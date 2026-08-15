@@ -163,6 +163,60 @@ export class MapView {
     if (pts) this.map.setLayoutProperty(CAMERA_LAYER.layerId, 'visibility', v);
   }
 
+  // Live traffic incident markers from UDOT (Workstream B).
+  setIncidents(events) {
+    const feats = (events || []).map((ev) => ({
+      type: 'Feature',
+      properties: { severity: ev.severity, label: ev.label || ev.category, road: ev.road || '' },
+      geometry: { type: 'Point', coordinates: [ev.lon, ev.lat] },
+    }));
+    const src = this.map.getSource('incidents');
+    if (src) {
+      src.setData({ type: 'FeatureCollection', features: feats });
+      return;
+    }
+    this.map.addSource('incidents', { type: 'geojson', data: { type: 'FeatureCollection', features: feats } });
+    this.map.addLayer({
+      id: 'incident-halos',
+      type: 'circle',
+      source: 'incidents',
+      minzoom: 9,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 5, 14, 12],
+        'circle-color': [
+          'match', ['get', 'severity'],
+          'closure', '#ff3355',
+          'emergency', '#ff5533',
+          'incident', '#ff7744',
+          'lane', '#ffaa40',
+          'roadwork', '#ffd05c',
+          '#8fa0b8',
+        ],
+        'circle-opacity': 0.28,
+      },
+    });
+    this.map.addLayer({
+      id: 'incident-dots',
+      type: 'circle',
+      source: 'incidents',
+      minzoom: 10.5,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 10.5, 3.5, 14, 6],
+        'circle-color': [
+          'match', ['get', 'severity'],
+          'closure', '#ff3355',
+          'emergency', '#ff5533',
+          'incident', '#ff7744',
+          'lane', '#ffaa40',
+          'roadwork', '#ffd05c',
+          '#8fa0b8',
+        ],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#0b0f17',
+      },
+    });
+  }
+
   setEndpoints(features) {
     const src = this.map.getSource('endpoints');
     if (src) src.setData({ type: 'FeatureCollection', features });

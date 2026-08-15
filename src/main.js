@@ -4,6 +4,7 @@ import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
 import { planRoutes, loadGraph, inGraphRegion, graphStatus } from './router.js';
+import { loadTraffic } from './traffic.js';
 import { $, el, debounce, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
 import { registerSW } from './pwa.js';
@@ -58,12 +59,29 @@ async function preloadEngine() {
   try {
     await loadGraph();
     app._engineReady = true;
-    enginePill('🛡 Local camera-aware engine ready');
     window.__ghostwayEngine = 'ready';
   } catch (e) {
     console.warn('engine load failed', e);
     app._engineReady = false;
     window.__ghostwayEngine = 'failed';
+    return;
+  }
+  // Live traffic: fetch UDOT events for the graph bbox, then show them on the
+  // map. Fails silently -> free-flow routing (Workstream B degrade path).
+  try {
+    const g = await loadGraph();
+    const traffic = await loadTraffic(g.bbox);
+    app.traffic = traffic;
+    if (traffic.ok && traffic.events.length) {
+      app.map.setIncidents(traffic.events);
+      enginePill(`🛡 Engine ready · 🚧 ${traffic.events.length} live traffic events`);
+    } else {
+      enginePill('🛡 Local camera-aware engine ready');
+    }
+    window.__ghostwayTraffic = traffic.ok ? traffic.events.length : 'failed';
+  } catch (e) {
+    console.warn('traffic load failed', e);
+    window.__ghostwayTraffic = 'failed';
   }
 }
 
@@ -191,7 +209,7 @@ async function onRoute() {
   if (engineCovers(from.coords, to.coords)) {
     try {
       const t0 = performance.now();
-      const { options } = await planRoutes(from.coords, to.coords, {});
+      const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null });
       const ms = Math.round(performance.now() - t0);
       app.state.options = options;
       // Default pick: closest to the user's mode preference.
@@ -475,7 +493,7 @@ async function reRoute(fromC) {
   }
   try {
     if (engineCovers(fromC, to.coords)) {
-      const { options } = await planRoutes(fromC, to.coords, {});
+      const { options } = await planRoutes(fromC, to.coords, { traffic: app.traffic || null });
       app.state.options = options;
       app.state.chosen = pickOptionForMode(options);
       app.state.route = { engine: true, options, chosen: app.state.chosen };
@@ -709,6 +727,8 @@ function handleDrawer(action) {
         <li><span class="lg-halo"></span> Heatmap halo = camera density</li>
         <li><span class="lg-line teal"></span> Your chosen route</li>
         <li><span class="lg-line grey"></span> Alternative route</li>
+        <li><span class="lg-dot closure"></span> Live closure (UDOT)</li>
+        <li><span class="lg-dot roadwork"></span> Live roadwork / lane closure (UDOT)</li>
       </ul>
     `);
   } else if (action === 'data') {
@@ -717,6 +737,7 @@ function handleDrawer(action) {
       <ul class="src-list">
         <li><b>Base map:</b> OpenStreetMap via OpenFreeMap</li>
         <li><b>Cameras:</b> DeFlock (OpenStreetMap + volunteer ALPR map)</li>
+        <li><b>Live traffic:</b> UDOT open events (roadwork, closures, incidents)</li>
         <li><b>Search:</b> Photon (OpenStreetMap)</li>
         <li><b>Routing:</b> Ghostway engine (Wasatch Front) · BRouter + OSRM fallback</li>
       </ul>

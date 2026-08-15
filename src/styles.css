@@ -654,6 +654,10 @@ details summary {
   color: var(--accent);
   font-weight: 600;
 }
+.opt-delay {
+  color: #ffaa40;
+  font-weight: 600;
+}
 .steps-wrap { margin-top: 8px; }
 #startNavBtn { margin-top: 8px; }
 .rc-edit {
@@ -792,6 +796,8 @@ details summary {
 .lg-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
 .lg-dot.flock { background: #ff4d6d; }
 .lg-dot.other { background: #ffaa40; }
+.lg-dot.closure { background: #ff3355; }
+.lg-dot.roadwork { background: #ffd05c; }
 .lg-halo {
   width: 14px; height: 14px; border-radius: 50%; flex: none;
   background: radial-gradient(circle, rgba(58,214,197,0.7), transparent 70%);

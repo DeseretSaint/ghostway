@@ -123,10 +123,11 @@ function renderEngineCard(app, card, result) {
         o.cameras === 0
           ? `<span class="opt-cams clear">0 cameras</span>`
           : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
+      const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
       return `
         <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
-          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}</span>
+          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}</span>
         </button>`;
     })
     .join('');

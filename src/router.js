@@ -208,7 +208,7 @@ class Heap {
   get size() { return this.k.length; }
 }
 
-function astar(g, startNode, endNode, mode) {
+function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay) {
   const cfg = MODES[mode];
   const N = g.nodeCount;
   const gScore = new Float64Array(N).fill(Infinity);
@@ -219,7 +219,7 @@ function astar(g, startNode, endNode, mode) {
   const tLon = g.nodeLon[endNode] / 1e6;
   const tLat = g.nodeLat[endNode] / 1e6;
   const h = (n) => {
-    // optimistic straight-line time at max speed
+    // optimistic straight-line time at max speed (traffic-free by design)
     const dLon = (g.nodeLon[n] / 1e6 - tLon) * 111320 * Math.cos((tLat * Math.PI) / 180);
     const dLat = (g.nodeLat[n] / 1e6 - tLat) * 111320;
     return Math.hypot(dLon, dLat) / (120 / 3.6);
@@ -245,7 +245,8 @@ function astar(g, startNode, endNode, mode) {
       if (closed[v]) continue;
       const e = g.arcEdge[p];
       const len = g.eLen[e];
-      const timeSec = len / (g.eSpd[e] / 3.6);
+      let timeSec = len / (g.eSpd[e] / 3.6);
+      timeSec /= edgeFactor[e]; // live traffic slows the edge
       const camCost = cfg.camWeight * (g.eCam[e] / 255) * (len / 100); // exposure scales with length under camera
       const ng = gScore[u] + timeSec + camCost;
       if (ng < gScore[v]) {
@@ -271,16 +272,16 @@ function astar(g, startNode, endNode, mode) {
   arcs.reverse();
 
   // Path metrics.
-  let distance = 0, time = 0, camUnits = 0;
+  let distance = 0, time = 0, camUnits = 0, delay = 0;
   const coords = [];
   let cameraClusters = 0, inCluster = false;
-  let lastName = -2;
   coords.push([g.nodeLon[startNode] / 1e6, g.nodeLat[startNode] / 1e6]);
   for (const p of arcs) {
     const e = g.arcEdge[p];
     const len = g.eLen[e];
     distance += len;
-    time += len / (g.eSpd[e] / 3.6);
+    time += (len / (g.eSpd[e] / 3.6)) / edgeFactor[e];
+    delay += edgeDelay[e];
     const cam = g.eCam[e];
     camUnits += cam * (len / 100);
     if (cam > 40) {
@@ -290,12 +291,12 @@ function astar(g, startNode, endNode, mode) {
     }
     const toNode = g.arcTo[p];
     coords.push([g.nodeLon[toNode] / 1e6, g.nodeLat[toNode] / 1e6]);
-    lastName = g.eName[e];
   }
 
   return {
     coords, distance, duration: time,
     cameras: cameraClusters, camUnits,
+    delay, // seconds lost to live traffic
     expansions, arcs,
   };
 }
@@ -416,26 +417,51 @@ function maneuverText(t) {
 }
 
 // ---- Public planning API: returns up to 3 options ----
-export async function planRoutes(from, to, { prefer = 'moderate' } = {}) {
+export async function planRoutes(from, to, { prefer = 'moderate', traffic = null } = {}) {
   const g = await loadGraph();
   const s = nearestNode(from[0], from[1]);
   const t = nearestNode(to[0], to[1]);
   if (s.node === -1 || t.node === -1) throw new Error('Outside the coverage area');
   if (s.dist > 1200 || t.dist > 1200) throw new Error('Start or destination is too far from a road in the coverage area');
 
-  const fastest = astar(g, s.node, t.node, 'off');
+  // Precompute per-edge live-traffic factors once for all mode runs.
+  const edgeFactor = new Float32Array(g.edgeCount).fill(1);
+  const edgeDelay = new Float64Array(g.edgeCount);
+  if (traffic && traffic.grid && traffic.grid.size) {
+    const cos = Math.cos((40.35 * Math.PI) / 180);
+    for (let e = 0; e < g.edgeCount; e++) {
+      const a = g.ea[e], b = g.eB[e];
+      const midLon = (g.nodeLon[a] + g.nodeLon[b]) / 2e6;
+      const midLat = (g.nodeLat[a] + g.nodeLat[b]) / 2e6;
+      const k = Math.floor(midLon / 0.0025) + ',' + Math.floor(midLat / 0.0025);
+      const evs = traffic.grid.get(k);
+      if (!evs) continue;
+      let worst = 1;
+      for (const ev of evs) {
+        const dLon = (ev.lon - midLon) * 111320 * cos;
+        const dLat = (ev.lat - midLat) * 111320;
+        if (dLon * dLon + dLat * dLat <= ev.radius * ev.radius) {
+          if (ev.speedFactor < worst) worst = ev.speedFactor;
+        }
+      }
+      edgeFactor[e] = worst;
+      edgeDelay[e] = (g.eLen[e] / (g.eSpd[e] / 3.6)) * (1 / worst - 1);
+    }
+  }
+
+  const fastest = astar(g, s.node, t.node, 'off', edgeFactor, edgeDelay);
   if (!fastest) throw new Error('No route found');
 
   const options = [{ mode: 'off', label: 'Fastest', route: fastest }];
 
-  const balanced = astar(g, s.node, t.node, 'moderate');
+  const balanced = astar(g, s.node, t.node, 'moderate', edgeFactor, edgeDelay);
   if (balanced && balanced.cameras < fastest.cameras && balanced.distance <= fastest.distance * 1.35) {
     options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
   } else if (balanced && balanced.distance <= fastest.distance * 1.05) {
     options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
   }
 
-  const clearest = astar(g, s.node, t.node, 'strict');
+  const clearest = astar(g, s.node, t.node, 'strict', edgeFactor, edgeDelay);
   if (clearest) {
     // strict is only a distinct option if it actually avoids more cameras
     const bestSoFar = Math.min(...options.map((o) => o.route.cameras));
@@ -459,9 +485,10 @@ export async function planRoutes(from, to, { prefer = 'moderate' } = {}) {
     o.cameras = o.route.cameras;
     o.distance = o.route.distance;
     o.duration = o.route.duration;
+    o.delay = o.route.delay || 0;
   }
 
-  return { options: uniq, graph: g, snapFrom: s, snapTo: t };
+  return { options: uniq, graph: g, snapFrom: s, snapTo: t, trafficLive: !!(traffic && traffic.ok && traffic.events.length) };
 }
 
 function similar(a, b) {

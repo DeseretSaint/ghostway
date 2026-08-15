@@ -8,7 +8,7 @@ Live: https://deseretsaint.github.io/ghostway/
 |---|---|---|
 | Routing engine (camera-aware) | 7 | Own graph + A* with camera cost (Wasatch Front); national coverage pending |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
-| Traffic / ETA accuracy | 2 | Static OSM speeds; UDOT live data pending |
+| Traffic / ETA accuracy | 6 | Live UDOT events → edge speed factors + delay on cards; measured-speed data pending |
 | Nav experience (follow, voice) | 8 | Voice guidance, countdown banner, speed limits, arrival screen, off-route reroute |
 | Visual polish | 7 | Motion + spring states, legend, camera layer toggle; icon/splash pending |
 | Camera data layer | 6 | DeFlock tiles + heatmap working |
@@ -71,8 +71,29 @@ Shipped:
   arrival triggers. All suites pass; zero console errors.
 Quality: Nav experience 4→8 · Visual polish 5→7.
 
-Next (iteration 3):
-- B: UDOT live traffic → edge speeds, traffic-colored route segments, delay chip.
-- C: follow-mode camera (bearing rotation, recenter), speed-limit alerts.
-- C: draggable waypoint on route preview (clickable alternatives already shipped).
-- D: app icon + splash, empty/loading state design, camera-density halo tuning.
+### Iteration 3 — Live traffic + traffic-aware ETAs (Workstream B)
+Shipped:
+- **Key-free live traffic**: UDOT "Road Events" ArcGIS Feature Service
+  (services6.arcgis.com, CORS-open, no account) — the same events that power
+  udottraffic.utah.gov. 5-min cached; degrades silently to free-flow routing.
+- Severity model maps events → per-edge speed factors baked into A* costs:
+  closure 0.15 · emergency 0.25 · incident 0.45 · lane 0.50 · roadwork 0.62 ·
+  alert 0.82, with per-severity influence radii.
+- **Traffic-aware ETAs**: every route option carries a measured `delay` (seconds
+  lost to live conditions); route cards show "+N min traffic" when >30 s.
+- **Incident map layer**: severity-colored halos + dots (closure red → roadwork
+  yellow), toggle-aware, legend updated.
+- Verified against the LIVE feed: 67 active events in the Wasatch box
+  (49 roadwork / 15 closures / 1 emergency / 1 incident). A corridor routed
+  THROUGH an SR-68 closure shows ETA +97 s vs free-flow. PG→Costco corridor is
+  currently clear (delay 0) — correct behavior. `scripts/traffic-check.mjs`.
+- ETA accuracy note: point-event coverage is the constraint — UDOT's 5-min
+  measured-speed feed needs a registered token, so road segments between
+  incidents still use OSM maxspeed profiles. Recorded for the score.
+Quality: Traffic 2→6.
+
+Next (iteration 4):
+- C: follow-mode camera (bearing rotation + pitch, recenter button).
+- C: draggable waypoint on route preview (clickable alternatives done).
+- D: app icon + splash, empty/loading state design.
+- B stretch: probe UDOT TMS 5-min speed feeds for a no-token endpoint.
