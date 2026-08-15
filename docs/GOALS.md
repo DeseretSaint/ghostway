@@ -463,3 +463,25 @@ Next (iteration 18):
 - Camera layer: cluster the heatmap halo at mid-zoom.
 - Field-test follow-up: watch for the next drive report.
 
+### Iteration 18 — Search location bias fix (field report #6)
+Keaton's screenshot: typing "Costco" returned Palm Desert/Bismarck/Tulsa/
+New Berlin/Amagasaki. Root cause: Photon was queried WITHOUT lat/lon bias,
+so it returned the global top-6 by raw relevance, and the client-side
+distance sort could only reorder that wrong pool. Two fixes:
+1. `searchPlaces()` now passes `lat`/`lon` to Photon and requests a wider
+   candidate pool (3× limit, min 15) before the distance sort.
+2. When GPS position isn't available yet, the map center is used as the bias
+   point (previously `near` was null until the GPS button was tapped).
+Verified against the live Photon API from Keaton's location: unbiased query
+reproduced the exact garbage from his screenshot (Tulsa, Palm Desert, New
+Berlin, Bismarck, Coralville); biased query returns Lehi 6 km → Orem 12 km →
+Saratoga Springs 14 km → Sandy → Riverton. New E2E
+`scripts/search-bias-check.mjs` types bare "Costco" with GPS active:
+"Costco, 1200 East · Lehi, Utah" first, zero out-of-state results — PASS.
+All suites green.
+
+Next (iteration 19):
+- B: real-drive ground truth from Keaton (needs his PG→Costco time).
+- Camera layer: cluster the heatmap halo at mid-zoom.
+- Field-test follow-up: watch for the next drive report.
+

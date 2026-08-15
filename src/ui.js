@@ -40,7 +40,7 @@ export function buildPanel(app) {
       box.hidden = true;
       return;
     }
-    const near = app.state.userLoc || null;
+    const near = app.state.userLoc || (app.map ? app.map.getCenter() : null);
     const places = await searchPlaces(q, 6, near).catch(() => []);
     if (!places.length) {
       box.hidden = true;

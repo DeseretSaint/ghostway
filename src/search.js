@@ -7,7 +7,13 @@ import { haversine } from './utils.js';
 
 export async function searchPlaces(query, limit = 6, near = null) {
   if (!query || query.trim().length < 2) return [];
-  const url = `${CONFIG.photon}?q=${encodeURIComponent(query)}&limit=${limit}`;
+  // Location-biased search: pass lat/lon to Photon so relevance favors the
+  // user's area (fixes "Costco" returning Palm Desert/Bismarck/Tulsa), and
+  // fetch a wider candidate pool so a nearby match isn't squeezed out of the
+  // global top-N. Client-side distance sort still applies as a second pass.
+  const bias = near ? `&lat=${near[1]}&lon=${near[0]}` : '';
+  const pool = Math.max(limit * 3, 15);
+  const url = `${CONFIG.photon}?q=${encodeURIComponent(query)}&limit=${pool}${bias}`;
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error('search failed');
   const j = await res.json();
@@ -33,7 +39,7 @@ export async function searchPlaces(query, limit = 6, near = null) {
       .map((pl) => ({ ...pl, _d: haversine(near, pl.coords) }))
       .sort((a, b) => a._d - b._d);
   }
-  return places;
+  return places.slice(0, limit);
 }
 
 export async function reverseGeocode(coords) {
