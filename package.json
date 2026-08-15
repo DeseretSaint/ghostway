@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host --port 4173",
+    "serve": "node scripts/serve-https.mjs",
     "fetch-cameras": "node scripts/fetch-cameras.mjs"
   },
   "devDependencies": {

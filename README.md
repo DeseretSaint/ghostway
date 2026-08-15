@@ -74,6 +74,28 @@ offline. Routing and search need a connection to the open servers above.
 To host it: serve the static `dist/` from any HTTPS origin (required for
 geolocation and installability on mobile).
 
+### Test on your phone (private, over Tailscale)
+
+GitHub Pages is unavailable on a private repo's free plan, so for local testing
+Ghostway ships a tiny HTTPS static server:
+
+```bash
+npm run build
+npm run serve          # serves dist/ over HTTPS on 0.0.0.0:4173
+```
+
+Then open `https://<this-machine-tailscale-ip>:4173` on your phone (Tailscale
+cert is self-signed — your browser/phone will show a warning; accept it once).
+A self-signed cert is still a valid TLS context, so "Add to Home Screen",
+install, and GPS all work. For a public/permanent URL, deploy `dist/` to any
+HTTPS host (Cloudflare Pages, Netlify, or a paid GitHub plan with Pages on).
+
+### Deploy to GitHub Pages (public repo or paid plan)
+
+The workflow in `.github/workflows/deploy.yml` builds `dist/` and publishes it
+to GitHub Pages on every push to `main`. Enable Pages (Settings → Pages → Source:
+GitHub Actions) once the repo is public or on a plan that includes Pages.
+
 
 Open `src/config.js` and set `CONFIG.donate.methods` / `CONFIG.donate.crypto`
 to your own Ko-fi, GitHub Sponsors, Liberapay, or wallet addresses. The donate
