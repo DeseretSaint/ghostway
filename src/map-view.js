@@ -154,6 +154,7 @@ export class MapView {
     });
     this._waypointDragHandlers = [];
     this._waypointTapHandlers = [];
+    this._reportClickHandlers = [];
     this._wpDragging = false;
     this._wireWaypoint();
 
@@ -198,6 +199,45 @@ export class MapView {
         ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coords } }]
         : [],
     });
+  }
+
+  // Community camera reports layer (distinct styling from known cameras).
+  setReports(features) {
+    const src = this.map.getSource('reports');
+    if (src) {
+      src.setData({ type: 'FeatureCollection', features });
+      return;
+    }
+    this.map.addSource('reports', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features },
+    });
+    this.map.addLayer({
+      id: 'reports-dots',
+      type: 'circle',
+      source: 'reports',
+      minzoom: 10,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 5, 14, 8],
+        'circle-color': '#c77dff',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#0b0f17',
+      },
+    });
+    this.map.on('click', 'reports-dots', (e) => {
+      const f = e.features && e.features[0];
+      if (f) this._reportClickHandlers.forEach((h) => h(f.properties, f.geometry.coordinates));
+    });
+    this.map.on('mouseenter', 'reports-dots', () => {
+      this.map.getCanvas().style.cursor = 'pointer';
+    });
+    this.map.on('mouseleave', 'reports-dots', () => {
+      this.map.getCanvas().style.cursor = '';
+    });
+  }
+
+  onReportClick(handler) {
+    this._reportClickHandlers.push(handler);
   }
 
   onWaypointDrag(handler) {

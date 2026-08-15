@@ -924,3 +924,22 @@ details summary {
   border-color: #ff5570;
   animation: over-pulse 0.9s ease-in-out infinite;
 }
+
+/* Report-a-camera form */
+.rp-label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+.rp-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #e8eef7;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.rp-input:focus { outline: none; border-color: var(--accent); }
+select.rp-input { appearance: none; }
+.rp-actions { display: flex; gap: 10px; margin-top: 14px; }
+.rp-actions .primary-btn { flex: 1; }
+.drawer-item.accent { color: var(--accent); font-weight: 600; }
+.lg-dot.report { background: #c77dff; }

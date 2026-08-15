@@ -21,6 +21,10 @@ export const CONFIG = {
   // --- Turn-by-turn (OSRM, used only for human-readable instructions) ---
   osrm: 'https://routing.openstreetmap.de/routed-car',
 
+  // --- Community reports: OpenStreetMap notes API (anonymous, no key).
+  //     Overridable for self-hosting/tests.
+  osmNotesUrl: 'https://api.openstreetmap.org/api/0.6/notes.json',
+
   // --- National-coverage fallback engine (Valhalla demo, key-free, CORS-open).
   //     Used outside Ghostway's own graph region. For higher limits / no rate
   //     risk, point this at a self-hosted Docker instance — see

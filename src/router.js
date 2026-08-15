@@ -470,12 +470,56 @@ function maneuverText(t) {
 }
 
 // ---- Public planning API: returns up to 3 options ----
-export async function planRoutes(from, to, { prefer = 'moderate', traffic = null } = {}) {
+export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [] } = {}) {
   const g = await loadGraph();
   const s = nearestNode(from[0], from[1]);
   const t = nearestNode(to[0], to[1]);
   if (s.node === -1 || t.node === -1) throw new Error('Outside the coverage area');
   if (s.dist > 1200 || t.dist > 1200) throw new Error('Start or destination is too far from a road in the coverage area');
+
+  // Community camera reports: bake user-reported cameras into the edge
+  // exposure (same radius/weighting as the graph builder), so routes react
+  // immediately — before any OSM/DeFlock review lands.
+  let graph = g;
+  if (communityCams && communityCams.length) {
+    const merged = new Uint8Array(g.eCam); // copy
+    const CELL = 0.002; // ~220 m grid, matches builder
+    const grid = new Map();
+    for (const c of communityCams) {
+      const gx = Math.floor(c.lon / CELL);
+      const gy = Math.floor(c.lat / CELL);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const k = gx + dx + ',' + (gy + dy);
+          if (!grid.has(k)) grid.set(k, []);
+          grid.get(k).push(c);
+        }
+      }
+    }
+    const R = 100; // meters of influence, same as builder
+    for (let e = 0; e < g.edgeCount; e++) {
+      const a = g.ea[e], b = g.eB[e];
+      const pts = [
+        [g.nodeLon[a] / 1e6, g.nodeLat[a] / 1e6],
+        [(g.nodeLon[a] + g.nodeLon[b]) / 2e6, (g.nodeLat[a] + g.nodeLat[b]) / 2e6],
+        [g.nodeLon[b] / 1e6, g.nodeLat[b] / 1e6],
+      ];
+      let extra = 0;
+      for (const [plon, plat] of pts) {
+        const cell = grid.get(Math.floor(plon / CELL) + ',' + Math.floor(plat / CELL));
+        if (!cell) continue;
+        const cosLat = Math.cos((plat * Math.PI) / 180);
+        for (const c of cell) {
+          const dLon = (c.lon - plon) * 111320 * cosLat;
+          const dLat = (c.lat - plat) * 111320;
+          const d2 = dLon * dLon + dLat * dLat;
+          if (d2 <= R * R) extra = Math.max(extra, Math.round((1 - Math.sqrt(d2) / R) * 255));
+        }
+      }
+      if (extra) merged[e] = Math.min(255, merged[e] + extra);
+    }
+    graph = { ...g, eCam: merged };
+  }
 
   // Precompute per-edge live-traffic factors once for all mode runs.
   const edgeFactor = new Float32Array(g.edgeCount).fill(1);
@@ -502,19 +546,19 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     }
   }
 
-  const fastest = astar(g, s.node, t.node, 'off', edgeFactor, edgeDelay);
+  const fastest = astar(graph, s.node, t.node, 'off', edgeFactor, edgeDelay);
   if (!fastest) throw new Error('No route found');
 
   const options = [{ mode: 'off', label: 'Fastest', route: fastest }];
 
-  const balanced = astar(g, s.node, t.node, 'moderate', edgeFactor, edgeDelay);
+  const balanced = astar(graph, s.node, t.node, 'moderate', edgeFactor, edgeDelay);
   if (balanced && balanced.cameras < fastest.cameras && balanced.distance <= fastest.distance * 1.35) {
     options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
   } else if (balanced && balanced.distance <= fastest.distance * 1.05) {
     options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
   }
 
-  const clearest = astar(g, s.node, t.node, 'strict', edgeFactor, edgeDelay);
+  const clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay);
   if (clearest) {
     // strict is only a distinct option if it actually avoids more cameras
     const bestSoFar = Math.min(...options.map((o) => o.route.cameras));
@@ -533,10 +577,10 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
 
   // Attach instructions + geometry.
   for (const o of uniq) {
-    o.instructions = instructionsFor(g, o.route);
+    o.instructions = instructionsFor(graph, o.route);
     o.coords = simplify(o.route.coords);
     o.cameras = o.route.cameras;
-    o.cameraPoints = cameraClusterPositions(g, o.route);
+    o.cameraPoints = cameraClusterPositions(graph, o.route);
     o.distance = o.route.distance;
     o.duration = o.route.duration;
     o.delay = o.route.delay || 0;

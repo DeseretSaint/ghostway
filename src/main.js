@@ -1,4 +1,5 @@
 import { CONFIG, CAMERA_LAYER, isAlprCamera } from './config.js';
+import { loadReports, addReport, removeReport, markPublished, publishReportToOsm } from './reports.js';
 import { MapView } from './map-view.js';
 import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
@@ -65,6 +66,47 @@ async function init() {
   // Camera click -> info modal.
   app.map.onCameraClick(async (props, coords) => {
     openCameraModal(props, coords);
+  });
+
+  // Community reports: render layer + handle taps (details/delete).
+  refreshReportLayer();
+  app.map.onReportClick(async (props, coords) => {
+    const reports = loadReports();
+    const rec = reports.find((r) => Math.abs(r.lon - coords[0]) < 1e-6 && Math.abs(r.lat - coords[1]) < 1e-6);
+    if (!rec) return;
+    openModal(`
+      <h3>📷 Community report</h3>
+      <p><b>${{ alpr: 'ALPR / plate reader', redlight: 'Red-light camera', speed: 'Speed camera', fixed: 'Fixed camera', other: 'Camera (type unknown)' }[rec.kind] || 'Camera'}</b>${rec.brand ? ` — ${rec.brand}` : ''}</p>
+      ${rec.note ? `<p class="muted">${rec.note}</p>` : ''}
+      <p class="muted small">Reported ${new Date(rec.createdAt).toLocaleDateString()} · ${rec.publishedNoteId ? `Published to OSM note ${rec.publishedNoteId}` : 'Not yet published to OSM'}</p>
+      <div class="rp-actions">
+        ${rec.publishedNoteId ? '' : '<button id="rptPub" class="primary-btn" type="button">Publish to OSM</button>'}
+        <button id="rptDel" class="ghost-btn" type="button">Delete report</button>
+      </div>
+    `);
+    const pub = $('#rptPub');
+    if (pub) pub.addEventListener('click', async () => {
+      pub.disabled = true;
+      pub.textContent = 'Publishing…';
+      try {
+        const noteId = await publishReportToOsm(rec);
+        if (noteId) markPublished(rec.id, noteId);
+        closeModal();
+        refreshReportLayer();
+        showStatus('Published to OpenStreetMap. Thank you!', 'info');
+      } catch (e) {
+        console.warn('OSM publish failed', e);
+        pub.disabled = false;
+        pub.textContent = 'Publish to OSM';
+        showStatus('Publish failed — report stays local.', 'warn');
+      }
+    });
+    $('#rptDel').addEventListener('click', () => {
+      removeReport(rec.id);
+      refreshReportLayer();
+      closeModal();
+      showStatus('Report deleted.', 'info');
+    });
   });
 
   // Waypoint drag: live-move the handle, re-route on drop (Workstream C).
@@ -227,6 +269,11 @@ function engineCovers(fromC, toC) {
   return app._engineReady && inGraphRegion(fromC[0], fromC[1]) && inGraphRegion(toC[0], toC[1]);
 }
 
+// Community-reported cameras feed the local routing engine immediately.
+function communityCams() {
+  return loadReports().map((r) => ({ lon: r.lon, lat: r.lat, kind: r.kind }));
+}
+
 function pickOptionForMode(options) {
   const modeRank = { strict: ['strict', 'moderate', 'off'], moderate: ['moderate', 'strict', 'off'], off: ['off', 'moderate', 'strict'] };
   const pref = modeRank[app.state.mode] || modeRank.moderate;
@@ -250,7 +297,7 @@ async function onRoute() {
   if (engineCovers(from.coords, to.coords)) {
     try {
       const t0 = performance.now();
-      const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null });
+      const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
       const ms = Math.round(performance.now() - t0);
       app.state.options = options;
       // Default pick: closest to the user's mode preference.
@@ -323,8 +370,9 @@ async function reRouteViaWaypoint() {
     const local = engineCovers(from.coords, via) && engineCovers(via, to.coords);
     if (local) {
       source = 'local';
-      const r1 = await planRoutes(from.coords, via, { traffic: app.traffic || null });
-      const r2 = await planRoutes(via, to.coords, { traffic: app.traffic || null });
+      const cc = communityCams();
+      const r1 = await planRoutes(from.coords, via, { traffic: app.traffic || null, communityCams: cc });
+      const r2 = await planRoutes(via, to.coords, { traffic: app.traffic || null, communityCams: cc });
       opt1 = r1.options[pickOptionForMode(r1.options)];
       opt2 = r2.options[pickOptionForMode(r2.options)];
     } else {
@@ -691,7 +739,7 @@ async function reRoute(fromC) {
   }
   try {
     if (engineCovers(fromC, to.coords)) {
-      const { options } = await planRoutes(fromC, to.coords, { traffic: app.traffic || null });
+      const { options } = await planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
       app.state.options = options;
       app.state.chosen = pickOptionForMode(options);
       app.state.route = { engine: true, options, chosen: app.state.chosen };
@@ -972,6 +1020,129 @@ function openCameraModal(props, coords) {
   `);
 }
 
+// ---- Report-a-camera flow (Workstream camera layer / ecosystem give-back) ----
+// Two stages: (1) pick a location on the map, (2) fill the details form.
+// Reports are stored locally (privacy-first) and feed routing immediately;
+// publishing to OSM notes is opt-in, anonymous, key-free.
+function openReportModal(stage, coords) {
+  if (!stage) {
+    openModal(`
+      <h3>📷 Report a camera</h3>
+      <p>Spotted a camera that's not on the map? Report it — it protects
+      everyone who uses Ghostway, and (if you choose) gets submitted to
+      OpenStreetMap so the DeFlock project can verify it.</p>
+      <p class="muted">Nothing leaves your device unless you publish to OSM —
+      and even then it's an anonymous map note, no account.</p>
+      <button id="reportPick" class="primary-btn" style="margin-top:8px">📍 Pick location on map</button>
+    `);
+    $('#reportPick').addEventListener('click', () => {
+      closeModal();
+      startReportPlacement();
+    });
+    return;
+  }
+  if (stage === 'form') {
+    const [lon, lat] = coords;
+    openModal(`
+      <h3>📷 Camera report</h3>
+      <p class="muted small">Location: ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
+      <label class="rp-label" for="rpKind">Camera type</label>
+      <select id="rpKind" class="rp-input">
+        <option value="alpr" selected>ALPR / license plate reader</option>
+        <option value="redlight">Red-light camera</option>
+        <option value="speed">Speed camera</option>
+        <option value="fixed">Fixed surveillance camera</option>
+        <option value="other">Other / not sure</option>
+      </select>
+      <label class="rp-label" for="rpBrand">Brand or model (if known)</label>
+      <input id="rpBrand" class="rp-input" type="text" maxlength="40" placeholder="e.g. Flock Safety" autocomplete="off" />
+      <label class="rp-label" for="rpNote">Notes (optional)</label>
+      <input id="rpNote" class="rp-input" type="text" maxlength="120" placeholder="e.g. on pole facing northbound" autocomplete="off" />
+      <div class="rp-actions">
+        <button id="rpSave" class="primary-btn" type="button">Save report</button>
+        <button id="rpCancel" class="ghost-btn" type="button">Cancel</button>
+      </div>
+      <p class="muted small" style="margin-top:10px">After saving you can optionally publish it to OpenStreetMap (anonymous, no account) — that's how it reaches the DeFlock map.</p>
+    `);
+    $('#rpCancel').addEventListener('click', closeModal);
+    $('#rpSave').addEventListener('click', () => {
+      const rec = addReport({
+        lon, lat,
+        kind: $('#rpKind').value,
+        brand: $('#rpBrand').value.trim(),
+        note: $('#rpNote').value.trim(),
+      });
+      refreshReportLayer();
+      closeModal();
+      offerPublish(rec);
+    });
+    return;
+  }
+}
+
+function offerPublish(rec) {
+  openModal(`
+    <h3>✅ Report saved</h3>
+    <p>Ghostway already routes around it on this device.</p>
+    <p>Want to publish it to <b>OpenStreetMap</b> as an anonymous note?
+    Mappers can then verify it and add it to OSM — which feeds the DeFlock
+    camera map for everyone.</p>
+    <div class="rp-actions">
+      <button id="pubYes" class="primary-btn" type="button">Publish to OSM</button>
+      <button id="pubNo" class="ghost-btn" type="button">Keep it local</button>
+    </div>
+  `);
+  $('#pubNo').addEventListener('click', closeModal);
+  $('#pubYes').addEventListener('click', async () => {
+    const btn = $('#pubYes');
+    btn.disabled = true;
+    btn.textContent = 'Publishing…';
+    try {
+      const noteId = await publishReportToOsm(rec);
+      if (noteId) markPublished(rec.id, noteId);
+      closeModal();
+      showStatus(
+        noteId
+          ? `Published to OpenStreetMap (note ${noteId}). Thank you!`
+          : 'Published. Thank you for contributing!',
+        'info'
+      );
+    } catch (e) {
+      console.warn('OSM publish failed', e);
+      btn.disabled = false;
+      btn.textContent = 'Publish to OSM';
+      showStatus('Publish failed — report is saved locally and still protects routes.', 'warn');
+    }
+  });
+}
+
+function startReportPlacement() {
+  app._reportMode = true;
+  showStatus('Tap the map where the camera is.', 'info');
+  app.map.map.getCanvas().style.cursor = 'crosshair';
+  const once = (e) => {
+    if (!app._reportMode) return;
+    app._reportMode = false;
+    app.map.map.getCanvas().style.cursor = '';
+    app.map.map.off('click', once);
+    clearStatus();
+    openReportModal('form', [e.lngLat.lng, e.lngLat.lat]);
+  };
+  app.map.map.on('click', once);
+}
+
+// Render community reports as distinct markers on the map.
+function refreshReportLayer() {
+  const reports = loadReports();
+  app.map.setReports(
+    reports.map((r) => ({
+      type: 'Feature',
+      properties: { kind: r.kind, brand: r.brand || '', published: r.publishedNoteId ? 1 : 0 },
+      geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
+    }))
+  );
+}
+
 function openWhyModal() {
   openModal(`
     <h3>Why avoid these cameras?</h3>
@@ -986,6 +1157,10 @@ function openWhyModal() {
 }
 
 function handleDrawer(action) {
+  if (action === 'report') {
+    openReportModal();
+    return;
+  }
   if (action === 'about') {
     openModal(`
       <h3>${CONFIG.about.name}</h3><p class="tag">${CONFIG.about.tagline}</p><p>${CONFIG.about.body}</p>
@@ -993,6 +1168,7 @@ function handleDrawer(action) {
       <ul class="src-list legend">
         <li><span class="lg-dot flock"></span> Plate reader risk (Flock, Motorola, Rekor… or traffic-facing)</li>
         <li><span class="lg-dot other"></span> Other surveillance camera</li>
+        <li><span class="lg-dot report"></span> Community-reported camera (purple)</li>
         <li><span class="lg-halo"></span> Heatmap halo = camera density</li>
         <li><span class="lg-line teal"></span> Your chosen route</li>
         <li><span class="lg-line grey"></span> Alternative route</li>

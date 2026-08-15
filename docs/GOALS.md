@@ -11,7 +11,7 @@ Live: https://deseretsaint.github.io/ghostway/
 | Traffic / ETA accuracy | 8 | Full Wasatch coverage; 3/5 corridors match Valhalla exactly, 2 diverge on route choice |
 | Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, alerts, waypoint drag, live camera counter |
 | Visual polish | 9 | Splash, onboarding, mission icons, motion, legend; states done |
-| Camera data layer | 8 | ALPR-aware map coloring, rich tap-details (direction/mount/freshness), unified classification |
+| Camera data layer | 9 | ALPR-aware coloring, rich tap-details, community reports (local + opt-in OSM notes), reports steer routing |
 
 ## Workstreams
 - **A — Custom camera-aware routing**: own graph, A*, per-edge camera cost, STRICT/MODERATE/OFF, route options, Valhalla national fallback, self-host doc. [core done; graph expansion ongoing]
@@ -332,4 +332,33 @@ Next (iteration 13):
 - B: real-drive ground truth from Keaton's PG→Costco run (needs his time).
 - Camera layer: report-a-camera flow (contribute back to DeFlock/OSM).
 - D: banner density option (compact mode for small screens).
+
+### Iteration 13 — Report-a-camera: users become contributors (camera layer 8 → 9)
+Shipped:
+- **Report flow**: menu → "Report a camera" → tap-to-place on map → form
+  (type: ALPR/red-light/speed/fixed/other · brand · notes) → save. Real
+  hit-tested clicks throughout; purple markers render on the map (legend
+  updated); tap a report for details, publish, or delete.
+- **Privacy-first by construction**: reports persist in localStorage only.
+  Publishing to OpenStreetMap is OPT-IN and ANONYMOUS (key-free notes API,
+  CORS-open) — the note asks mappers to add man_made=surveillance so DeFlock
+  picks it up. Publishing was tested against a LOCAL MOCK server only; the E2E
+  deliberately never posts to the real OSM database.
+- **Reports steer routing immediately**: community camera points are baked
+  into edge exposure at plan time (same 100 m radius/weighting as the graph
+  builder) — no rebuild needed. Wired through direct, via-waypoint, and
+  re-route paths.
+- Bug fixed during verification: `startReportPlacement` called `app.map.on()`
+  which doesn't exist on MapView (needed `app.map.map.on`) — caught by the
+  E2E before shipping.
+- Verified: `report-check.mjs` (full UI flow, hit-tested, persistence, marker)
+  PASS · `report-routing-check.mjs` (report on strict route changes camera
+  accounting 1→2) PASS · `osm-publish-check.mjs` (POST shape vs mock server)
+  PASS. Vision-reviewed form screenshot: no defects. All suites green, zero
+  console errors.
+
+Next (iteration 14):
+- B: real-drive ground truth from Keaton's PG→Costco run (needs his time).
+- D: banner density option (compact mode for small screens).
+- Camera layer: CI job to refresh camera snapshot monthly from DeFlock.
 
