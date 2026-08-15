@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b0f17" />
+    <title>Ghostway — Navigate beyond surveillance</title>
+    <meta
+      name="description"
+      content="Free, open-source turn-by-turn navigation that keeps you clear of ALPR and Flock surveillance cameras by default."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="map" aria-label="Map"></div>
+
+      <!-- Top brand bar -->
+      <header id="topbar">
+        <button id="menuBtn" class="icon-btn" aria-label="Open menu" title="Menu">☰</button>
+        <div id="brand">
+          <span class="brand-mark" aria-hidden="true">◈</span>
+          <span class="brand-name">Ghostway</span>
+        </div>
+        <div id="safety-pill" class="safety-pill" title="Current avoidance setting">
+          <span class="dot"></span><span class="label">Avoid cameras</span>
+        </div>
+        <button id="gpsBtn" class="icon-btn" aria-label="Use my location" title="Use my location">◎</button>
+      </header>
+
+      <!-- Search / control panel -->
+      <section id="panel" class="panel">
+        <div id="search">
+          <div class="field">
+            <span class="field-ic">⟩</span>
+            <input id="fromInput" type="text" placeholder="Start (tap ◎ for here)" autocomplete="off" />
+            <button class="clear-btn" data-clear="fromInput" aria-label="Clear">×</button>
+          </div>
+          <div class="field">
+            <span class="field-ic">⊗</span>
+            <input id="toInput" type="text" placeholder="Where to?" autocomplete="off" />
+            <button class="clear-btn" data-clear="toInput" aria-label="Clear">×</button>
+          </div>
+          <div id="suggestions" class="suggestions" hidden></div>
+        </div>
+
+        <div id="route-actions" class="route-actions" hidden>
+          <button id="swapBtn" class="ghost-btn" title="Swap">⇅</button>
+          <button id="goBtn" class="primary-btn">Route me clear</button>
+          <button id="clearRouteBtn" class="ghost-btn" title="Clear route">✕</button>
+        </div>
+
+        <div id="avoid-toggle" class="avoid-toggle" hidden>
+          <label class="switch">
+            <input id="avoidChk" type="checkbox" checked />
+            <span class="track"><span class="thumb"></span></span>
+          </label>
+          <span class="switch-label">Avoid surveillance cameras</span>
+          <button id="camInfoBtn" class="text-link" title="What is this?">why?</button>
+        </div>
+
+        <div id="route-card" class="route-card" hidden></div>
+
+        <div id="status" class="status" hidden></div>
+      </section>
+
+      <!-- Slide-in menu / settings -->
+      <aside id="drawer" class="drawer" hidden>
+        <div class="drawer-head">
+          <h2>Ghostway</h2>
+          <button id="closeDrawer" class="icon-btn" aria-label="Close">×</button>
+        </div>
+        <nav class="drawer-nav">
+          <button data-action="about" class="drawer-item">About Ghostway</button>
+          <button data-action="data" class="drawer-item">Data sources</button>
+          <button data-action="donate" class="drawer-item">Support the developer</button>
+          <button data-action="privacy" class="drawer-item">Privacy & how it works</button>
+          <hr />
+          <button data-action="github" class="drawer-item">View source on GitHub</button>
+        </nav>
+        <p class="drawer-foot">Free & open source · No tracking · No account</p>
+      </aside>
+      <div id="scrim" class="scrim" hidden></div>
+
+      <!-- Generic modal -->
+      <div id="modal" class="modal" hidden>
+        <div class="modal-card">
+          <button id="modalClose" class="icon-btn modal-close" aria-label="Close">×</button>
+          <div id="modalBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
