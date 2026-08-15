@@ -14,6 +14,13 @@
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* The `hidden` attribute must beat component `display` rules (flex/grid),
+   otherwise invisible overlays (modal/drawer/scrim) sit on top and swallow
+   every tap. This was the "controls not clickable" bug. */
+[hidden] {
+  display: none !important;
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
