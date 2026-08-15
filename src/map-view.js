@@ -118,6 +118,33 @@ export class MapView {
       },
     });
 
+    // Draggable waypoint handle (Workstream C: route preview editing).
+    this.map.addSource('waypoint', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+    this.map.addLayer({
+      id: 'waypoint-halo',
+      type: 'circle',
+      source: 'waypoint',
+      paint: { 'circle-radius': 20, 'circle-color': '#ffb454', 'circle-opacity': 0.25 },
+    });
+    this.map.addLayer({
+      id: 'waypoint-dot',
+      type: 'circle',
+      source: 'waypoint',
+      paint: {
+        'circle-radius': 10,
+        'circle-color': '#ffb454',
+        'circle-stroke-width': 3,
+        'circle-stroke-color': '#ffffff',
+      },
+    });
+    this._waypointDragHandlers = [];
+    this._waypointTapHandlers = [];
+    this._wpDragging = false;
+    this._wireWaypoint();
+
     this.camSourceReady = true;
     this._wireCameraClicks();
     this._readyResolve && this._readyResolve();
@@ -147,6 +174,79 @@ export class MapView {
 
   onCameraClick(handler) {
     this._clickHandlers.push(handler);
+  }
+
+  // ---- Waypoint drag (Workstream C) ----
+  setWaypoint(coords) {
+    const src = this.map.getSource('waypoint');
+    if (!src) return;
+    src.setData({
+      type: 'FeatureCollection',
+      features: coords
+        ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coords } }]
+        : [],
+    });
+  }
+
+  onWaypointDrag(handler) {
+    this._waypointDragHandlers.push(handler);
+  }
+
+  onWaypointTap(handler) {
+    this._waypointTapHandlers.push(handler);
+  }
+
+  _wireWaypoint() {
+    const LAYER = 'waypoint-dot';
+    let dragStartPoint = null;
+    let moved = false;
+
+    this.map.on('mousedown', LAYER, (e) => {
+      e.preventDefault();
+      this._wpDragging = true;
+      moved = false;
+      dragStartPoint = e.point;
+      this.map.getCanvas().style.cursor = 'grabbing';
+    });
+    this.map.on('touchstart', LAYER, (e) => {
+      if (e.points.length !== 1) return;
+      e.preventDefault();
+      this._wpDragging = true;
+      moved = false;
+      dragStartPoint = e.point;
+    });
+
+    const onMove = (e) => {
+      if (!this._wpDragging) return;
+      e.preventDefault();
+      moved = true;
+      const c = e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
+      if (c) this._waypointDragHandlers.forEach((h) => h(c, false));
+    };
+    this.map.on('mousemove', onMove);
+    this.map.on('touchmove', onMove);
+
+    const onUp = (e) => {
+      if (!this._wpDragging) return;
+      this._wpDragging = false;
+      this.map.getCanvas().style.cursor = '';
+      if (!moved && dragStartPoint) {
+        // Treat as a tap on the waypoint handle.
+        this._waypointTapHandlers.forEach((h) => h());
+        return;
+      }
+      const c = e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
+      if (c) this._waypointDragHandlers.forEach((h) => h(c, true));
+    };
+    this.map.on('mouseup', onUp);
+    this.map.on('touchend', onUp);
+
+    this.map.on('mouseenter', LAYER, () => {
+      if (!this._wpDragging) this.map.getCanvas().style.cursor = 'grab';
+    });
+    this.map.on('mouseleave', LAYER, () => {
+      if (!this._wpDragging) this.map.getCanvas().style.cursor = '';
+    });
   }
 
   setRoute(features) {

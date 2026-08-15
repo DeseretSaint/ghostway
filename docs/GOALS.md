@@ -9,7 +9,7 @@ Live: https://deseretsaint.github.io/ghostway/
 | Routing engine (camera-aware) | 9 | Own graph (Wasatch) + Valhalla national fallback with camera avoidance; self-host doc shipped |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
 | Traffic / ETA accuracy | 8 | Live UDOT events → edge delays; calibrated cost model matches Valhalla ±0 min on benchmark corridor |
-| Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, over-speed + camera-ahead alerts |
+| Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, alerts, waypoint drag |
 | Visual polish | 9 | Splash, onboarding, mission icons, motion, legend; states done |
 | Camera data layer | 6 | DeFlock tiles + heatmap working |
 
@@ -232,4 +232,30 @@ Next (iteration 9):
   expanding the prebuilt box would bring the 3-mode local engine to it).
 - B: corridor ETA vs REAL drives (record Keaton's actual drive times to
   replace the Valhalla-reference benchmark).
+
+### Iteration 9 — Waypoint drag on route preview (Workstream C — final item)
+Shipped:
+- **Draggable waypoint**: every engine route preview shows an orange grab-handle
+  at the route midpoint. Real mouse/touch drag re-routes as from → via → to
+  (two legs stitched into one through-route with summed distance/ETA/camera
+  counts and merged step lists at correct cumulative offsets). Works on both
+  tiers (local graph when both legs are in coverage, Valhalla otherwise).
+- Tap the via handle to remove the waypoint and re-route direct.
+- Handle hidden while navigating; via routes refresh live step bookkeeping if
+  dragged mid-navigation (no nav restart needed).
+- Bug found & fixed: `drawEngineRoutes` nav-bookkeeping read `sel.route.coords`
+  which the stitched via option lacked → TypeError on drop. Fixed by giving the
+  stitched option raw coords + a defensive fallback in the bookkeeping path
+  (caught by the unminified-stack diagnostic, verified by the E2E drag test).
+- Verified: `scripts/waypoint-check.mjs` — real mouse drag moves the handle,
+  drop triggers via re-route, card shows "Via waypoint 14 min · 12 km · 2
+  cameras", stitched geometry passes within 300 m of the drop point. All 12
+  suites green, zero console errors.
+Quality: Nav experience 9 (all C items complete).
+
+Next (iteration 10):
+- A: expand prebuilt graph coverage (SLC↔Provo corridor) to bring the local
+  3-mode engine to more of Keaton's real trips.
+- B: record real drive times on test corridors to validate ETAs against actual.
+- Camera layer score (6) is the lowest remaining — DeFlock data-quality pass.
 
