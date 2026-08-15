@@ -13,7 +13,7 @@ export class MapView {
       center: [-111.7646, 40.3778],
       zoom: 11.5,
       attributionControl: false,
-      maxPitch: 0,
+      maxPitch: 60,
     });
     this.map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
@@ -21,6 +21,7 @@ export class MapView {
     this.routeSource = null;
     this.camSourceReady = false;
     this._clickHandlers = [];
+    this._userLayerReady = false;
 
     this.map.on('load', () => this._onLoad());
   }
@@ -235,6 +236,79 @@ export class MapView {
 
   flyTo(coords, zoom) {
     this.map.flyTo({ center: coords, zoom: zoom ?? this.map.getZoom(), duration: 700 });
+  }
+
+  // ---- Follow mode (Workstream C): bearing-rotated driving camera ----
+  _ensureUserLayer() {
+    if (this._userLayerReady) return;
+    this.map.addSource('user-pos', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+    this.map.addLayer({
+      id: 'user-halo',
+      type: 'circle',
+      source: 'user-pos',
+      paint: { 'circle-radius': 16, 'circle-color': '#3ad6c5', 'circle-opacity': 0.18 },
+    });
+    this.map.addLayer({
+      id: 'user-dot',
+      type: 'circle',
+      source: 'user-pos',
+      paint: {
+        'circle-radius': 7,
+        'circle-color': '#3ad6c5',
+        'circle-stroke-width': 2.5,
+        'circle-stroke-color': '#ffffff',
+      },
+    });
+    this._userLayerReady = true;
+  }
+
+  setUserPosition(coords, headingDeg) {
+    this._ensureUserLayer();
+    const src = this.map.getSource('user-pos');
+    if (src) {
+      src.setData({
+        type: 'FeatureCollection',
+        features: [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coords } }],
+      });
+    }
+  }
+
+  // Smoothly follow the user: rotate to heading, pitch for driving, keep them
+  // centered in the lower third so the road ahead is visible.
+  followUser(coords, headingDeg, zoom = 16.5) {
+    this._ensureUserLayer();
+    this.setUserPosition(coords, headingDeg);
+    const h = this.map.getContainer().clientHeight;
+    this.map.easeTo({
+      center: coords,
+      zoom,
+      bearing: -headingDeg, // map rotates so heading points up
+      pitch: 55,
+      padding: { top: h * 0.28, bottom: 0, left: 0, right: 0 },
+      duration: 900,
+      easing: (t) => t * (2 - t), // ease-out
+    });
+  }
+
+  // Exit follow mode: level the camera, no rotation, restore padding.
+  unfollow() {
+    this.map.easeTo({ bearing: 0, pitch: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 });
+  }
+
+  // Notify when the user manually moves the map (pan / rotate / zoom). Used to
+  // pause follow mode until they tap recenter. Programmatic camera moves
+  // (easeTo/flyTo) also fire these events but WITHOUT an originalEvent, so we
+  // filter those out.
+  onUserPan(handler) {
+    const wrap = (e) => {
+      if (e && e.originalEvent) handler();
+    };
+    this.map.on('dragstart', wrap);
+    this.map.on('rotatestart', wrap);
+    this.map.on('zoomstart', wrap);
   }
 
   getCenter() {

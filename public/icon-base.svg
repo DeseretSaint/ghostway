@@ -1,15 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
-      <stop offset="0%" stop-color="#162133"/>
+    <radialGradient id="bg" cx="50%" cy="38%" r="80%">
+      <stop offset="0%" stop-color="#17243a"/>
       <stop offset="100%" stop-color="#0b0f17"/>
     </radialGradient>
   </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
-  <g>
-    <path d="M256 96 L368 160 V288 C368 384 320 416 256 432 C192 416 144 384 144 288 V160 Z"
-          fill="none" stroke="#3ad6c5" stroke-width="26" stroke-linejoin="round"/>
-    <circle cx="256" cy="240" r="48" fill="#3ad6c5"/>
-    <path d="M256 288 V368" stroke="#9fb2c9" stroke-width="22" stroke-linecap="round"/>
-  </g>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Camera's gaze (top-right): red lens + translucent coverage wedge -->
+  <path d="M372 148 L236 306 A190 190 0 0 0 372 338 Z" fill="#ff4d6d" opacity="0.28"/>
+  <path d="M372 148 L300 296 A150 150 0 0 0 372 332 Z" fill="#ff4d6d" opacity="0.30"/>
+  <circle cx="372" cy="168" r="34" fill="#ff4d6d"/>
+  <circle cx="372" cy="168" r="34" fill="none" stroke="#0b0f17" stroke-width="7"/>
+  <circle cx="372" cy="168" r="11" fill="#0b0f17"/>
+
+  <!-- The route: curves clear of the gaze, bottom-left to top-center -->
+  <path d="M124 408 C 210 386, 168 300, 218 244 C 262 194, 286 176, 294 112"
+        fill="none" stroke="#3ad6c5" stroke-width="34" stroke-linecap="round"/>
+
+  <!-- Origin dot + destination arrowhead -->
+  <circle cx="124" cy="408" r="26" fill="#e8eef7"/>
+  <circle cx="124" cy="408" r="26" fill="none" stroke="#0b0f17" stroke-width="6"/>
+  <path d="M294 66 L324 126 L294 110 L264 126 Z" fill="#3ad6c5"/>
 </svg>

@@ -104,6 +104,12 @@ function wireApp() {
   $('#modalClose').addEventListener('click', closeModal);
 
   $('#gpsBtn').addEventListener('click', useMyLocation);
+  $('#recenterBtn').addEventListener('click', () => setFollow(true));
+  // Standard nav behavior: if the user pans/rotates during navigation, pause
+  // follow mode and show the recenter button.
+  app.map.onUserPan(() => {
+    if (app.state.navigating && app._followActive) setFollow(false);
+  });
   $('#camLayerBtn').addEventListener('click', () => {
     app._camLayerOn = !(app._camLayerOn ?? true);
     app.map.setCameraLayerVisible(app._camLayerOn);
@@ -383,6 +389,7 @@ function startNav() {
   // Hide the planning panel, show the nav banner.
   $('#panel').hidden = true;
   showNavBanner();
+  setFollow(true);
 
   const first = app._navSteps[0];
   if (first) speak(phraseManeuver(first.distance, first.instruction, first.name), { interrupt: true });
@@ -394,7 +401,12 @@ function startNav() {
         const c = [pos.coords.longitude, pos.coords.latitude];
         app.state.userLoc = c;
         updateSpeed(pos);
-        app.map.flyTo(c, 16);
+        app.state.heading = updateHeading(pos, c);
+        if (app._followActive) {
+          app.map.followUser(c, app.state.heading);
+        } else {
+          app.map.setUserPosition(c, app.state.heading);
+        }
         advanceStep(c);
         checkOffRoute(c);
       },
@@ -402,6 +414,30 @@ function startNav() {
       { enableHighAccuracy: true, maximumAge: 2000 }
     );
   }
+}
+
+// Heading: prefer GPS heading; otherwise derive from consecutive positions.
+function updateHeading(pos, coords) {
+  const prev = app._lastHeadingPos;
+  app._lastHeadingPos = coords;
+  const h = pos.coords.heading;
+  if (h != null && !isNaN(h) && (pos.coords.speed == null || pos.coords.speed > 1)) return h;
+  if (prev) {
+    const [lon1, lat1] = prev;
+    const latm = ((lat1 + coords[1]) / 2) * Math.PI / 180;
+    const dx = (coords[0] - lon1) * Math.cos(latm);
+    const dy = coords[1] - lat1;
+    if (Math.hypot(dx, dy) > 1e-6) {
+      return ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+    }
+  }
+  return app.state.heading || 0;
+}
+
+function setFollow(on) {
+  app._followActive = on;
+  $('#recenterBtn').hidden = on || !app.state.navigating;
+  if (on) app._lastHeadingPos = null;
 }
 
 function updateSpeed(pos) {
@@ -427,6 +463,8 @@ function updateSpeed(pos) {
 function stopNav(arrived = false) {
   app.state.navigating = false;
   cancelVoice();
+  setFollow(false);
+  app.map.unfollow();
   if (app.state.gpsWatch) {
     navigator.geolocation.clearWatch(app.state.gpsWatch);
     app.state.gpsWatch = null;

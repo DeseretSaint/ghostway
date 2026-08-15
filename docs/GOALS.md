@@ -9,8 +9,8 @@ Live: https://deseretsaint.github.io/ghostway/
 | Routing engine (camera-aware) | 7 | Own graph + A* with camera cost (Wasatch Front); national coverage pending |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
 | Traffic / ETA accuracy | 6 | Live UDOT events → edge speed factors + delay on cards; measured-speed data pending |
-| Nav experience (follow, voice) | 8 | Voice guidance, countdown banner, speed limits, arrival screen, off-route reroute |
-| Visual polish | 7 | Motion + spring states, legend, camera layer toggle; icon/splash pending |
+| Nav experience (follow, voice) | 9 | Follow-mode bearing camera, pitch, pan-pause + recenter; voice + banner + arrival |
+| Visual polish | 8 | Mission icon set (route avoiding camera's gaze), motion, legend, layer toggle; splash next |
 | Camera data layer | 6 | DeFlock tiles + heatmap working |
 
 ## Workstreams
@@ -92,8 +92,33 @@ Shipped:
   incidents still use OSM maxspeed profiles. Recorded for the score.
 Quality: Traffic 2→6.
 
-Next (iteration 4):
-- C: follow-mode camera (bearing rotation + pitch, recenter button).
-- C: draggable waypoint on route preview (clickable alternatives done).
-- D: app icon + splash, empty/loading state design.
+### Iteration 4 — Follow mode (Workstream C) + icon set (Workstream D)
+Shipped:
+- **Follow-mode camera**: while navigating, the map rotates to your GPS heading
+  (heading-up like Google/Apple), tilts to a 55° driving perspective with the
+  user pinned to the lower third, zooms to street level, and eases smoothly
+  between fixes. Heading comes from GPS `heading` with a fallback derived from
+  consecutive positions.
+- **Pan-pause + recenter** (standard nav behavior): if you drag/rotate/zoom the
+  map during navigation, follow pauses and a 🧭 recenter button appears; tap it
+  to resume. Programmatic camera moves are filtered out via `originalEvent` so
+  they don't falsely pause follow.
+- **Teal user marker** (dot + halo) rendered during navigation.
+- Camera now permits pitch (maxPitch 0→60) — the style's 3D buildings tilt in
+  follow mode.
+- **New app icon set** (192/512/maskable): a teal route curving away from a red
+  camera's coverage wedge — the mission in one glance. Vision-reviewed, refined
+  per critique (sector contrast +, arrow/camera spacing +), 8/10 professional
+  rating. Transparent corners for Android adaptive icons.
+- Verified: new `scripts/follow-check.mjs` drives the route with mocked GPS
+  headings and asserts bearing 73→77°, pitch 55°, zoom 16.5, user-dot visible,
+  pan pauses follow + recenter resumes — all hard assertions pass. All six
+  suites green (smoke, engine, interact, nav-playback, follow, traffic).
+Quality: Nav experience 8→9 · Visual polish 7→8.
+
+Next (iteration 5):
+- D: splash screen polish + first-run onboarding state design.
+- C: waypoint drag on route preview; speed-limit over-speed alert.
 - B stretch: probe UDOT TMS 5-min speed feeds for a no-token endpoint.
+- A: Valhalla-in-Docker evaluation for national coverage.
+

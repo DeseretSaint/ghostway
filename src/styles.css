@@ -805,3 +805,21 @@ details summary {
 .lg-line { width: 18px; height: 4px; border-radius: 2px; flex: none; }
 .lg-line.teal { background: #3ad6c5; }
 .lg-line.grey { background: #5b6b80; }
+
+/* Recenter (follow mode) button */
+.recenter-btn {
+  position: absolute;
+  right: 12px;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  z-index: 6;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+}
