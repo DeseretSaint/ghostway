@@ -11,7 +11,7 @@ Live: https://deseretsaint.github.io/ghostway/
 | Traffic / ETA accuracy | 8 | Full Wasatch coverage; 3/5 corridors match Valhalla exactly, 2 diverge on route choice |
 | Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, alerts, waypoint drag, live camera counter |
 | Visual polish | 9 | Splash, onboarding, mission icons, motion, legend; states done |
-| Camera data layer | 9 | ALPR-aware coloring, rich tap-details, community reports (local + opt-in OSM notes), reports steer routing |
+| Camera data layer | 9 | ALPR-aware coloring, rich tap-details, community reports, monthly-refreshed bundled snapshot, outage-resilient avoidance |
 
 ## Workstreams
 - **A — Custom camera-aware routing**: own graph, A*, per-edge camera cost, STRICT/MODERATE/OFF, route options, Valhalla national fallback, self-host doc. [core done; graph expansion ongoing]
@@ -361,4 +361,29 @@ Next (iteration 14):
 - B: real-drive ground truth from Keaton's PG→Costco run (needs his time).
 - D: banner density option (compact mode for small screens).
 - Camera layer: CI job to refresh camera snapshot monthly from DeFlock.
+
+### Iteration 14 — Camera data freshness + outage resilience (camera layer)
+Problem found: the shipped camera fallback (`public/cameras/cameras.geojson`)
+was an EMPTY placeholder, so whenever Overpass went down, camera avoidance
+silently stopped working — and it was also fetched eagerly at startup.
+Shipped:
+- **Real bundled snapshot**: `scripts/fetch-cameras.mjs` rewritten — pulls the
+  DeFlock national dataset, writes (a) the full 35 MB national snapshot for
+  graph builds (gitignored) and (b) a trimmed **Wasatch-only snapshot: 626
+  cameras, 116 KB** shipped as the app fallback. Sanity check refuses tiny
+  results.
+- **Lazy fallback**: snapshot now loads only when Overpass actually fails
+  (`_ensureFallback()`), zero startup cost.
+- **Monthly CI refresh** (`.github/workflows/camera-refresh.yml`): 1st of each
+  month, commits the fresh snapshot (same pattern as the WZDx traffic job).
+- Verified: `scripts/camera-fallback-check.mjs` simulates a total Overpass
+  outage — avoidance still works end-to-end from the bundled snapshot
+  (pool of 57 cameras, Balanced 12 vs Fastest 13 cameras on PG→Costco). PASS.
+- All 16 suites green (traffic flaked once on UDOT 504, passed on retry — the
+  app's own retry/backoff covers this).
+
+Next (iteration 15):
+- B: real-drive ground truth from Keaton's PG→Costco run (needs his time).
+- D: banner density option (compact mode for small screens).
+- A: extend graph bbox south (Provo → Spanish Fork growth corridor).
 

@@ -31,6 +31,13 @@ export class CameraStore {
   }
 
   async loadFallback() {
+    // No-op at startup: the bundled snapshot is loaded lazily by _overpass()
+    // only when the live Overpass source fails. Kept for API compatibility.
+    return this._geojson;
+  }
+
+  async _ensureFallback() {
+    if (this._geojson) return this._geojson;
     try {
       const r = await fetch(CONFIG.cameraGeojson);
       if (r.ok) this._geojson = await r.json();
@@ -71,7 +78,8 @@ export class CameraStore {
       this._cache.set(key, feats);
       return feats;
     } catch (err) {
-      if (this._geojson) return this._inBox(this._geojson.features, bbox);
+      const fb = await this._ensureFallback();
+      if (fb) return this._inBox(fb.features, bbox);
       return [];
     }
   }
