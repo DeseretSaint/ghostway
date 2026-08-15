@@ -50,7 +50,17 @@ const server = createServer(
       res.end('not found');
       return;
     }
-    res.writeHead(200, { 'content-type': MIME[extname(path)] || 'application/octet-stream' });
+    const ext = extname(path);
+    const headers = { 'content-type': MIME[ext] || 'application/octet-stream' };
+    // HTML / manifest / service worker: always revalidate so the phone never
+    // shows a stale shell pointing at an old JS hash.
+    if (ext === '.html' || ext === '.webmanifest' || path.endsWith('/sw.js')) {
+      headers['cache-control'] = 'no-cache';
+    } else {
+      // Hashed assets are content-addressed -> safe to cache forever.
+      headers['cache-control'] = 'public, max-age=31536000, immutable';
+    }
+    res.writeHead(200, headers);
     createReadStream(path).pipe(res);
   }
 );

@@ -1,0 +1,23 @@
+import { spawn } from 'node:child_process';
+import puppeteer from 'puppeteer-core';
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const srv = spawn('node', ['scripts/serve-https.mjs'], { cwd: process.cwd(), stdio: 'ignore' });
+await wait(2500);
+const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--ignore-certificate-errors'] });
+const p = await b.newPage();
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+await p.goto('https://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+await wait(3500);
+const r = await p.evaluate(async () => {
+  const reg = await navigator.serviceWorker.getRegistration();
+  const m = await (await fetch('/manifest.webmanifest')).json();
+  return { sw: !!reg, scope: reg?.scope, manifestIcons: (m.icons || []).length, name: m.name };
+});
+console.log('over HTTPS ->', JSON.stringify(r), 'pageerrors:', errs.slice(0, 3));
+const pass = r.sw && r.manifestIcons >= 1;
+await b.close();
+srv.kill('SIGTERM');
+console.log(pass ? 'HTTPS PWA PASS ✅' : 'HTTPS PWA FAIL ❌');
+process.exit(pass ? 0 : 1);
