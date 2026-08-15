@@ -19,9 +19,11 @@ async function main() {
   // Helper: what element is at the center of a selector?
   const atCenter = (sel) =>
     page.evaluate((s) => {
-      const r = document.querySelector(s).getBoundingClientRect();
-      const el = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-      return el ? el.id || el.tagName : 'none';
+      const el = document.querySelector(s);
+      if (!el) return 'missing';
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return hit ? hit.id || hit.className || hit.tagName : 'none';
     }, sel);
 
   const checks = {};
@@ -47,17 +49,30 @@ async function main() {
     return r.width > 0 && r.height > 0 && !document.querySelector('#route-actions').hidden;
   });
   checks.goHit = await atCenter('#goBtn');
-  // Real mouse click on Go.
-  await page.click('#goBtn');
+  // Picking both endpoints auto-routes now; if Go is still visible (auto-route
+  // pending), give it a real click. Otherwise routing already ran.
+  if (checks.goHit === 'goBtn') {
+    await page.click('#goBtn');
+  }
   try {
-    await page.waitForFunction(() => window.__ghostwayDebug && window.__ghostwayDebug.routed === true, { timeout: 20000 });
+    await page.waitForFunction(() => window.__ghostwayDebug && window.__ghostwayDebug.routed === true, { timeout: 30000 });
     checks.routed = true;
   } catch {
     checks.routed = false;
   }
   await wait(1000);
   checks.routeCardShown = await page.evaluate(() => !document.querySelector('#route-card').hidden);
-  checks.avoidToggleHit = await atCenter('#avoidChk'); // now visible
+  // (C) After routing the search panel collapses (Google Maps behavior). The
+  //     Start button must be clickable; the mode switch lives behind "Edit".
+  checks.startNavHit = await atCenter('#startNavBtn');
+  const edit = await page.$('#editRouteBtn');
+  if (edit) {
+    await edit.click();
+    await wait(400);
+    checks.modeHit = await atCenter('.mode-btn.active');
+  } else {
+    checks.modeHit = await atCenter('.mode-btn.active');
+  }
 
   console.log(JSON.stringify(checks, null, 1));
   console.log('page errors:', errs.slice(0, 4));
@@ -67,13 +82,11 @@ async function main() {
     checks.gpsHit === 'gpsBtn' &&
     checks.fromHit === 'fromInput' &&
     checks.toHit === 'toInput' &&
-    checks.goVisible &&
-    checks.goHit === 'goBtn' &&
     checks.routed &&
     checks.routeCardShown &&
-    checks.avoidToggleHit === 'avoidChk' ||
-    checks.avoidToggleHit === 'SPAN' ||
-    errs.length === 0;
+    String(checks.modeHit).includes('mode-btn') &&
+    checks.startNavHit === 'startNavBtn' &&
+    errs.filter((e) => !/favicon/.test(e)).length === 0;
 
   await browser.close();
   srv.kill('SIGTERM');

@@ -50,7 +50,12 @@ export const CONFIG = {
     ],
   },
 
-  github: 'https://github.com/ghostway/ghostway',
+  // --- Routing engine coverage: Ghostway's own graph ships the Wasatch Front.
+  //     Outside this box (or if the graph fails to load) we fall back to
+  //     BRouter/OSRM with camera re-routing.
+  engineRegion: 'wasatch-front',
+
+  github: 'https://github.com/DeseretSaint/ghostway',
   about: {
     name: 'Ghostway',
     tagline: 'Navigate beyond surveillance.',

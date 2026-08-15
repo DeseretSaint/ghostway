@@ -1,3 +1,14 @@
 node_modules/
 dist/
 certs/
+
+# Engine build inputs — regenerable (Geofabrik extract + DeFlock snapshot).
+engine/data/*.pbf
+engine/data/*.osm.pbf
+engine/data/*.geojson
+
+# Ship only the gzipped graph.
+public/graph/wasatch-graph.bin
+
+# Test artifacts
+engine-e2e.png

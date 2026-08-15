@@ -584,3 +584,81 @@ details summary {
   color: var(--muted);
   text-align: right;
 }
+
+/* Avoidance mode switch (Strict / Moderate / Off) */
+.mode-switch {
+  display: inline-flex;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+.mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.mode-btn.active {
+  background: var(--accent);
+  color: #06231f;
+}
+.engine-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--accent);
+  text-align: center;
+}
+
+/* Route options (Clearest / Balanced / Fastest) */
+.route-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+.route-opt {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+  font-size: 13px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.route-opt.chosen {
+  border-color: var(--accent);
+  background: rgba(58, 214, 197, 0.1);
+}
+.opt-label {
+  font-weight: 700;
+}
+.opt-meta {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.opt-cams.clear {
+  color: var(--accent);
+  font-weight: 600;
+}
+.steps-wrap { margin-top: 8px; }
+#startNavBtn { margin-top: 8px; }
+.rc-edit {
+  display: block;
+  margin-left: auto;
+  margin-bottom: 4px;
+  font-size: 12px;
+}

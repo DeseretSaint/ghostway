@@ -91,14 +91,101 @@ export function buildPanel(app) {
   );
 }
 
+// ---- Route card: engine options (Clearest/Balanced/Fastest) or legacy single ----
 export function renderRouteCard(app, result) {
   const card = $('#route-card');
+  // Collapse the search panel so the route summary + Start button are fully
+  // visible without scrolling (Google Maps behavior).
+  $('#search').hidden = true;
+  $('#route-actions').hidden = true;
+  $('#avoid-toggle').hidden = true;
+  if (result.engine) {
+    renderEngineCard(app, card, result);
+    return;
+  }
+  renderLegacyCard(app, card, result);
+}
+
+export function expandSearch(app) {
+  $('#search').hidden = false;
+  $('#route-actions').hidden = false;
+  $('#avoid-toggle').hidden = false;
+}
+
+function renderEngineCard(app, card, result) {
+  const { options, chosen } = result;
+  const sel = options[chosen];
+  const fastest = options.find((o) => o.mode === 'off') || options[0];
+
+  const optHtml = options
+    .map((o, i) => {
+      const cams =
+        o.cameras === 0
+          ? `<span class="opt-cams clear">0 cameras</span>`
+          : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
+      return `
+        <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button">
+          <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
+          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}</span>
+        </button>`;
+    })
+    .join('');
+
+  const detourVsFastest =
+    sel.mode !== 'off' && fastest
+      ? `<div class="rc-detour">+${fmtDistance(Math.max(0, sel.distance - fastest.distance))} · +${Math.max(
+          0,
+          Math.round((sel.duration - fastest.duration) / 60)
+        )} min vs fastest</div>`
+      : '';
+
+  const steps = sel.instructions || [];
+  const stepHtml = steps
+    .slice(0, 12)
+    .map(
+      (s) =>
+        `<li><span class="step-ic">${stepIcon(s.modifier)}</span><span>${s.instruction}${
+          s.name ? ` <b>${s.name}</b>` : ''
+        }</span><span class="step-dist">${fmtDistance(s.distance)}</span></li>`
+    )
+    .join('');
+
+  card.innerHTML = `
+    <button id="editRouteBtn" class="text-link rc-edit" type="button">✎ Edit route</button>
+    <div class="rc-head">
+      <div class="rc-time">${fmtDuration(sel.duration)}</div>
+      <div class="rc-dist">${fmtDistance(sel.distance)}</div>
+    </div>
+    <div class="rc-badge">${
+      sel.cameras === 0
+        ? '🛡️ Fully clear of known cameras'
+        : `🛡️ Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
+    }</div>
+    ${detourVsFastest}
+    <div class="route-options">${optHtml}</div>
+    <button id="startNavBtn" class="primary-btn">▶ Start navigation</button>
+    ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : ''}
+  `;
+  card.hidden = false;
+
+  const edit = $('#editRouteBtn');
+  if (edit) edit.addEventListener('click', () => expandSearch(app));
+  card.querySelectorAll('.route-opt').forEach((b) =>
+    b.addEventListener('click', () => app.selectOption(Number(b.dataset.opt)))
+  );
+  const sn = $('#startNavBtn');
+  if (sn) sn.addEventListener('click', () => app.startNav());
+}
+
+function modeEmoji(mode) {
+  return { strict: '🕶', moderate: '🛡', off: '🚀' }[mode] || '🛡';
+}
+
+function renderLegacyCard(app, card, result) {
   const shown = result.avoid && result.applied ? result.clear : result.baseline;
   const baseline = result.baseline;
 
-  const detour = result.applied
-    ? shown.distance - baseline.distance
-    : 0;
+  const detour = result.applied ? shown.distance - baseline.distance : 0;
   const extraMin = result.applied
     ? Math.max(0, Math.round((shown.duration - baseline.duration) / 60))
     : 0;
@@ -128,27 +215,30 @@ export function renderRouteCard(app, result) {
     .join('');
 
   card.innerHTML = `
+    <button id="editRouteBtn" class="text-link rc-edit" type="button">✎ Edit route</button>
     <div class="rc-head">
       <div class="rc-time">${fmtDuration(shown.duration)}</div>
       <div class="rc-dist">${fmtDistance(shown.distance)}</div>
     </div>
     <div class="rc-badge">${headline}</div>
     ${result.applied ? `<div class="rc-detour">+${fmtDistance(detour)} · +${extraMin} min vs fastest</div>` : ''}
-    ${steps.length ? `<ol class="steps">${stepHtml}</ol>` : '<p class="muted small">Turn-by-turn directions unavailable right now.</p>'}
+    <button id="startNavBtn" class="primary-btn">▶ Start navigation</button>
+    ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : '<p class="muted small">Turn-by-turn directions unavailable right now.</p>'}
     ${result.applied ? `<button id="showFastest" class="text-link">Show fastest route instead</button>` : ''}
-  <button id="startNavBtn" class="primary-btn" style="margin-top:10px">▶ Start navigation</button>
   `;
   card.hidden = false;
+
+  const edit = $('#editRouteBtn');
+  if (edit) edit.addEventListener('click', () => expandSearch(app));
 
   const sf = $('#showFastest');
   if (sf)
     sf.addEventListener('click', () => {
       app.state.avoid = false;
-      $('#avoidChk').checked = false;
       app.map.setRoute([
         { type: 'Feature', properties: { color: '#5b6b80' }, geometry: { type: 'LineString', coordinates: baseline.coords } },
       ]);
-      renderRouteCard(app, { ...result, avoid: false, applied: false });
+      renderLegacyCard(app, card, { ...result, avoid: false, applied: false });
     });
   const sn = $('#startNavBtn');
   if (sn) sn.addEventListener('click', () => app.startNav());

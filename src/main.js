@@ -3,6 +3,7 @@ import { MapView } from './map-view.js';
 import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
+import { planRoutes, loadGraph, inGraphRegion, graphStatus } from './router.js';
 import { $, el, debounce, fmtDistance, fmtDuration, haversine, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
 import { registerSW } from './pwa.js';
@@ -13,8 +14,11 @@ const app = {
   state: {
     from: null, // {coords, label}
     to: null,
-    avoid: true,
+    mode: localStorage.getItem('gw-mode') || 'moderate', // strict | moderate | off
+    avoid: true, // derived from mode !== 'off' (kept for legacy path)
     route: null,
+    options: [], // engine route options
+    chosen: 0,
     userLoc: null, // [lon,lat] last known GPS
     navigating: false,
     gpsWatch: null,
@@ -30,6 +34,7 @@ async function init() {
   // Expose nav controls to the UI module.
   app.startNav = startNav;
   app.stopNav = stopNav;
+  app.selectOption = selectOption;
 
   buildPanel(app);
   wireApp();
@@ -40,9 +45,33 @@ async function init() {
     openCameraModal(props, coords);
   });
 
-  // Default view: Pleasant Grove, UT (Keaton's home turf) to demonstrate.
   showStatus('Tap ◎ to start from your location, or search a destination.', 'info');
   registerSW();
+  preloadEngine();
+  applyModeUI();
+}
+
+// Load Ghostway's own routing graph in the background (~6 MB gz).
+async function preloadEngine() {
+  try {
+    await loadGraph();
+    app._engineReady = true;
+    enginePill('🛡 Local camera-aware engine ready');
+    window.__ghostwayEngine = 'ready';
+  } catch (e) {
+    console.warn('engine load failed', e);
+    app._engineReady = false;
+    window.__ghostwayEngine = 'failed';
+  }
+}
+
+function enginePill(msg) {
+  const s = $('#engineStatus');
+  if (!s) return;
+  s.textContent = msg;
+  s.hidden = false;
+  clearTimeout(s._t);
+  s._t = setTimeout(() => (s.hidden = true), 4000);
 }
 
 function wireApp() {
@@ -59,11 +88,18 @@ function wireApp() {
   $('#goBtn').addEventListener('click', onRoute);
   $('#swapBtn').addEventListener('click', swapEndpoints);
   $('#clearRouteBtn').addEventListener('click', clearRoute);
-  $('#avoidChk').addEventListener('change', (e) => {
-    app.state.avoid = e.target.checked;
-    updateSafetyPill();
+
+  // Camera avoidance mode switch (strict / moderate / off).
+  $('#modeSwitch').addEventListener('click', (e) => {
+    const btn = e.target.closest('.mode-btn');
+    if (!btn) return;
+    app.state.mode = btn.dataset.mode;
+    localStorage.setItem('gw-mode', app.state.mode);
+    app.state.avoid = app.state.mode !== 'off';
+    applyModeUI();
     if (app.state.from && app.state.to) onRoute();
   });
+
   $('#camInfoBtn').addEventListener('click', openWhyModal);
 
   // Drawer actions.
@@ -76,11 +112,13 @@ function wireApp() {
   });
 }
 
-function updateSafetyPill() {
+function applyModeUI() {
   const pill = $('#safety-pill');
-  const on = app.state.avoid;
-  pill.classList.toggle('off', !on);
-  pill.querySelector('.label').textContent = on ? 'Avoid cameras' : 'Fastest route';
+  const mode = app.state.mode;
+  pill.classList.toggle('off', mode === 'off');
+  pill.querySelector('.label').textContent =
+    mode === 'strict' ? 'Strict avoidance' : mode === 'moderate' ? 'Avoid cameras' : 'Fastest route';
+  document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
 }
 
 function setEndpoints(from, to) {
@@ -119,6 +157,10 @@ function maybeAutoRoute() {
   if (app.state.from && app.state.to) onRoute();
 }
 
+function engineCovers(fromC, toC) {
+  return app._engineReady && inGraphRegion(fromC[0], fromC[1]) && inGraphRegion(toC[0], toC[1]);
+}
+
 async function onRoute() {
   const from = app.state.from || (await resolveInput('fromInput'));
   const to = app.state.to || (await resolveInput('toInput'));
@@ -129,6 +171,33 @@ async function onRoute() {
   setEndpoints(from, to);
   showStatus('Routing…', 'info');
 
+  // --- Ghostway's own camera-aware engine (in coverage) ---
+  if (engineCovers(from.coords, to.coords)) {
+    try {
+      const t0 = performance.now();
+      const { options } = await planRoutes(from.coords, to.coords, {});
+      const ms = Math.round(performance.now() - t0);
+      app.state.options = options;
+      // Default pick: closest to the user's mode preference.
+      const modeRank = { strict: ['strict', 'moderate', 'off'], moderate: ['moderate', 'strict', 'off'], off: ['off', 'moderate', 'strict'] };
+      const pref = modeRank[app.state.mode] || modeRank.moderate;
+      let chosen = options.findIndex((o) => o.mode === pref[0]);
+      if (chosen === -1) chosen = options.findIndex((o) => o.mode === pref[1]);
+      if (chosen === -1) chosen = 0;
+      app.state.chosen = chosen;
+      app.state.route = { engine: true, options, chosen };
+      drawEngineRoutes();
+      renderRouteCard(app, app.state.route);
+      clearStatus();
+      enginePill(`🛡 Local engine · ${ms} ms · ${options.length} option${options.length > 1 ? 's' : ''}`);
+      window.__ghostwayDebug = { routed: true, engine: true, options: options.length, ms };
+      return;
+    } catch (e) {
+      console.warn('engine route failed, falling back', e);
+    }
+  }
+
+  // --- Legacy fallback (outside coverage or engine failure) ---
   try {
     const result = await planRoute(from.coords, to.coords, {
       avoid: app.state.avoid,
@@ -142,6 +211,45 @@ async function onRoute() {
     console.error(err);
     showStatus('Routing failed: ' + err.message, 'warn');
   }
+}
+
+function selectOption(i) {
+  if (!app.state.options[i]) return;
+  app.state.chosen = i;
+  drawEngineRoutes();
+  renderRouteCard(app, app.state.route);
+}
+
+function drawEngineRoutes() {
+  const { options, chosen } = app.state;
+  const feats = [];
+  options.forEach((o, i) => {
+    if (i === chosen) return;
+    feats.push({
+      type: 'Feature',
+      properties: { color: '#5b6b80' },
+      geometry: { type: 'LineString', coordinates: o.coords },
+    });
+  });
+  const sel = options[chosen];
+  feats.push({
+    type: 'Feature',
+    properties: { color: '#3ad6c5' },
+    geometry: { type: 'LineString', coordinates: sel.coords },
+  });
+  app.map.setRoute(feats);
+  app.map.setEndpoints([
+    { type: 'Feature', properties: { color: '#3ad6c5' }, geometry: { type: 'Point', coordinates: sel.coords[0] } },
+    { type: 'Feature', properties: { color: '#ff4d6d' }, geometry: { type: 'Point', coordinates: sel.coords[sel.coords.length - 1] } },
+  ]);
+  app.map.fitTo(sel.coords, true);
+
+  // Nav bookkeeping for the chosen option.
+  app._navSteps = (sel.instructions || []).map((s) => ({ ...s, startS: s.at || 0 }));
+  app._routeCum = cumulativeDistances(sel.coords);
+  app._routeTotal = app._routeCum[app._routeCum.length - 1] || 1;
+  app._navRouteCoords = sel.coords;
+  app._totalDuration = sel.duration;
 }
 
 async function resolveInput(id) {
@@ -186,6 +294,7 @@ function drawRoute(result) {
   app._routeCum = cumulativeDistances(shown.coords);
   app._routeTotal = app._routeCum[app._routeCum.length - 1] || 1;
   app._navRouteCoords = shown.coords;
+  app._totalDuration = shown.duration;
 }
 
 function cumulativeDistances(coords) {
@@ -256,7 +365,9 @@ function stopNav() {
   }
   $('#navBanner').hidden = true;
   $('#panel').hidden = false;
-  app.map.fitTo([app.state.from?.coords, app.state.to?.coords].filter(Boolean), true);
+  const sel = app.state.route?.engine ? app.state.options[app.state.chosen] : null;
+  const fit = sel ? sel.coords : [app.state.from?.coords, app.state.to?.coords].filter(Boolean);
+  app.map.fitTo(fit, true);
 }
 
 function advanceStep(userC) {
@@ -290,13 +401,22 @@ function renderNavStep() {
   const dist = step ? fmtDistance(step.distance) : '';
   const dir = step ? step.instruction : 'Continue';
   const name = step && step.name ? ` <b>${step.name}</b>` : '';
+  // Remaining ETA: prefer per-step durations (legacy); else prorate total.
+  let eta;
+  if (step && step.duration != null) {
+    eta = fmtDuration(steps.slice(i).reduce((a, s) => a + (s.duration || 0), 0));
+  } else if (app._totalDuration) {
+    eta = fmtDuration(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0])));
+  } else {
+    eta = '';
+  }
   $('#navBanner').innerHTML = `
     <button id="navStop" class="nav-stop" aria-label="Stop navigation">■</button>
     <div class="nav-step">
       <div class="nav-dist">${dist}</div>
       <div class="nav-dir">${dir}${name}</div>
     </div>
-    <div class="nav-eta">${fmtDuration(steps.reduce((a, s) => a + s.duration, 0))}</div>`;
+    <div class="nav-eta">${eta}</div>`;
   const stop = $('#navStop');
   if (stop) stop.addEventListener('click', stopNav);
 }
@@ -312,11 +432,13 @@ function swapEndpoints() {
 
 function clearRoute() {
   app.state.route = null;
+  app.state.options = [];
+  app.state.chosen = 0;
   app.state.from = null;
   app.state.to = null;
   $('#fromInput').value = '';
   $('#toInput').value = '';
-  $('#toInput').value = '';
+  $('#search').hidden = false;
   $('#route-actions').hidden = true;
   $('#avoid-toggle').hidden = true;
   $('#route-card').hidden = true;
@@ -367,7 +489,8 @@ function openWhyModal() {
     with thousands of agencies nationwide, usually without a warrant.</p>
     <p>Ghostway uses the open <a href="https://deflock.org" target="_blank" rel="noopener">DeFlock</a>
     camera map to route you around known camera locations by default.</p>
-    <p class="muted">Toggle “Avoid surveillance cameras” off any time you’d rather take the fastest road.</p>
+    <p><b>Strict</b> bends over backwards to pass zero cameras. <b>Moderate</b> avoids most while
+    keeping the detour sensible. <b>Off</b> takes the fastest road.</p>
   `);
 }
 
@@ -381,17 +504,17 @@ function handleDrawer(action) {
         <li><b>Base map:</b> OpenStreetMap via OpenFreeMap</li>
         <li><b>Cameras:</b> DeFlock (OpenStreetMap + volunteer ALPR map)</li>
         <li><b>Search:</b> Photon (OpenStreetMap)</li>
-        <li><b>Routing:</b> BRouter + OSRM (OpenStreetMap)</li>
+        <li><b>Routing:</b> Ghostway engine (Wasatch Front) · BRouter + OSRM fallback</li>
       </ul>
       <p class="muted small">All sources are open and free to use. No account, no tracking.</p>
     `);
   } else if (action === 'privacy') {
     openModal(`
       <h3>Privacy & how it works</h3>
-      <p>Your searches and routes are sent to public open-source servers (Photon, BRouter, OSRM)
-      to compute results — the same data any map needs. Ghostway itself stores nothing about you.</p>
-      <p>Routes default to avoiding ALPR cameras using DeFlock’s open dataset. You can turn that
-      off for the fastest road.</p>
+      <p>Inside the Wasatch Front coverage area, routing happens <b>entirely on your device</b>
+      using Ghostway's own prebuilt road graph — your destination never leaves your phone.</p>
+      <p>Outside coverage, routes fall back to public open-source servers (Photon, BRouter, OSRM).
+      Ghostway itself stores nothing about you.</p>
     `);
   } else if (action === 'donate') {
     openDonate();
