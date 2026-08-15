@@ -139,16 +139,16 @@ export class MapView {
       id: 'waypoint-halo',
       type: 'circle',
       source: 'waypoint',
-      paint: { 'circle-radius': 20, 'circle-color': '#ffb454', 'circle-opacity': 0.25 },
+      paint: { 'circle-radius': 14, 'circle-color': '#ffb454', 'circle-opacity': 0.22 },
     });
     this.map.addLayer({
       id: 'waypoint-dot',
       type: 'circle',
       source: 'waypoint',
       paint: {
-        'circle-radius': 10,
+        'circle-radius': 8,
         'circle-color': '#ffb454',
-        'circle-stroke-width': 3,
+        'circle-stroke-width': 2.5,
         'circle-stroke-color': '#ffffff',
       },
     });

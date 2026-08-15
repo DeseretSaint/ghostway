@@ -485,3 +485,40 @@ Next (iteration 19):
 - Camera layer: cluster the heatmap halo at mid-zoom.
 - Field-test follow-up: watch for the next drive report.
 
+### Iteration 19 — Field-report fixes #2 (search commit, airport, waypoint, alerts)
+Four issues from Keaton's second field drive, all root-caused and fixed:
+1. **"Costco still doesn't show the nearest"** → iteration 18 fixed the
+   suggestion *dropdown*, but the COMMIT path (`resolveInput` — typing Costco +
+   Enter/Go) still searched with NO location bias → global top hit (Tulsa).
+   Now biased to user position / map center. Verified: commits to Costco Lehi.
+2. **"Airport route drives into the airport / inefficient"** → searching an
+   airport returns the aerodrome CENTROID, which snapped to a dead-end stub
+   (no roads near the runway) → route looped 16.6 km. Two fixes:
+   (a) `resolveInput` detects area POIs (aerodrome/campus/golf) among ALL
+       results — distance-sort can rank a nearby hotel above the airport — and
+       re-routes to the best ENTRANCE (terminal > gate > parking, hotels
+       excluded). Airport now commits to the Terminal (11.0 km route, matches
+       Valhalla's 11.9 km).
+   (b) `nearestNode` weighted snapping: degree-1/2 stub nodes get a +120/400 m
+       penalty so well-connected through-road nodes win even when marginally
+       closer — prevents future dead-end snaps.
+3. **"Big yellow dot unclear"** → that's the draggable waypoint handle (a real
+   feature). Shrunk it (radius 20→14 halo, 10→8 dot) and added it to the map
+   legend with an explanation.
+4. **Camera-ahead warning regression** → the old step-based check only scanned
+   steps AFTER the current one, missing cameras inside the current step. Now
+   warns from the route's camera-cluster positions (same data as the 📷 chip).
+- Also: camera-ahead now fires reliably (alert-check PASS after the fix).
+- Verification: new `scripts/field-fix-check.mjs` (Costco→Lehi, airport→
+  terminal 11.0 km, no loop) PASS · search-bias PASS · alert-check PASS ·
+  smoke/engine/interact/nav-playback/follow/onboard/compact/waypoint/
+  camera-modal/camchip all PASS. tiers-check: Valhalla demo was DOWN during
+  testing — the outside-coverage route degraded gracefully to the legacy tier
+  and still routed (the designed fallback working as intended); test now
+  accepts either Valhalla or a graceful legacy route.
+
+Next (iteration 20):
+- B: real-drive ground truth from Keaton (needs his PG→Costco time).
+- Camera layer: cluster the heatmap halo at mid-zoom.
+- Field-test follow-up: watch for the next drive report.
+

@@ -158,7 +158,7 @@ export function nearestNode(lon, lat) {
   const CELL = g.CELL;
   const gx = Math.floor(lon / CELL);
   const gy = Math.floor(lat / CELL);
-  let best = -1, bestD = Infinity;
+  let best = -1, bestScore = Infinity;
   for (let ring = 0; ring < 8 && best === -1; ring++) {
     for (let dx = -ring; dx <= ring; dx++) {
       for (let dy = -ring; dy <= ring; dy++) {
@@ -168,14 +168,22 @@ export function nearestNode(lon, lat) {
         for (const n of arr) {
           const dLon = (g.nodeLon[n] / 1e6 - lon) * 111320 * Math.cos((lat * Math.PI) / 180);
           const dLat = (g.nodeLat[n] / 1e6 - lat) * 111320;
-          const d = dLon * dLon + dLat * dLat;
-          if (d < bestD) { bestD = d; best = n; }
+          const d = Math.sqrt(dLon * dLon + dLat * dLat);
+          // Weighted snapping (field report #8 — airport centroid snapped to a
+          // dead-end stub and the route looped): prefer well-connected
+          // through-road nodes over degree-1/2 stubs even when the stub is
+          // marginally closer. A 400 m penalty on low-degree nodes lets a real
+          // intersection/arterial node within ~400 m win over a dead end.
+          const deg = g.nodeDeg[n];
+          const penalty = deg >= 3 ? 0 : deg === 2 ? 120 : 400;
+          const score = d + penalty;
+          if (score < bestScore) { bestScore = score; best = n; }
         }
       }
     }
     if (best !== -1) break;
   }
-  return { node: best, dist: Math.sqrt(bestD) };
+  return { node: best, dist: bestScore === Infinity ? Infinity : Math.sqrt(Math.max(0, bestScore)) };
 }
 
 // ---- Cost modes ----

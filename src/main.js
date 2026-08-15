@@ -498,12 +498,68 @@ function drawEngineRoutes() {
 async function resolveInput(id) {
   const v = $('#' + id).value.trim();
   if (!v) return null;
-  const places = await searchPlaces(v, 1).catch(() => []);
-  if (places.length) {
-    const p = places[0];
-    return { coords: p.coords, label: p.name };
+  // Location-biased resolution: without `near`, committing bare "Costco"
+  // resolved to the global top hit (Tulsa!) — field report #7. Bias to the
+  // user's position, falling back to the map center.
+  const near = app.state.userLoc || (app.map ? app.map.getCenter() : null);
+  const places = await searchPlaces(v, 8, near).catch(() => []);
+  if (!places.length) return { coords: null, label: v };
+
+  // Large-area POIs (airports, campuses, golf courses) resolve to a centroid
+  // that snaps to an arbitrary — often dead-end — street (field report #8: the
+  // app drove toward the airport interior instead of the terminal). Because
+  // results are distance-sorted, the area POI may not be the top hit (a
+  // nearby hotel can rank above it), so scan ALL results for a matching area
+  // POI, then route to its entrance/terminal instead of its centroid.
+  const area = places.find((r) => isAreaPoi(r) && nameMatchesQuery(r.name, v)) || (isAreaPoi(places[0]) ? places[0] : null);
+  if (area) {
+    let entrance = findEntrance(places, area);
+    if (!entrance) {
+      const more = await searchPlaces(area.name + ' terminal', 6, near).catch(() => []);
+      entrance = findEntrance([...places, ...more], area);
+    }
+    if (entrance) return { coords: entrance.coords, label: area.name };
   }
-  return { coords: null, label: v };
+  const p = places[0];
+  return { coords: p.coords, label: p.name };
+}
+
+function nameMatchesQuery(name, q) {
+  if (!name) return false;
+  const n = name.toLowerCase();
+  // Every meaningful query token should appear in the POI name.
+  const tokens = q.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+  if (!tokens.length) return true;
+  return tokens.every((t) => n.includes(t));
+}
+
+function isAreaPoi(place) {
+  const p = place.raw || {};
+  return p.osm_value === 'aerodrome' || p.osm_value === 'campus' || p.osm_value === 'golf_course';
+}
+
+function findEntrance(results, area) {
+  if (!results || !results.length) return null;
+  const areaC = area.coords;
+  let best = null, bestRank = 99, bestD = Infinity;
+  for (const r of results) {
+    if (r === area) continue;
+    const rp = r.raw || {};
+    // Skip lodging/food that merely has the airport in its name.
+    if (/hotel|inn|suites|motel|lodging/i.test((rp.osm_key || '') + ' ' + (rp.osm_value || ''))) continue;
+    let rank = 99;
+    if (rp.osm_key === 'aeroway' && rp.osm_value === 'terminal') rank = 0;
+    else if (rp.osm_value === 'entrance' || rp.osm_value === 'gate') rank = 1;
+    else if (rp.osm_value === 'parking') rank = 2;
+    else if (/terminal|departure|arrival/i.test(r.name || '') && rp.osm_key === 'aeroway') rank = 3;
+    else if (rp.osm_key === 'building') rank = 6;
+    if (rank > 6) continue;
+    const d = haversine(areaC, r.coords);
+    if (d < 8000 && (rank < bestRank || (rank === bestRank && d < bestD))) {
+      bestRank = rank; bestD = d; best = r;
+    }
+  }
+  return best;
 }
 
 function drawRoute(result) {
@@ -863,18 +919,19 @@ function advanceStep(userC) {
         speak(phraseManeuver(Math.max(30, distToManeuver), s.instruction, s.name));
       }
     }
-    // Camera-ahead warning: find the nearest later step that passes cameras;
-    // if we're within ~250m of entering it, alert once.
-    for (let k = idx + 1; k < steps.length; k++) {
-      if (!steps[k].cameras) continue;
-      if (app._voiceAnnounced['cam' + k]) continue; // already warned for this one
-      const distToCam = steps[k].startS - traveled;
+    // Camera-ahead warning from route camera clusters — the same positions the
+    // 📷 counter chip uses (iteration 19: the old step-based check missed
+    // cameras inside the CURRENT step, so some passes went unannounced).
+    const camPts = app._camPts || [];
+    for (const c of camPts) {
+      if (app._voiceAnnounced['camPt' + c.at]) continue;
+      const distToCam = c.at - traveled;
       if (distToCam > 0 && distToCam <= 250) {
-        app._voiceAnnounced['cam' + k] = 1;
+        app._voiceAnnounced['camPt' + c.at] = 1;
         speak('Camera ahead. You will pass it in about 200 meters.');
         haptic();
+        break;
       }
-      break; // only ever consider the nearest camera step
     }
   }
 }
@@ -1224,6 +1281,7 @@ function handleDrawer(action) {
         <li><span class="lg-halo"></span> Heatmap halo = camera density</li>
         <li><span class="lg-line teal"></span> Your chosen route</li>
         <li><span class="lg-line grey"></span> Alternative route</li>
+        <li><span class="lg-dot" style="background:#ffb454"></span> Draggable waypoint — drag it to reroute through that point</li>
         <li><span class="lg-dot closure"></span> Live closure (UDOT)</li>
         <li><span class="lg-dot roadwork"></span> Live roadwork / lane closure (UDOT)</li>
       </ul>
