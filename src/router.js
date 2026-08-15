@@ -112,6 +112,13 @@ function parseGraph(raw) {
     }
   }
 
+  // Node degree (undirected edge count per node) — junction penalty input.
+  const nodeDeg = new Uint8Array(nodeCount);
+  for (let i = 0; i < E; i++) {
+    if (nodeDeg[ea[i]] < 255) nodeDeg[ea[i]]++;
+    if (nodeDeg[eB[i]] < 255) nodeDeg[eB[i]]++;
+  }
+
   // Spatial grid of nodes for snapping (~250m cells).
   const CELL = 0.0025;
   const grid = new Map();
@@ -127,9 +134,18 @@ function parseGraph(raw) {
     nodeLon, nodeLat,
     ea, eB, eLen, eSpd, eCam, eOw, eName,
     outStart, arcTo, arcEdge, arcRev,
+    nodeDeg,
     grid, CELL,
   };
 }
+
+// ---- ETA calibration (iteration 8) ----
+// Production costing models (Valhalla et al.) derate posted speeds on
+// signalized road classes and charge junction delays. Benchmark target:
+// PG → Costco Lehi within ±10% of Valhalla's 10 min (see
+// scripts/eta-benchmark.mjs). spd is the posted km/h on the edge.
+export const effFactor = (spd) => (spd >= 95 ? 1.0 : spd >= 60 ? 0.86 : spd >= 45 ? 0.82 : 0.78);
+export const junctionPenalty = (spd) => (spd >= 95 ? 0 : spd >= 60 ? 7 : spd >= 40 ? 5 : 3.5);
 
 export function inGraphRegion(lon, lat) {
   if (!graph) return false;
@@ -245,8 +261,12 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay) {
       if (closed[v]) continue;
       const e = g.arcEdge[p];
       const len = g.eLen[e];
-      let timeSec = len / (g.eSpd[e] / 3.6);
+      const spd = g.eSpd[e];
+      // Effective speed: posted speed derated for signals/urban friction.
+      let timeSec = len / ((spd * effFactor(spd)) / 3.6);
       timeSec /= edgeFactor[e]; // live traffic slows the edge
+      // Junction delay: entering an intersection (degree ≥ 3) costs signal/turn time.
+      if (g.nodeDeg[v] >= 3) timeSec += junctionPenalty(spd);
       const camCost = cfg.camWeight * (g.eCam[e] / 255) * (len / 100); // exposure scales with length under camera
       const ng = gScore[u] + timeSec + camCost;
       if (ng < gScore[v]) {
@@ -278,9 +298,13 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay) {
   coords.push([g.nodeLon[startNode] / 1e6, g.nodeLat[startNode] / 1e6]);
   for (const p of arcs) {
     const e = g.arcEdge[p];
+    const toNode = g.arcTo[p];
     const len = g.eLen[e];
+    const spd = g.eSpd[e];
     distance += len;
-    time += (len / (g.eSpd[e] / 3.6)) / edgeFactor[e];
+    let seg = (len / ((spd * effFactor(spd)) / 3.6)) / edgeFactor[e];
+    if (g.nodeDeg[toNode] >= 3) seg += junctionPenalty(spd);
+    time += seg;
     delay += edgeDelay[e];
     const cam = g.eCam[e];
     camUnits += cam * (len / 100);
@@ -289,7 +313,6 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay) {
     } else {
       inCluster = false;
     }
-    const toNode = g.arcTo[p];
     coords.push([g.nodeLon[toNode] / 1e6, g.nodeLat[toNode] / 1e6]);
   }
 

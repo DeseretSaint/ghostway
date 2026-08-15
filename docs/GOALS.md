@@ -8,7 +8,7 @@ Live: https://deseretsaint.github.io/ghostway/
 |---|---|---|
 | Routing engine (camera-aware) | 9 | Own graph (Wasatch) + Valhalla national fallback with camera avoidance; self-host doc shipped |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
-| Traffic / ETA accuracy | 6 | Live UDOT events → edge delays; benchmark shows own engine ~30% optimistic vs Valhalla — turn-penalty fix next |
+| Traffic / ETA accuracy | 8 | Live UDOT events → edge delays; calibrated cost model matches Valhalla ±0 min on benchmark corridor |
 | Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, over-speed + camera-ahead alerts |
 | Visual polish | 9 | Splash, onboarding, mission icons, motion, legend; states done |
 | Camera data layer | 6 | DeFlock tiles + heatmap working |
@@ -208,4 +208,28 @@ Next (iteration 8):
 - B: junction/turn penalty + urban road-class derate in the own graph cost
   model, re-run benchmark, target <10% deviation from Valhalla reference.
 - C: waypoint drag on route preview.
+
+### Iteration 8 — ETA calibration: junction penalties + speed derates (Workstream B)
+Shipped:
+- **Cost model calibrated against the Valhalla production reference**:
+  - `effFactor(spd)`: posted speeds derated for signal/urban friction
+    (1.0 ≥95 km/h · 0.86 ≥60 · 0.82 ≥45 · 0.78 below) — models the gap between
+    posted limits and realized speeds on signalized arterials.
+  - `junctionPenalty(spd)`: entering any degree-≥3 node (real intersection)
+    charges 7s / 5s / 3.5s by road class; motorway-class free-flow is exempt.
+    Node degree is computed once at graph-load time (Uint8Array, zero format change).
+- Benchmark re-run (`scripts/eta-benchmark.mjs`):
+  PG → Costco Lehi: **7 min → 10 min; Valhalla reference 10 min → diff +0 min**
+  (was -3 min / 30% optimistic; target was <10% deviation; achieved exact match).
+- Heuristic admissibility preserved (A* h uses 120 km/h free-flow ≥ max
+  effective edge speed 110 km/h) — no search-correctness risk.
+- All 11 suites green; zero console errors.
+Quality: Traffic/ETA 6→8.
+
+Next (iteration 9):
+- C: waypoint drag on route preview (last C item).
+- A: extend graph coverage (Provo→SLC corridor already routes via Valhalla;
+  expanding the prebuilt box would bring the 3-mode local engine to it).
+- B: corridor ETA vs REAL drives (record Keaton's actual drive times to
+  replace the Valhalla-reference benchmark).
 
