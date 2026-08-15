@@ -17,12 +17,15 @@ globalThis.fetch = async (url, opts) => {
 await loadGraph();
 
 const corridors = [
-  { name: 'PG → Costco Lehi', from: [-111.759, 40.364], to: [-111.834, 40.394], local: true },
-  { name: 'Pleasant Grove → Provo (BYU)', from: [-111.759, 40.364], to: [-111.6553, 40.2523], local: false },
-  { name: 'Lehi → SLC Downtown', from: [-111.8508, 40.3852], to: [-111.891, 40.7608], local: false },
-  { name: 'American Fork → Park City', from: [-111.7965, 40.3769], to: [-111.498, 40.6461], local: false },
-  { name: 'Orem → Salt Lake Airport', from: [-111.6946, 40.2969], to: [-111.9778, 40.7884], local: false },
+  { name: 'PG → Costco Lehi', from: [-111.759, 40.364], to: [-111.834, 40.394] },
+  { name: 'Pleasant Grove → Provo (BYU)', from: [-111.759, 40.364], to: [-111.6553, 40.2523] },
+  { name: 'Lehi → SLC Downtown', from: [-111.8508, 40.3852], to: [-111.891, 40.7608] },
+  { name: 'American Fork → Park City', from: [-111.7965, 40.3769], to: [-111.498, 40.6461] },
+  { name: 'Orem → Salt Lake Airport', from: [-111.6946, 40.2969], to: [-111.9778, 40.7884] },
 ];
+
+// Coverage check uses the graph's own bbox (loaded above).
+import { inGraphRegion } from '../src/router.js';
 
 console.log('corridor | valhalla ETA | own engine ETA | diff');
 for (const c of corridors) {
@@ -32,7 +35,7 @@ for (const c of corridors) {
     const vm = Math.round(v.duration / 60);
     const vk = (v.distance / 1000).toFixed(1);
     line += ` | ${vm} min (${vk} km)`;
-    if (c.local) {
+    if (inGraphRegion(c.from[0], c.from[1]) && inGraphRegion(c.to[0], c.to[1])) {
       const { options } = await planRoutes(c.from, c.to, { traffic: null });
       const fastest = options.find((o) => o.mode === 'off');
       const om = Math.round(fastest.duration / 60);
