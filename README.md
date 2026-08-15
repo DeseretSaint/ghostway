@@ -41,8 +41,10 @@ to keep you off those roads by default.
   ETA + camera count shown **before** you pick.
 - **Route options** — Clearest / Balanced / Fastest with distance, ETA, and
   camera count on each, Magic Earth style.
-- **Live traffic** — UDOT open incident data (closures, roadwork) slows
-  affected road segments and shows delay on the route cards. No key required.
+- **Live traffic** — Utah: UDOT open incidents (closures, roadwork) slow
+  affected road segments. Nationwide: a daily-refreshed harvest of every
+  state's open WZDx work-zone feed adds work zones and avoids hard closures
+  outside Utah. No key required anywhere.
 - **Turn-by-turn navigation** — voice guidance (offline, Web Speech API),
   distance countdown, next-step preview, speed limits, live GPS speed.
 - **Follow mode** — heading-up 3D driving camera, pan to look around, tap 🧭
@@ -89,13 +91,15 @@ point `CONFIG.valhallaUrl` at it and nothing else changes.
 |---|---|---|
 | Base map | OpenStreetMap via [OpenFreeMap](https://openfreemap.org) | ODbL |
 | Cameras | [DeFlock](https://deflock.org) (OSM + volunteers) | ODbL / CC-BY |
-| Live traffic | UDOT open events (services6.arcgis.com) | public |
+| Live traffic (Utah) | UDOT open events (services6.arcgis.com) | public |
+| Work zones (national) | Every state's open WZDx feed (data.transportation.gov registry) | public |
 | Search | [Photon](https://photon.komoot.io) (OSM) | AGPL |
 | World routing | [Valhalla](https://github.com/valhalla/valhalla) demo | MIT |
 | Map engine | [MapLibre GL JS](https://maplibre.org) | BSD-3 |
 
-The camera snapshot and traffic data refresh monthly via GitHub Actions
-(`camera-refresh.yml`). No proprietary tile servers anywhere.
+The camera snapshot, national work-zone snapshot, and graph data refresh
+automatically via GitHub Actions (`camera-refresh.yml`,
+`wzdx-national-refresh.yml`). No proprietary tile servers anywhere.
 
 ## Run it yourself
 

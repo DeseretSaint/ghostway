@@ -324,19 +324,43 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay) {
   };
 }
 
-// Simplify coords (drop near-collinear points) for rendering + instructions.
-function simplify(coords, tolDeg = 2e-6) {
+// Simplify the route polyline for rendering — proper Douglas-Peucker in
+// METER space. The old degree-space cross-product tolerance dropped real
+// street corners (a 90° city turn between short segments fell under it),
+// making the drawn line cut across building blocks. DP with a 3 m chord
+// tolerance keeps every real corner and only removes jitter on straights.
+export function simplify(coords, tolM = 3) {
   if (coords.length <= 2) return coords;
-  const out = [coords[0]];
-  for (let i = 1; i < coords.length - 1; i++) {
-    const [ax, ay] = out[out.length - 1];
-    const [bx, by] = coords[i];
-    const [cx, cy] = coords[i + 1];
-    const cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-    if (Math.abs(cross) > tolDeg) out.push(coords[i]);
+  const kx = Math.cos((coords[0][1] * Math.PI) / 180) * 111320;
+  const ky = 111320;
+  const x = coords.map((c) => c[0] * kx);
+  const y = coords.map((c) => c[1] * ky);
+  const keep = new Uint8Array(coords.length);
+  keep[0] = 1;
+  keep[coords.length - 1] = 1;
+  const stack = [[0, coords.length - 1]];
+  while (stack.length) {
+    const [s, e] = stack.pop();
+    if (e - s < 2) continue;
+    const ax = x[s], ay = y[s], dx = x[e] - ax, dy = y[e] - ay;
+    const len2 = dx * dx + dy * dy;
+    let maxD = -1, idx = -1;
+    for (let i = s + 1; i < e; i++) {
+      let d;
+      if (len2 === 0) {
+        d = Math.hypot(x[i] - ax, y[i] - ay);
+      } else {
+        const t = Math.max(0, Math.min(1, ((x[i] - ax) * dx + (y[i] - ay) * dy) / len2));
+        d = Math.hypot(x[i] - (ax + t * dx), y[i] - (ay + t * dy));
+      }
+      if (d > maxD) { maxD = d; idx = i; }
+    }
+    if (maxD > tolM && idx > 0) {
+      keep[idx] = 1;
+      stack.push([s, idx], [idx, e]);
+    }
   }
-  out.push(coords[coords.length - 1]);
-  return out;
+  return coords.filter((_, i) => keep[i]);
 }
 
 function bearing(a, b) {

@@ -155,11 +155,17 @@ for (const { coords, p } of ways) {
     const dy = (lat2 - lat1) * 111320;
     const len = Math.round(Math.hypot(dx, dy));
     if (len <= 0 || len > 10000) continue;
-    const cam = Math.max(
-      camPenaltyNear(lon1, lat1),
-      camPenaltyNear((lon1 + lon2) / 2, (lat1 + lat2) / 2),
-      camPenaltyNear(lon2, lat2)
-    );
+    // Sample camera exposure densely along the edge (every ~40 m), not just at
+    // the endpoints + midpoint. Long road segments used to miss cameras that
+    // sit near the road between sample points — the field-reported "route
+    // passed a camera it said it avoided" bug.
+    const nSamp = Math.max(2, Math.ceil(len / 40) + 1);
+    let cam = 0;
+    for (let k = 0; k < nSamp; k++) {
+      const t = k / (nSamp - 1);
+      const p = camPenaltyNear(lon1 + (lon2 - lon1) * t, lat1 + (lat2 - lat1) * t);
+      if (p > cam) cam = p;
+    }
     if (cam > 0) camEdges++;
     A.push(a); B.push(b); LEN.push(len); SPD.push(spd); CAM.push(cam); OW.push(ow); NAME.push(nid);
   }

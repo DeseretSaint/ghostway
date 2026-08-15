@@ -6,7 +6,7 @@ import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
 import { planRoutes, loadGraph, inGraphRegion, graphStatus } from './router.js';
 import { valhallaPlanRoutes } from './valhalla.js';
-import { loadTraffic } from './traffic.js';
+import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
 import { $, el, debounce, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
 import { registerSW } from './pwa.js';
@@ -275,6 +275,23 @@ function communityCams() {
   return loadReports().map((r) => ({ lon: r.lon, lat: r.lat, kind: r.kind }));
 }
 
+// Hard road closures near a corridor from the national WZDx snapshot
+// (iteration 17 — nationwide traffic). Fails soft to [].
+async function nationalClosures(fromC, toC) {
+  try {
+    const buf = 0.03;
+    const bbox = [
+      Math.min(fromC[0], toC[0]) - buf, Math.min(fromC[1], toC[1]) - buf,
+      Math.max(fromC[0], toC[0]) + buf, Math.max(fromC[1], toC[1]) + buf,
+    ];
+    const wz = await loadNationalWzdx(bbox);
+    if (!wz.ok) return [];
+    return closurePointsNear(wz.zones, bbox, 20);
+  } catch {
+    return [];
+  }
+}
+
 function pickOptionForMode(options) {
   const modeRank = { strict: ['strict', 'moderate', 'off'], moderate: ['moderate', 'strict', 'off'], off: ['off', 'moderate', 'strict'] };
   const pref = modeRank[app.state.mode] || modeRank.moderate;
@@ -321,7 +338,8 @@ async function onRoute() {
   try {
     const t0 = performance.now();
     const mode = app.state.avoid ? (app.state.mode || 'moderate') : 'off';
-    const { options } = await valhallaPlanRoutes(from.coords, to.coords, app.cameras, { mode });
+    const closures = await nationalClosures(from.coords, to.coords);
+    const { options } = await valhallaPlanRoutes(from.coords, to.coords, app.cameras, { mode, closures });
     const ms = Math.round(performance.now() - t0);
     app.state.options = options;
     const chosen = pickOptionForMode(options);
@@ -378,8 +396,9 @@ async function reRouteViaWaypoint() {
       opt2 = r2.options[pickOptionForMode(r2.options)];
     } else {
       source = 'valhalla';
-      const r1 = await valhallaPlanRoutes(from.coords, via, app.cameras, { mode });
-      const r2 = await valhallaPlanRoutes(via, to.coords, app.cameras, { mode });
+      const closures = await nationalClosures(from.coords, to.coords);
+      const r1 = await valhallaPlanRoutes(from.coords, via, app.cameras, { mode, closures });
+      const r2 = await valhallaPlanRoutes(via, to.coords, app.cameras, { mode, closures });
       opt1 = r1.options[pickOptionForMode(r1.options)];
       opt2 = r2.options[pickOptionForMode(r2.options)];
     }
@@ -601,22 +620,43 @@ function startNav() {
   }
 }
 
-// Heading: prefer GPS heading; otherwise derive from consecutive positions.
+// Heading: prefer GPS heading while moving; hold the last stable heading when
+// stopped or crawling (GPS jitter at a stop made the follow camera spin);
+// derive from displacement only when the device actually moved ~8 m.
 function updateHeading(pos, coords) {
-  const prev = app._lastHeadingPos;
-  app._lastHeadingPos = coords;
+  const speed = pos.coords.speed; // m/s, may be null
   const h = pos.coords.heading;
-  if (h != null && !isNaN(h) && (pos.coords.speed == null || pos.coords.speed > 1)) return h;
-  if (prev) {
-    const [lon1, lat1] = prev;
-    const latm = ((lat1 + coords[1]) / 2) * Math.PI / 180;
-    const dx = (coords[0] - lon1) * Math.cos(latm);
-    const dy = coords[1] - lat1;
-    if (Math.hypot(dx, dy) > 1e-6) {
-      return ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+
+  // Stopped / crawling: keep the last stable heading, never spin.
+  if (speed != null && speed < 1.2) {
+    app._lastHeadingPos = coords;
+    return app.state.heading || 0;
+  }
+
+  let candidate = null;
+  if (h != null && !isNaN(h) && (speed == null || speed > 2)) {
+    candidate = h;
+  } else {
+    const anchor = app._headingAnchor || coords;
+    const latm = ((anchor[1] + coords[1]) / 2) * Math.PI / 180;
+    const dx = (coords[0] - anchor[0]) * 111320 * Math.cos(latm);
+    const dy = (coords[1] - anchor[1]) * 111320;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 8) {
+      candidate = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+      app._headingAnchor = coords;
     }
   }
-  return app.state.heading || 0;
+  app._lastHeadingPos = coords;
+  if (candidate == null) return app.state.heading || 0;
+
+  // Shortest-path smoothing so bearing changes animate, never snap/spin.
+  const prev = app.state.heading;
+  if (prev == null) return candidate;
+  let d = candidate - prev;
+  while (d > 180) d -= 360;
+  while (d < -180) d += 360;
+  return (prev + d * 0.45 + 360) % 360;
 }
 
 function setFollow(on) {
@@ -751,7 +791,8 @@ async function reRoute(fromC) {
       let done = false;
       try {
         const mode = app.state.avoid ? (app.state.mode || 'moderate') : 'off';
-        const { options } = await valhallaPlanRoutes(fromC, to.coords, app.cameras, { mode });
+        const closures = await nationalClosures(fromC, to.coords);
+        const { options } = await valhallaPlanRoutes(fromC, to.coords, app.cameras, { mode, closures });
         app.state.options = options;
         app.state.chosen = pickOptionForMode(options);
         app.state.route = { engine: true, source: 'valhalla', options, chosen: app.state.chosen };

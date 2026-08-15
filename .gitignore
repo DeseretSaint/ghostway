@@ -7,6 +7,9 @@ engine/data/*.pbf
 engine/data/*.osm.pbf
 engine/data/*.geojson
 
+# Ship only the gzipped national WZDx snapshot (raw is a build artifact).
+public/data/wzdx-national.json
+
 # Ship only the gzipped graph.
 public/graph/wasatch-graph.bin
 

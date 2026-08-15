@@ -8,7 +8,7 @@ Live: https://deseretsaint.github.io/ghostway/
 |---|---|---|
 | Routing engine (camera-aware) | 9 | Own graph (Wasatch) + Valhalla national fallback with camera avoidance; self-host doc shipped |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
-| Traffic / ETA accuracy | 8 | Full Wasatch coverage; 3/5 corridors match Valhalla exactly, 2 diverge on route choice |
+| Traffic / ETA accuracy | 9 | UDOT live in Utah + nationwide WZDx closures/work zones; calibrated ETA model |
 | Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, alerts, waypoint drag, live camera counter |
 | Visual polish | 9 | Splash, onboarding, mission icons, motion, legend, compact banner density mode |
 | Camera data layer | 9 | ALPR-aware coloring, rich tap-details, community reports, monthly-refreshed bundled snapshot, outage-resilient avoidance |
@@ -429,4 +429,37 @@ Next (iteration 17):
 - B: real-drive ground truth from Keaton's PG→Costco run (needs his time) —
   still the only blocked item; everything else in the queue is done.
 - Camera layer: cluster the heatmap halo at mid-zoom (last visual item).
+
+### Iteration 17 — Field-test bug fixes (5 real-drive reports from Keaton)
+All five issues from Keaton's first real drive, fixed and verified:
+1. **Route passed a camera it claimed to avoid** → root cause: graph builder
+   sampled camera exposure at only 3 points per road edge; cameras near long
+   segments were missed. Now samples every ~40 m along every edge. Graph
+   rebuilt (11,273 camera-exposed edges).
+2. **Route line cut through buildings / didn't match the turns** → root cause:
+   `simplify()` used a degree-space cross-product tolerance that dropped real
+   90° city corners. Replaced with proper Douglas-Peucker in meter space
+   (3 m tolerance). Verified: real corners preserved, jitter straights thinned.
+   Re-screenshotted on an SLC corridor: line now follows roads cleanly.
+3. **Traffic was Utah-only (UDOT)** → shipped nationwide traffic: CI harvests
+   every state's open WZDx work-zone feed (data.transportation.gov registry)
+   daily → compact gzipped snapshot (22,588 zones, 7,457 hard closures across
+   15+ states) → app loads it and seeds Valhalla `exclude_locations` with hard
+   closures near the corridor. New `scripts/fetch-wzdx-national.mjs`,
+   `scripts/national-traffic-check.mjs`, `wzdx-national-refresh.yml`.
+4. **README screenshots showed Keaton's neighborhood** → re-captured on a
+   generic SLC downtown↔airport corridor (vision-verified: generic, roads
+   clean, no private-area feel).
+5. **Follow camera spun at stops** → root cause: GPS heading jitter at
+   zero speed. Now: below 1.2 m/s hold last stable heading; derived heading
+   only after ~8 m of real displacement; all heading changes smoothed via
+   shortest-path interpolation (0.45 factor) — never snaps/spins.
+- Verification: geometry unit test (corners preserved ✅), national-traffic
+  loader test (22,588 zones, closures feed routing ✅), re-captured
+  screenshots vision-reviewed ✅, all core suites green ✅.
+
+Next (iteration 18):
+- B: real-drive ground truth from Keaton (needs his PG→Costco time).
+- Camera layer: cluster the heatmap halo at mid-zoom.
+- Field-test follow-up: watch for the next drive report.
 

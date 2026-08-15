@@ -1,0 +1,31 @@
+name: refresh-wzdx-national
+
+on:
+  schedule:
+    - cron: '10 14 * * *' # daily — state WZDx feeds change frequently
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Harvest national WZDx work zones
+        run: node scripts/fetch-wzdx-national.mjs
+      - name: Commit if changed
+        run: |
+          git config user.name "ghostway-ci"
+          git config user.email "ghostway-ci@users.noreply.github.com"
+          git add public/data/wzdx-national.json.gz
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "chore: refresh national WZDx work-zone snapshot (daily CI)"
+            git push
+          fi

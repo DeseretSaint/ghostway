@@ -107,3 +107,65 @@ export function incidentsNear(grid, lon, lat) {
   const k = Math.floor(lon / CELL) + ',' + Math.floor(lat / CELL);
   return grid.get(k) || [];
 }
+
+// ---- Nationwide work zones (iteration 17) ----
+// UDOT events are Utah-only. Outside Utah, Ghostway loads a CI-refreshed
+// snapshot of every active state WZDx feed (scripts/fetch-wzdx-national.mjs)
+// and renders work zones on the map + avoids full closures in routing.
+const WZDX_URL = 'data/wzdx-national.json.gz';
+let wzdxCache = null;
+
+export async function loadNationalWzdx(bbox, force = false) {
+  if (wzdxCache && !force && Date.now() - wzdxCache.at < 30 * 60 * 1000) return wzdxCache;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 25000);
+    const res = await fetch(WZDX_URL, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) throw new Error(`wzdx fetch ${res.status}`);
+    const buf = await res.arrayBuffer();
+    // Hosts may serve .gz pre-inflated (Content-Encoding: gzip) — sniff magic.
+    const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
+    let raw;
+    if (head[0] === 0x1f && head[1] === 0x8b) {
+      const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+      raw = await new Response(stream).arrayBuffer();
+    } else {
+      raw = buf;
+    }
+    const data = JSON.parse(new TextDecoder().decode(raw));
+    const [w, s, e, n] = bbox;
+    const zones = [];
+    for (const key of Object.keys(data.states || {})) {
+      for (const z of data.states[key]) {
+        const coords = z.c || [];
+        if (coords.length < 2) continue;
+        const touches = coords.some((c) => c[0] >= w && c[0] <= e && c[1] >= s && c[1] <= n);
+        if (!touches) continue;
+        zones.push({ coords, factor: z.f || 0.85, road: z.r || '' });
+      }
+    }
+    wzdxCache = { ok: true, zones, asOf: data.asOf, at: Date.now() };
+    return wzdxCache;
+  } catch (err) {
+    console.warn('national wzdx load failed', err.message);
+    wzdxCache = { ok: false, zones: [], asOf: null, at: Date.now() };
+    return wzdxCache;
+  }
+}
+
+// Full-closure points from the national snapshot inside a bbox — fed to the
+// Valhalla tier as exclude_locations so routing avoids closed roads nationwide.
+export function closurePointsNear(zones, bbox, cap = 25) {
+  const [w, s, e, n] = bbox;
+  const pts = [];
+  for (const z of zones || []) {
+    if (z.factor > 0.25) continue; // only hard closures
+    const mid = z.coords[Math.floor(z.coords.length / 2)];
+    if (mid[0] >= w && mid[0] <= e && mid[1] >= s && mid[1] <= n) {
+      pts.push(mid);
+      if (pts.length >= cap) return pts;
+    }
+  }
+  return pts;
+}

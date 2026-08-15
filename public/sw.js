@@ -5,7 +5,7 @@
 // immediately (a cached shell would otherwise stick forever across versions).
 
 // Bump this on every release that changes the shell — it invalidates old caches.
-const VERSION = 'ghostway-v18';
+const VERSION = 'ghostway-v19';
 const SHELL = `${VERSION}-shell`;
 const TILES = `${VERSION}-tiles`;
 

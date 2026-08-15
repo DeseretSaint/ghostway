@@ -119,7 +119,7 @@ export function valhallaInstructions(maneuvers) {
 
 // Full avoidance pipeline. Mirrors the own-graph engine's return shape closely
 // enough for the UI: { options: [{ mode, label, route: {coords,...}, instructions, cameras, distance, duration, delay }] }.
-export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'moderate' } = {}) {
+export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'moderate', closures = [] } = {}) {
   const baseline = await valhallaRoute(from, to, null);
 
   if (mode === 'off') {
@@ -149,6 +149,24 @@ export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'modera
   let excludes = [];
   let iterations = 0;
   let avoidedCount = 0;
+
+  // Nationwide work zones: seed exclusions with hard closures near the route
+  // (iteration 17). Only closures within 2 km of the baseline cost the
+  // exclusion budget; distant ones are irrelevant to this corridor.
+  if (closures && closures.length) {
+    const nearClosures = closures.filter((c) => nearRouteFromList(baseline.coords, [
+      { type: 'Feature', geometry: { type: 'Point', coordinates: c } },
+    ], 2000).length);
+    const seed = nearClosures.slice(0, 12);
+    if (seed.length) {
+      excludes = excludes.concat(seed);
+      try {
+        const rerouted = await valhallaRoute(from, to, excludes);
+        if (rerouted) current = rerouted;
+      } catch (e) { /* keep baseline */ }
+    }
+  }
+
   while (iterations < 5) {
     iterations++;
     const onRoute = nearRouteFromList(current.coords, pool, CONFIG.avoidance.routeCorridorM);
