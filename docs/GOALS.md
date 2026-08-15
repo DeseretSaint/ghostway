@@ -9,8 +9,8 @@ Live: https://deseretsaint.github.io/ghostway/
 | Routing engine (camera-aware) | 7 | Own graph + A* with camera cost (Wasatch Front); national coverage pending |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
 | Traffic / ETA accuracy | 2 | Static OSM speeds; UDOT live data pending |
-| Nav experience (follow, voice) | 4 | Banner + GPS watch; follow-cam/voice/off-route pending |
-| Visual polish | 5 | Clean dark UI; motion/states need work |
+| Nav experience (follow, voice) | 8 | Voice guidance, countdown banner, speed limits, arrival screen, off-route reroute |
+| Visual polish | 7 | Motion + spring states, legend, camera layer toggle; icon/splash pending |
 | Camera data layer | 6 | DeFlock tiles + heatmap working |
 
 ## Workstreams
@@ -47,3 +47,32 @@ Next (iteration 2):
 - A: Valhalla-in-Docker evaluation for national coverage + CI graph refresh.
 - B: UDOT live traffic → edge speed overrides, re-ETA during nav.
 - C: follow-mode camera, off-route re-route, voice guidance.
+
+### Iteration 2 — Navigation experience (Workstream C) + motion polish (D)
+Shipped:
+- **Voice guidance** (Web Speech API, offline, no key): departure callout,
+  per-maneuver announcements, ~200 m "coming up" callouts, arrival phrase,
+  "Rerouting." on re-route. Configurable 🔊 toggle in the banner, persisted.
+- **Live step banner** rebuilt: big maneuver icon, nav-style distance countdown
+  (1.2 mi → 0.5 mi → 800 ft), road name, **next-step preview** ("then ↰ …"),
+  live remaining ETA.
+- **Speed limit display** from OSM maxspeed (US-style MAX sign) + live GPS
+  speed chip (smoothed; falls back to position-derived speed).
+- **Arrival screen** with trip summary — distance, ETA, driving time, and the
+  mission metric: *cameras passed on this trip* ("Zero cameras passed 🛡").
+- **Off-route detection + auto re-route** through the camera-aware engine from
+  the current position (re-announces "Rerouting", resets steps).
+- Fixed a real nav bug: step advancement tracked simplified render geometry
+  while step distances were measured on raw geometry → steps never advanced.
+- **Camera layer toggle** chip on the map + **legend** in About (Workstream D).
+- **Motion polish** (Workstream D): spring-loaded panels/banner/modal,
+  press-scale button feedback, reduced-motion support, WCAG-checked contrast.
+- Verified: GPS-playback test drives the full route headlessly — steps advance,
+  arrival triggers. All suites pass; zero console errors.
+Quality: Nav experience 4→8 · Visual polish 5→7.
+
+Next (iteration 3):
+- B: UDOT live traffic → edge speeds, traffic-colored route segments, delay chip.
+- C: follow-mode camera (bearing rotation, recenter), speed-limit alerts.
+- C: draggable waypoint on route preview (clickable alternatives already shipped).
+- D: app icon + splash, empty/loading state design, camera-density halo tuning.

@@ -332,11 +332,17 @@ export function instructionsFor(g, route) {
     return Math.hypot((b[0] - a[0]) * 111320 * Math.cos(latm), (b[1] - a[1]) * 111320);
   };
 
-  // Segment names aligned with path points (edge i sits between point i and i+1).
-  const segs = route.arcs.map((p) => g.eName[g.arcEdge[p]]);
+  // Per-arc attributes + cumulative start distance along the route.
+  const arcsInfo = [];
+  let acc = 0;
+  for (const p of route.arcs) {
+    const e = g.arcEdge[p];
+    arcsInfo.push({ name: g.eName[e], len: g.eLen[e], spd: g.eSpd[e], cam: g.eCam[e], start: acc });
+    acc += g.eLen[e];
+  }
   const nameAt = (i) => {
-    const nm = segs[Math.min(i, segs.length - 1)];
-    return nm !== undefined && nm !== 65535 ? g.names[nm] || '' : '';
+    const s = arcsInfo[Math.min(i, arcsInfo.length - 1)];
+    return s && s.name !== 65535 ? g.names[s.name] || '' : '';
   };
 
   const maneuvers = [{ at: 0, turn: 'depart', name: nameAt(0) }];
@@ -359,12 +365,26 @@ export function instructionsFor(g, route) {
   const steps = [];
   for (let i = 0; i < maneuvers.length - 1; i++) {
     const m = maneuvers[i];
+    const from = m.at;
+    const to = maneuvers[i + 1].at;
+    // Attribute arcs to this step: arc counted if its midpoint is inside.
+    let speedLimit = 0;
+    let cams = 0;
+    for (const a of arcsInfo) {
+      const mid = a.start + a.len / 2;
+      if (mid >= from && mid < to) {
+        if (a.spd > speedLimit) speedLimit = a.spd;
+        if (a.cam > 40) cams++;
+      }
+    }
     steps.push({
       instruction: maneuverText(m.turn),
       modifier: m.turn,
-      distance: Math.round(maneuvers[i + 1].at - m.at),
+      distance: Math.round(to - from),
       name: m.name || '',
       at: Math.round(m.at),
+      speedLimit: speedLimit || null, // km/h of the fastest edge in this step
+      cameras: cams,
     });
   }
   return steps;

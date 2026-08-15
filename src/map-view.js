@@ -153,6 +153,16 @@ export class MapView {
     if (src) src.setData({ type: 'FeatureCollection', features });
   }
 
+  // Show/hide the camera heatmap + points (Workstream D: layer toggle).
+  setCameraLayerVisible(on) {
+    if (!this.camSourceReady) return;
+    const v = on ? 'visible' : 'none';
+    const heat = this.map.getLayer(CAMERA_LAYER.heatId);
+    const pts = this.map.getLayer(CAMERA_LAYER.layerId);
+    if (heat) this.map.setLayoutProperty(CAMERA_LAYER.heatId, 'visibility', v);
+    if (pts) this.map.setLayoutProperty(CAMERA_LAYER.layerId, 'visibility', v);
+  }
+
   setEndpoints(features) {
     const src = this.map.getSource('endpoints');
     if (src) src.setData({ type: 'FeatureCollection', features });

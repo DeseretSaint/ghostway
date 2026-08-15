@@ -34,6 +34,30 @@ export function fmtDistance(m) {
   return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
 }
 
+// Navigation-style distance countdown (rounds like real nav apps):
+// 1.2 mi → 0.5 mi → 800 ft.
+export function fmtNavDistance(m) {
+  if (m == null) return '';
+  const ft = m * 3.28084;
+  if (ft < 1000) return `${Math.max(0, Math.round(ft / 50) * 50)} ft`;
+  const mi = ft / 5280;
+  if (mi < 10) return `${mi.toFixed(1)} mi`;
+  return `${Math.round(mi)} mi`;
+}
+
+export function fmtSpeed(mps, unit = 'mph') {
+  if (mps == null || !isFinite(mps)) return '';
+  if (unit === 'mph') return `${Math.round(mps * 2.23694)} mph`;
+  return `${Math.round(mps * 3.6)} km/h`;
+}
+
+// Light haptic tap where supported (Android Chrome). iOS ignores.
+export function haptic() {
+  try {
+    navigator.vibrate && navigator.vibrate(10);
+  } catch {}
+}
+
 export function fmtDuration(sec) {
   if (sec == null) return '';
   const m = Math.round(sec / 60);

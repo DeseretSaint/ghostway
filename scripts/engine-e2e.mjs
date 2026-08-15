@@ -39,19 +39,28 @@ async function hit(sel) {
   return top;
 }
 
-// Type destination and pick first suggestion.
-await p.type('#toInput', 'Costco Lehi');
-await wait(1300);
-await p.click('#suggestions .sugg');
-await wait(400);
-// Type origin and pick first suggestion.
-await p.type('#fromInput', 'Pleasant Grove Utah');
-await wait(1300);
-await p.click('#suggestions .sugg');
-await wait(400);
+// Robust pick: wait for a suggestion, else press Enter (commits typed text).
+async function pickSuggestion(inputSel, query) {
+  await p.type(inputSel, query);
+  try {
+    await p.waitForSelector('#suggestions .sugg', { timeout: 6000 });
+    await p.click('#suggestions .sugg');
+  } catch {
+    await p.focus(inputSel);
+    await p.keyboard.press('Enter');
+  }
+  await wait(500);
+}
+await pickSuggestion('#toInput', 'Costco Lehi');
+await pickSuggestion('#fromInput', 'Pleasant Grove Utah');
 
-// Real-click the Route button.
-await p.click('#goBtn');
+// Real-click the Route button — but only if it's still visible (picking both
+// endpoints may have auto-routed already and collapsed the panel).
+const goVisible = await p.evaluate(() => {
+  const r = document.querySelector('#goBtn').getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && !document.querySelector('#route-actions').hidden;
+});
+if (goVisible) await p.click('#goBtn');
 await p.waitForFunction(
   "() => !document.querySelector('#route-card').hidden || document.querySelector('#status')?.textContent?.includes('failed')",
   { timeout: 40000 }
@@ -71,11 +80,18 @@ if (optCount >= 2) {
   console.log('after switch, chosen label:', await p.evaluate(() => document.querySelector('.route-opt.chosen .opt-label')?.textContent));
 }
 
-// Switch to Strict mode and re-route.
+// Switch to Strict mode and re-route. The mode switch lives behind "Edit route"
+// now that the panel collapses after routing.
+const editBtn = await p.$('#editRouteBtn');
+if (editBtn) {
+  await editBtn.click();
+  await wait(400);
+}
 const strictHit = await hit('.mode-btn[data-mode="strict"]');
 console.log('strict btn hit:', strictHit);
 await p.click('.mode-btn[data-mode="strict"]');
-await p.waitForFunction("() => window.__ghostwayDebug && window.__ghostwayDebug.ms", { timeout: 30000 });
+await p.waitForFunction("() => !document.querySelector('#route-card').hidden && document.querySelector('.route-opt.chosen')", { timeout: 30000 });
+await wait(1500);
 const afterStrict = await p.evaluate(() => {
   const opts = [...document.querySelectorAll('.route-opt .opt-meta')].map((e) => e.textContent);
   return opts;
@@ -89,6 +105,8 @@ await p.click('#startNavBtn');
 await wait(800);
 const navShown = await p.evaluate(() => !document.querySelector('#navBanner').hidden);
 console.log('nav banner shown:', navShown);
+const hasVoiceBtn = await p.evaluate(() => !!document.querySelector('#voiceBtn'));
+console.log('voice toggle in banner:', hasVoiceBtn);
 
 await p.screenshot({ path: 'engine-e2e.png' });
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 5));

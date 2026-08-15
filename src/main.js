@@ -4,9 +4,10 @@ import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
 import { planRoutes, loadGraph, inGraphRegion, graphStatus } from './router.js';
-import { $, el, debounce, fmtDistance, fmtDuration, haversine, pointToSegmentM } from './utils.js';
+import { $, el, debounce, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
 import { registerSW } from './pwa.js';
+import { speak, phraseManeuver, phraseArrival, cancel as cancelVoice, toggleVoice, voiceEnabled, setVoiceEnabled } from './voice.js';
 
 const app = {
   map: null,
@@ -39,6 +40,7 @@ async function init() {
   buildPanel(app);
   wireApp();
   await app.map.ready();
+  window.__gw = app; // test/diagnostic hook
 
   // Camera click -> info modal.
   app.map.onCameraClick(async (props, coords) => {
@@ -84,6 +86,11 @@ function wireApp() {
   $('#modalClose').addEventListener('click', closeModal);
 
   $('#gpsBtn').addEventListener('click', useMyLocation);
+  $('#camLayerBtn').addEventListener('click', () => {
+    app._camLayerOn = !(app._camLayerOn ?? true);
+    app.map.setCameraLayerVisible(app._camLayerOn);
+    $('#camLayerBtn').classList.toggle('off', !app._camLayerOn);
+  });
 
   $('#goBtn').addEventListener('click', onRoute);
   $('#swapBtn').addEventListener('click', swapEndpoints);
@@ -161,6 +168,15 @@ function engineCovers(fromC, toC) {
   return app._engineReady && inGraphRegion(fromC[0], fromC[1]) && inGraphRegion(toC[0], toC[1]);
 }
 
+function pickOptionForMode(options) {
+  const modeRank = { strict: ['strict', 'moderate', 'off'], moderate: ['moderate', 'strict', 'off'], off: ['off', 'moderate', 'strict'] };
+  const pref = modeRank[app.state.mode] || modeRank.moderate;
+  let chosen = options.findIndex((o) => o.mode === pref[0]);
+  if (chosen === -1) chosen = options.findIndex((o) => o.mode === pref[1]);
+  if (chosen === -1) chosen = 0;
+  return chosen;
+}
+
 async function onRoute() {
   const from = app.state.from || (await resolveInput('fromInput'));
   const to = app.state.to || (await resolveInput('toInput'));
@@ -179,11 +195,7 @@ async function onRoute() {
       const ms = Math.round(performance.now() - t0);
       app.state.options = options;
       // Default pick: closest to the user's mode preference.
-      const modeRank = { strict: ['strict', 'moderate', 'off'], moderate: ['moderate', 'strict', 'off'], off: ['off', 'moderate', 'strict'] };
-      const pref = modeRank[app.state.mode] || modeRank.moderate;
-      let chosen = options.findIndex((o) => o.mode === pref[0]);
-      if (chosen === -1) chosen = options.findIndex((o) => o.mode === pref[1]);
-      if (chosen === -1) chosen = 0;
+      const chosen = pickOptionForMode(options);
       app.state.chosen = chosen;
       app.state.route = { engine: true, options, chosen };
       drawEngineRoutes();
@@ -244,12 +256,17 @@ function drawEngineRoutes() {
   ]);
   app.map.fitTo(sel.coords, true);
 
-  // Nav bookkeeping for the chosen option.
+  // Nav bookkeeping for the chosen option. IMPORTANT: steps carry cumulative
+  // distances measured on the RAW arc path, so the progress tracker must also
+  // use the raw coordinates (not the simplified render geometry) — otherwise
+  // step advancement never fires.
   app._navSteps = (sel.instructions || []).map((s) => ({ ...s, startS: s.at || 0 }));
-  app._routeCum = cumulativeDistances(sel.coords);
-  app._routeTotal = app._routeCum[app._routeCum.length - 1] || 1;
-  app._navRouteCoords = sel.coords;
+  app._navRouteCoords = sel.route.coords;
+  app._routeCum = cumulativeDistances(sel.route.coords);
+  app._routeTotal = app._routeCum[app._routeCum.length - 1] || sel.distance;
   app._totalDuration = sel.duration;
+  window.__ghostwayNavCoords = sel.route.coords;
+  window.__ghostwayDebug = { ...(window.__ghostwayDebug || {}), navCoords: sel.coords.length };
 }
 
 async function resolveInput(id) {
@@ -339,17 +356,29 @@ function startNav() {
   if (!app.state.route) return;
   app.state.navigating = true;
   app.state.stepIndex = 0;
+  app._navStart = Date.now();
+  app._navLastPos = null;
+  app._navLastT = 0;
+  app._navSpeed = null; // m/s, smoothed
+  app._voiceAnnounced = {}; // step index -> announced
+
   // Hide the planning panel, show the nav banner.
   $('#panel').hidden = true;
   showNavBanner();
+
+  const first = app._navSteps[0];
+  if (first) speak(phraseManeuver(first.distance, first.instruction, first.name), { interrupt: true });
+
   // Follow the user with GPS.
   if (navigator.geolocation) {
     app.state.gpsWatch = navigator.geolocation.watchPosition(
       (pos) => {
         const c = [pos.coords.longitude, pos.coords.latitude];
         app.state.userLoc = c;
-        app.map.flyTo(c, 15);
+        updateSpeed(pos);
+        app.map.flyTo(c, 16);
         advanceStep(c);
+        checkOffRoute(c);
       },
       () => {},
       { enableHighAccuracy: true, maximumAge: 2000 }
@@ -357,17 +386,115 @@ function startNav() {
   }
 }
 
-function stopNav() {
+function updateSpeed(pos) {
+  const now = Date.now();
+  let spd = pos.coords.speed; // m/s from GPS, may be null
+  if (spd == null && app._navLastPos) {
+    const dt = (now - app._navLastT) / 1000;
+    if (dt > 0.5) spd = haversine(app._navLastPos, [pos.coords.longitude, pos.coords.latitude]) / dt;
+  }
+  if (spd != null) {
+    // exponential smoothing
+    app._navSpeed = app._navSpeed == null ? spd : app._navSpeed * 0.6 + spd * 0.4;
+  }
+  app._navLastPos = [pos.coords.longitude, pos.coords.latitude];
+  app._navLastT = now;
+  const chip = $('#speedChip');
+  if (chip) {
+    chip.textContent = fmtSpeed(app._navSpeed);
+    chip.hidden = app._navSpeed == null;
+  }
+}
+
+function stopNav(arrived = false) {
   app.state.navigating = false;
+  cancelVoice();
   if (app.state.gpsWatch) {
     navigator.geolocation.clearWatch(app.state.gpsWatch);
     app.state.gpsWatch = null;
   }
   $('#navBanner').hidden = true;
   $('#panel').hidden = false;
-  const sel = app.state.route?.engine ? app.state.options[app.state.chosen] : null;
-  const fit = sel ? sel.coords : [app.state.from?.coords, app.state.to?.coords].filter(Boolean);
-  app.map.fitTo(fit, true);
+  if (arrived) {
+    showArrivalScreen();
+  } else {
+    const sel = app.state.route?.engine ? app.state.options[app.state.chosen] : null;
+    const fit = sel ? sel.coords : [app.state.from?.coords, app.state.to?.coords].filter(Boolean);
+    app.map.fitTo(fit, true);
+  }
+}
+
+function showArrivalScreen() {
+  const sel = app.state.route?.engine ? app.state.options[app.state.chosen] : app.state.route?.clear || app.state.route?.baseline;
+  const elapsed = app._navStart ? Math.round((Date.now() - app._navStart) / 1000) : 0;
+  const cams = sel ? (sel.cameras ?? 0) : 0;
+  openModal(`
+    <h3>🏁 You've arrived</h3>
+    <p class="arrival-cams">${
+      cams === 0
+        ? '<b>Zero cameras passed.</b> You moved through without a single plate read.'
+        : `You passed <b>${cams}</b> camera${cams === 1 ? '' : 's'} on this trip.`
+    }</p>
+    <ul class="src-list">
+      ${sel ? `<li><b>Distance:</b> ${fmtDistance(sel.distance)}</li>` : ''}
+      ${sel ? `<li><b>Estimated:</b> ${fmtDuration(sel.duration)}</li>` : ''}
+      ${elapsed ? `<li><b>Driving time:</b> ${fmtDuration(elapsed)}</li>` : ''}
+    </ul>
+    <p class="muted small">Ghostway never logged your route. Safe travels.</p>
+  `);
+}
+
+// Off-route detection: if the user is far from the line for a while, re-route
+// from their current position to the destination through the same engine.
+function checkOffRoute(userC) {
+  const coords = app._navRouteCoords;
+  if (!coords || coords.length < 2) return;
+  let best = Infinity;
+  for (let i = 1; i < coords.length; i++) {
+    const d = pointToSegmentM(userC, coords[i - 1], coords[i]);
+    if (d < best) best = d;
+  }
+  const now = Date.now();
+  if (best > 120) {
+    if (!app._offSince) app._offSince = now;
+    if (now - app._offSince > 6000 && !app._rerouting) {
+      app._rerouting = true;
+      speak('Rerouting.', { interrupt: true });
+      reRoute(userC);
+    }
+  } else {
+    app._offSince = 0;
+  }
+}
+
+async function reRoute(fromC) {
+  const to = app.state.to;
+  if (!to) {
+    app._rerouting = false;
+    return;
+  }
+  try {
+    if (engineCovers(fromC, to.coords)) {
+      const { options } = await planRoutes(fromC, to.coords, {});
+      app.state.options = options;
+      app.state.chosen = pickOptionForMode(options);
+      app.state.route = { engine: true, options, chosen: app.state.chosen };
+      drawEngineRoutes();
+    } else {
+      const result = await planRoute(fromC, to.coords, { avoid: app.state.avoid, cameraStore: app.cameras });
+      app.state.route = result;
+      drawRoute(result);
+    }
+    app.state.stepIndex = 0;
+    app._voiceAnnounced = {};
+    showNavBanner();
+    renderNavStep();
+  } catch (e) {
+    console.warn('reroute failed', e);
+  } finally {
+    app._rerouting = false;
+    app._offSince = 0;
+  }
 }
 
 function advanceStep(userC) {
@@ -375,15 +502,58 @@ function advanceStep(userC) {
   if (!steps.length || !app.state.navigating) return;
   const frac = routeFraction(userC);
   const traveled = frac * (app._routeTotal || 1);
-  // Steps carry cumulative start distances (meters). Find the last step whose
-  // start is at/before the user's traveled distance.
+
+  // Arrival: within 40m of the route end and past 97% of the route.
+  if (traveled > app._routeTotal - 40 && frac > 0.97) {
+    speak(phraseArrival(), { interrupt: true });
+    haptic();
+    stopNav(true);
+    return;
+  }
+
+  // Steps carry cumulative start distances (meters). The "current" step is the
+  // one the user is driving; the banner shows the distance to its maneuver.
   let idx = 0;
   for (let i = 0; i < steps.length; i++) {
     if ((steps[i].startS || 0) <= traveled + 15) idx = i;
   }
+
   if (idx !== app.state.stepIndex) {
     app.state.stepIndex = idx;
+    haptic();
     renderNavStep();
+    // Announce the new maneuver ahead.
+    const s = steps[idx];
+    if (s && idx > 0 && !app._voiceAnnounced[idx]) {
+      app._voiceAnnounced[idx] = 1;
+      const distToManeuver = Math.max(0, (s.startS || 0) - traveled + s.distance);
+      speak(phraseManeuver(distToManeuver, s.instruction, s.name));
+    }
+  } else {
+    // Same step — refresh the countdown display.
+    updateCountdown(traveled);
+    // Distance-triggered callout at ~200m before the step's maneuver.
+    const s = steps[idx];
+    if (s && idx > 0 && !app._voiceAnnounced[idx + '_near']) {
+      const distToManeuver = (steps[idx + 1]?.startS ?? app._routeTotal) - traveled;
+      if (distToManeuver <= 220) {
+        app._voiceAnnounced[idx + '_near'] = 1;
+        speak(phraseManeuver(Math.max(30, distToManeuver), s.instruction, s.name));
+      }
+    }
+  }
+}
+
+function updateCountdown(traveled) {
+  const steps = app._navSteps || [];
+  const idx = Math.min(app.state.stepIndex, steps.length - 1);
+  const next = steps[idx + 1];
+  const el = $('#navDist');
+  if (!el) return;
+  if (next) {
+    el.textContent = fmtNavDistance(Math.max(0, next.startS - traveled));
+  } else {
+    el.textContent = fmtNavDistance(Math.max(0, (app._routeTotal || 0) - traveled));
   }
 }
 
@@ -398,27 +568,61 @@ function renderNavStep() {
   if (!steps.length) return;
   const i = Math.min(app.state.stepIndex, steps.length - 1);
   const step = steps[i];
-  const dist = step ? fmtDistance(step.distance) : '';
-  const dir = step ? step.instruction : 'Continue';
-  const name = step && step.name ? ` <b>${step.name}</b>` : '';
-  // Remaining ETA: prefer per-step durations (legacy); else prorate total.
-  let eta;
-  if (step && step.duration != null) {
-    eta = fmtDuration(steps.slice(i).reduce((a, s) => a + (s.duration || 0), 0));
-  } else if (app._totalDuration) {
-    eta = fmtDuration(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0])));
-  } else {
-    eta = '';
-  }
+  const next = steps[i + 1];
+  // Banner shows distance to the NEXT maneuver (what you're driving toward).
+  const traveled = routeFraction(app.state.userLoc || [0, 0]) * (app._routeTotal || 1);
+  const dist = next
+    ? fmtNavDistance(Math.max(0, next.startS - traveled))
+    : fmtNavDistance(Math.max(0, step.distance));
+  const dir = next ? next.instruction : step.instruction;
+  const road = next && next.name ? ` onto <b>${next.name}</b>` : next && step.name ? ` onto <b>${step.name}</b>` : '';
+  const icon = next ? stepIcon(next.modifier) : stepIcon(step.modifier);
+  const limit = (next && next.speedLimit) || step.speedLimit;
+  const limitMph = limit ? Math.round(limit * 0.621371 / 5) * 5 : null;
+  const eta = app._totalDuration ? fmtDuration(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0]))) : '';
+  const voiceOn = voiceEnabled();
+
   $('#navBanner').innerHTML = `
-    <button id="navStop" class="nav-stop" aria-label="Stop navigation">■</button>
+    <button id="navStop" class="nav-stop" aria-label="Stop navigation">✕</button>
+    <div class="nav-icon" aria-hidden="true">${icon}</div>
     <div class="nav-step">
-      <div class="nav-dist">${dist}</div>
-      <div class="nav-dir">${dir}${name}</div>
+      <div class="nav-dist" id="navDist">${dist}</div>
+      <div class="nav-dir">${dir}${road}</div>
+      ${next ? `<div class="nav-then">then ${stepIcon(step.modifier)} ${lower(step.instruction)}${step.name ? ` · ${step.name}` : ''}</div>` : ''}
     </div>
-    <div class="nav-eta">${eta}</div>`;
-  const stop = $('#navStop');
-  if (stop) stop.addEventListener('click', stopNav);
+    <div class="nav-side">
+      <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" title="Voice guidance">🔊</button>
+      ${limitMph ? `<div class="speed-limit"><span class="sl-num">${limitMph}</span><span class="sl-lbl">MAX</span></div>` : ''}
+      <div id="speedChip" class="speed-chip" hidden></div>
+      <div class="nav-eta">${eta}</div>
+    </div>`;
+  $('#navStop').addEventListener('click', () => stopNav(false));
+  $('#voiceBtn').addEventListener('click', () => {
+    const on = toggleVoice();
+    $('#voiceBtn').classList.toggle('on', on);
+    if (on) speak('Voice guidance on.');
+  });
+}
+
+function lower(s) {
+  return (s || '').replace(/^./, (c) => c.toLowerCase());
+}
+
+function stepIcon(mod) {
+  return (
+    {
+      left: '↰',
+      right: '↱',
+      slight_left: '↰',
+      slight_right: '↱',
+      straight: '↑',
+      sharp_left: '⤺',
+      sharp_right: '⤻',
+      'u-turn': '⮌',
+      depart: '◎',
+      arrive: '⊗',
+    }[mod] || '↑'
+  );
 }
 
 function swapEndpoints() {
@@ -496,7 +700,17 @@ function openWhyModal() {
 
 function handleDrawer(action) {
   if (action === 'about') {
-    openModal(`<h3>${CONFIG.about.name}</h3><p class="tag">${CONFIG.about.tagline}</p><p>${CONFIG.about.body}</p>`);
+    openModal(`
+      <h3>${CONFIG.about.name}</h3><p class="tag">${CONFIG.about.tagline}</p><p>${CONFIG.about.body}</p>
+      <h3 style="margin-top:14px">Map legend</h3>
+      <ul class="src-list legend">
+        <li><span class="lg-dot flock"></span> Flock Safety ALPR camera</li>
+        <li><span class="lg-dot other"></span> Other surveillance / plate reader</li>
+        <li><span class="lg-halo"></span> Heatmap halo = camera density</li>
+        <li><span class="lg-line teal"></span> Your chosen route</li>
+        <li><span class="lg-line grey"></span> Alternative route</li>
+      </ul>
+    `);
   } else if (action === 'data') {
     openModal(`
       <h3>Data sources</h3>
