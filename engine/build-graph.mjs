@@ -21,6 +21,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { isAlprCamera } from '../src/config.js';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const DATA = join(DIR, 'data');
@@ -83,9 +84,9 @@ const camGrid = new Map();
 for (const f of cams.features) {
   const [lon, lat] = f.geometry.coordinates;
   if (!inBox([lon, lat])) continue;
-  const brand = ((f.properties || {}).brand || (f.properties || {}).operator || '').toLowerCase();
-  const isAlpr = brand.includes('flock') || brand.includes('rekor') || brand.includes('platesmart') ||
-    brand.includes('neology') || brand.includes('axon') || brand.includes('genetec') || brand.includes('motorola');
+  // ALPR classification shares isAlprCamera() with the live map layer
+  // (plate-reader brands + traffic-facing cameras), single source of truth.
+  const isAlpr = isAlprCamera(f.properties || {});
   const w = isAlpr ? 1.0 : 0.5;
   const gx = Math.floor(lon / CELL);
   const gy = Math.floor(lat / CELL);

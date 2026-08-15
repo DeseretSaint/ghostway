@@ -67,9 +67,21 @@ export class MapView {
       minzoom: 11,
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 4, 14, 7],
+        // Red = ALPR risk (plate-reader brand or traffic-facing camera),
+        // amber = other surveillance. Matches isAlprCamera() in config.js.
         'circle-color': [
           'case',
-          ['==', ['get', CAMERA_LAYER.brandKey], 'Flock Safety'], '#ff4d6d',
+          [
+            'any',
+            ['==', ['get', 'surveillanceZone'], 'traffic'],
+            ['in', 'flock', ['downcase', ['to-string', ['get', 'brand']]]],
+            ['in', 'rekor', ['downcase', ['to-string', ['get', 'brand']]]],
+            ['in', 'platesmart', ['downcase', ['to-string', ['get', 'brand']]]],
+            ['in', 'motorola', ['downcase', ['to-string', ['get', 'brand']]]],
+            ['in', 'genetec', ['downcase', ['to-string', ['get', 'brand']]]],
+            ['in', 'leonardo', ['downcase', ['to-string', ['get', 'brand']]]],
+          ],
+          '#ff4d6d',
           '#ffaa40',
         ],
         'circle-stroke-width': 1.5,

@@ -74,6 +74,20 @@ export const CONFIG = {
   },
 };
 
+// DeFlock camera classification. Shared by the map layer, tap modal, and the
+// graph builder (which imports the same vendor list via engine/build-graph).
+// ALPR vendors = cameras that read license plates. `surveillanceZone: traffic`
+// in DeFlock's schema marks traffic-facing cameras, which in this dataset are
+// overwhelmingly plate readers (Flock dominates), so it counts as ALPR risk too.
+export const ALPR_BRAND_RE =
+  /flock|rekor|platesmart|cyclops|neology|axon|ekin|redspeed|mav|motorola|genetec|leonardo/i;
+
+export function isAlprCamera(props) {
+  if (!props) return false;
+  if (ALPR_BRAND_RE.test(props.brand || '')) return true;
+  return String(props.surveillanceZone || '').toLowerCase() === 'traffic';
+}
+
 // Camera vector-tile layer + property names (from DeFlock's PMTiles schema).
 export const CAMERA_LAYER = {
   sourceId: 'deflock',

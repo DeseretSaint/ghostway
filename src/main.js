@@ -1,4 +1,4 @@
-import { CONFIG, CAMERA_LAYER } from './config.js';
+import { CONFIG, CAMERA_LAYER, isAlprCamera } from './config.js';
 import { MapView } from './map-view.js';
 import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
@@ -913,14 +913,23 @@ function closeModal() {
 function openCameraModal(props, coords) {
   const brand = props.brand || 'Unknown';
   const op = props.operator || '';
-  const kind = props.kind || 'camera';
-  const isFlock = /flock/i.test(brand);
+  const isAlpr = isAlprCamera(props);
+  const dir = typeof props.direction === 'number'
+    ? `${props.direction}° (${['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(props.direction / 45) % 8]})`
+    : null;
+  const mount = props.mountType || '';
+  const age = props.osmTimestamp
+    ? `Mapped ${new Date(props.osmTimestamp).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}`
+    : '';
   openModal(`
     <h3>📷 ${brand}</h3>
-    ${op ? `<p class="muted">Operator: ${op}</p>` : ''}
-    <p>${kind === 'ALPR' ? 'Automated license plate reader (ALPR)' : 'Surveillance camera'}</p>
+    ${op && op.toLowerCase() !== brand.toLowerCase() ? `<p class="muted">Operator: ${op}</p>` : ''}
+    <p>${isAlpr ? '<b>Automated license plate reader (ALPR)</b> — reads every passing plate.' : 'Surveillance camera.'}</p>
+    <p class="muted">
+      ${dir ? `Faces ${dir}. ` : ''}${mount ? `Mounted on ${mount.replace(/_/g, ' ')}. ` : ''}${age}
+    </p>
     <p class="muted">${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}</p>
-    ${isFlock ? '<p class="warn-text">Flock Safety shares plate reads with thousands of agencies. Ghostway routes around these by default.</p>' : ''}
+    ${isAlpr ? '<p class="warn-text">Plate reads from cameras like this are shared with thousands of agencies. Ghostway routes around them by default.</p>' : ''}
     <p class="muted small">Data: DeFlock / OpenStreetMap contributors</p>
   `);
 }
@@ -944,8 +953,8 @@ function handleDrawer(action) {
       <h3>${CONFIG.about.name}</h3><p class="tag">${CONFIG.about.tagline}</p><p>${CONFIG.about.body}</p>
       <h3 style="margin-top:14px">Map legend</h3>
       <ul class="src-list legend">
-        <li><span class="lg-dot flock"></span> Flock Safety ALPR camera</li>
-        <li><span class="lg-dot other"></span> Other surveillance / plate reader</li>
+        <li><span class="lg-dot flock"></span> Plate reader risk (Flock, Motorola, Rekor… or traffic-facing)</li>
+        <li><span class="lg-dot other"></span> Other surveillance camera</li>
         <li><span class="lg-halo"></span> Heatmap halo = camera density</li>
         <li><span class="lg-line teal"></span> Your chosen route</li>
         <li><span class="lg-line grey"></span> Alternative route</li>

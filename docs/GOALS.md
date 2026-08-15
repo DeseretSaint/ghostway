@@ -11,7 +11,7 @@ Live: https://deseretsaint.github.io/ghostway/
 | Traffic / ETA accuracy | 8 | Full Wasatch coverage; 3/5 corridors match Valhalla exactly, 2 diverge on route choice |
 | Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, alerts, waypoint drag |
 | Visual polish | 9 | Splash, onboarding, mission icons, motion, legend; states done |
-| Camera data layer | 6 | DeFlock tiles + heatmap working |
+| Camera data layer | 8 | ALPR-aware map coloring, rich tap-details (direction/mount/freshness), unified classification |
 
 ## Workstreams
 - **A — Custom camera-aware routing**: own graph, A*, per-edge camera cost, STRICT/MODERATE/OFF, route options, Valhalla national fallback, self-host doc. [core done; graph expansion ongoing]
@@ -284,4 +284,34 @@ Next (iteration 11):
   two divergent corridors.
 - Camera layer (score 6): brand weighting audit + tap-details data polish.
 - Consider: CI job to rebuild the graph monthly from fresh Geofabrik data.
+
+### Iteration 11 — Camera data-quality pass (camera layer score 6 → 8)
+Audited the DeFlock dataset (130,555 cameras; tile inspection via @mapbox/vector-tile)
+and fixed what the app was doing with it:
+- **Bug fixed**: the camera modal read `props.kind` — a field that NEVER exists
+  in DeFlock data — so every plate reader displayed as generic "Surveillance
+  camera". Now classifies via `isAlprCamera()`: plate-reader brands (Flock,
+  Motorola, Rekor, PlateSmart, Neology, Axon, Ekin, Redspeed…) OR
+  `surveillanceZone: traffic`.
+- **Single source of truth**: map layer coloring, tap modal, and the graph
+  builder's camera weights now all share `isAlprCamera()` from config.js
+  (previously three divergent implementations).
+- **Map layer**: ALPR-risk cameras now render red across all plate-reader
+  brands (was: only exact "Flock Safety" string match); legend updated.
+- **Tap details upgraded**: ALPR callout, facing direction with compass point,
+  mount type, and data freshness ("Mapped Jun 2025" from osmTimestamp).
+- **Traffic hardening**: UDOT ArcGIS spatial query 504s/times out on the
+  expanded bbox — added 3× retry with backoff (20 s/attempt; success takes
+  5-10 s). Verified live: 70 events loaded.
+- Verified: new `scripts/camera-modal-check.mjs` taps a REAL rendered camera
+  marker (hit-tested, real click) and asserts ALPR classification + metadata
+  render — PASS ("Automated license plate reader (ALPR)… Faces 10° (N).
+  Mounted on pole. Mapped Jun 2025"). All 13 suites green, zero console errors.
+Quality: Camera data layer 6→8.
+
+Next (iteration 12):
+- B: real-drive ground truth (Keaton's PG→Costco time) for the two divergent
+  corridors.
+- A: contraction hierarchies for faster long-distance routing on the own graph.
+- Camera layer: report-a-camera flow (contribute back to DeFlock).
 

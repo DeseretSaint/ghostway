@@ -35,15 +35,22 @@ let cache = null;
 export async function loadTraffic(bbox, force = false) {
   if (cache && !force && Date.now() - cache.at < 5 * 60 * 1000) return cache;
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 9000);
     const [w, s, e, n] = bbox;
     const url =
       `${UDOT_EVENTS_URL}?where=1%3D1&outFields=EventCategory,EventType,IsFullClosure,Description,RoadwayName,PlannedEndDate&` +
       `resultRecordCount=2000&geometryType=esriGeometryEnvelope&geometry=${w}%2C${s}%2C${e}%2C${n}&inSR=4326&` +
       `spatialRel=esriSpatialRelIntersects&returnGeometry=true&f=json`;
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(t);
+    // ArcGIS intermittently 504s/times out on the spatial query; retry with
+    // backoff. Successful runs take 5-10 s, so allow 20 s per attempt.
+    let res;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (res.ok) break;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
     if (!res.ok) throw new Error(`traffic fetch ${res.status}`);
     const j = await res.json();
     const now = Date.now() / 1000;
