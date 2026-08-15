@@ -409,3 +409,24 @@ Next (iteration 16):
 - Camera layer: cluster the heatmap halo at mid-zoom (visual polish).
 - Docs: README for the public repo (mission, screenshots, self-host, data).
 
+### Iteration 16 — Public README rewrite + screenshots (open-source face)
+The README still described iteration-0 architecture (BRouter-hack routing,
+private-repo Tailscale workaround). Rewrote it to match the real app:
+- Live demo link, mission, ground rules, full feature list (all 16 iterations
+  of capability), three-tier routing stack table, how camera avoidance works,
+  data-source table with licenses, run/build/self-host instructions, config
+  reference (`valhallaUrl`, `osmNotesUrl`, `donate.*`), privacy statement,
+  test-suite overview.
+- Every factual claim verified against the codebase: 20 suites counted
+  (`ls scripts/*.mjs`), config keys grepped in src/config.js, GPL-3 license
+  confirmed in LICENSE.
+- Added two real screenshots (route options · navigation) captured from the
+  running app, vision-reviewed before embedding.
+- Verification: build green, smoke + interact PASS (docs-only change — no app
+  code touched).
+
+Next (iteration 17):
+- B: real-drive ground truth from Keaton's PG→Costco run (needs his time) —
+  still the only blocked item; everything else in the queue is done.
+- Camera layer: cluster the heatmap halo at mid-zoom (last visual item).
+
