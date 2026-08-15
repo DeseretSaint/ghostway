@@ -40,7 +40,8 @@ export function buildPanel(app) {
       box.hidden = true;
       return;
     }
-    const places = await searchPlaces(q, 6).catch(() => []);
+    const near = app.state.userLoc || null;
+    const places = await searchPlaces(q, 6, near).catch(() => []);
     if (!places.length) {
       box.hidden = true;
       return;
@@ -103,7 +104,9 @@ export function renderRouteCard(app, result) {
     : 0;
 
   let headline;
-  if (result.avoid && result.applied) {
+  if (result.routerDown) {
+    headline = `⚠️ Avoidance offline — routing server down. Showing a normal route; cameras still shown on the map.`;
+  } else if (result.avoid && result.applied) {
     headline = `🛡️ Routed clear of <b>${result.avoidedCount}</b> camera${result.avoidedCount === 1 ? '' : 's'}`;
   } else if (result.avoid && result.avoidedCount === 0) {
     headline = `✅ No known cameras along the way`;
@@ -133,6 +136,7 @@ export function renderRouteCard(app, result) {
     ${result.applied ? `<div class="rc-detour">+${fmtDistance(detour)} · +${extraMin} min vs fastest</div>` : ''}
     ${steps.length ? `<ol class="steps">${stepHtml}</ol>` : '<p class="muted small">Turn-by-turn directions unavailable right now.</p>'}
     ${result.applied ? `<button id="showFastest" class="text-link">Show fastest route instead</button>` : ''}
+  <button id="startNavBtn" class="primary-btn" style="margin-top:10px">▶ Start navigation</button>
   `;
   card.hidden = false;
 
@@ -146,6 +150,8 @@ export function renderRouteCard(app, result) {
       ]);
       renderRouteCard(app, { ...result, avoid: false, applied: false });
     });
+  const sn = $('#startNavBtn');
+  if (sn) sn.addEventListener('click', () => app.startNav());
 }
 
 function stepIcon(mod) {

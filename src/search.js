@@ -1,14 +1,17 @@
 import { CONFIG } from './config.js';
+import { haversine } from './utils.js';
 
 // Geocoding via Photon (OpenStreetMap). Forward search + reverse geocode.
+// Results are sorted by distance from the user's location when provided, so the
+// closest match surfaces first.
 
-export async function searchPlaces(query, limit = 6) {
+export async function searchPlaces(query, limit = 6, near = null) {
   if (!query || query.trim().length < 2) return [];
   const url = `${CONFIG.photon}?q=${encodeURIComponent(query)}&limit=${limit}`;
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error('search failed');
   const j = await res.json();
-  return (j.features || []).map((f) => {
+  let places = (j.features || []).map((f) => {
     const p = f.properties;
     const name = [p.name, p.housenumber ? p.street : p.street]
       .filter(Boolean)
@@ -16,13 +19,21 @@ export async function searchPlaces(query, limit = 6) {
     const region = [p.city || p.town || p.village, p.state, p.country]
       .filter(Boolean)
       .join(', ');
+    const coords = [f.geometry.coordinates[0], f.geometry.coordinates[1]];
     return {
       name: p.name || p.street || p.city || query,
       subtitle: [name, region].filter(Boolean).join(' · ') || p.osm_value,
-      coords: [f.geometry.coordinates[0], f.geometry.coordinates[1]],
+      coords,
       raw: p,
     };
   });
+
+  if (near && places.length > 1) {
+    places = places
+      .map((pl) => ({ ...pl, _d: haversine(near, pl.coords) }))
+      .sort((a, b) => a._d - b._d);
+  }
+  return places;
 }
 
 export async function reverseGeocode(coords) {

@@ -144,6 +144,8 @@ body {
   backdrop-filter: blur(12px);
   max-width: 520px;
   margin: 0 auto;
+  max-height: 52vh;
+  overflow-y: auto;
 }
 .field {
   display: flex;
@@ -528,4 +530,57 @@ details summary {
     right: auto;
     width: auto;
   }
+}
+
+/* Turn-by-turn navigation banner */
+.nav-banner {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: max(64px, calc(env(safe-area-inset-top) + 58px));
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #0e2a33, #0b0f17);
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  padding: 12px 14px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.nav-stop {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--danger);
+  font-size: 16px;
+  cursor: pointer;
+}
+.nav-step {
+  flex: 1;
+  min-width: 0;
+}
+.nav-dist {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1.1;
+}
+.nav-dir {
+  font-size: 15px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-eta {
+  flex: none;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
 }

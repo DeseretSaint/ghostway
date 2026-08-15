@@ -3,7 +3,7 @@ import { MapView } from './map-view.js';
 import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
-import { $, el, debounce, fmtDistance, fmtDuration } from './utils.js';
+import { $, el, debounce, fmtDistance, fmtDuration, haversine, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
 import { registerSW } from './pwa.js';
 
@@ -15,6 +15,10 @@ const app = {
     to: null,
     avoid: true,
     route: null,
+    userLoc: null, // [lon,lat] last known GPS
+    navigating: false,
+    gpsWatch: null,
+    stepIndex: 0,
   },
 };
 
@@ -22,6 +26,10 @@ async function init() {
   app.map = new MapView('map');
   app.cameras = new CameraStore();
   await app.cameras.loadFallback();
+
+  // Expose nav controls to the UI module.
+  app.startNav = startNav;
+  app.stopNav = stopNav;
 
   buildPanel(app);
   wireApp();
@@ -93,6 +101,7 @@ async function useMyLocation() {
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       const coords = [pos.coords.longitude, pos.coords.latitude];
+      app.state.userLoc = coords;
       const label = (await reverseGeocode(coords).catch(() => null)) || 'My location';
       setEndpoints({ coords, label }, app.state.to);
       app.map.flyTo(coords, 14);
@@ -173,6 +182,123 @@ function drawRoute(result) {
   const all = [result.from, ...shown.coords, result.to];
   app.map.fitTo(all, true);
   window.__ghostwayDebug = { routed: true, applied: result.applied, avoided: result.avoidedCount };
+  app._navSteps = result.steps || [];
+  app._routeCum = cumulativeDistances(shown.coords);
+  app._routeTotal = app._routeCum[app._routeCum.length - 1] || 1;
+  app._navRouteCoords = shown.coords;
+}
+
+function cumulativeDistances(coords) {
+  const cum = [0];
+  for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + haversine(coords[i - 1], coords[i]));
+  return cum;
+}
+
+// Fraction (0..1) of the route the user has traversed, by nearest point.
+function routeFraction(userC) {
+  const coords = app._navRouteCoords;
+  if (!coords || coords.length < 2) return 0;
+  let best = Infinity, bestFrac = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const d = pointToSegmentM(userC, coords[i - 1], coords[i]);
+    if (d < best) {
+      best = d;
+      const seg = haversine(coords[i - 1], coords[i]) || 1;
+      const within = pointProject(userC, coords[i - 1], coords[i]);
+      bestFrac = (app._routeCum[i - 1] + within * seg) / (app._routeTotal || 1);
+    }
+  }
+  return Math.max(0, Math.min(1, bestFrac));
+}
+
+// Project point P onto segment AB; return t in [0,1] along A->B.
+function pointProject(p, a, b) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const latm = toRad((a[1] + b[1]) / 2);
+  const ax = (b[0] - a[0]) * Math.cos(latm) * R;
+  const ay = (b[1] - a[1]) * R;
+  const px = (p[0] - a[0]) * Math.cos(latm) * R;
+  const py = (p[1] - a[1]) * R;
+  const len2 = ax * ax + ay * ay || 1;
+  let t = (px * ax + py * ay) / len2;
+  return Math.max(0, Math.min(1, t));
+}
+
+// ---- Turn-by-turn navigation mode ----
+function startNav() {
+  if (!app.state.route) return;
+  app.state.navigating = true;
+  app.state.stepIndex = 0;
+  // Hide the planning panel, show the nav banner.
+  $('#panel').hidden = true;
+  showNavBanner();
+  // Follow the user with GPS.
+  if (navigator.geolocation) {
+    app.state.gpsWatch = navigator.geolocation.watchPosition(
+      (pos) => {
+        const c = [pos.coords.longitude, pos.coords.latitude];
+        app.state.userLoc = c;
+        app.map.flyTo(c, 15);
+        advanceStep(c);
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 2000 }
+    );
+  }
+}
+
+function stopNav() {
+  app.state.navigating = false;
+  if (app.state.gpsWatch) {
+    navigator.geolocation.clearWatch(app.state.gpsWatch);
+    app.state.gpsWatch = null;
+  }
+  $('#navBanner').hidden = true;
+  $('#panel').hidden = false;
+  app.map.fitTo([app.state.from?.coords, app.state.to?.coords].filter(Boolean), true);
+}
+
+function advanceStep(userC) {
+  const steps = app._navSteps || [];
+  if (!steps.length || !app.state.navigating) return;
+  const frac = routeFraction(userC);
+  const traveled = frac * (app._routeTotal || 1);
+  // Steps carry cumulative start distances (meters). Find the last step whose
+  // start is at/before the user's traveled distance.
+  let idx = 0;
+  for (let i = 0; i < steps.length; i++) {
+    if ((steps[i].startS || 0) <= traveled + 15) idx = i;
+  }
+  if (idx !== app.state.stepIndex) {
+    app.state.stepIndex = idx;
+    renderNavStep();
+  }
+}
+
+function showNavBanner() {
+  const banner = $('#navBanner');
+  banner.hidden = false;
+  renderNavStep();
+}
+
+function renderNavStep() {
+  const steps = app._navSteps || [];
+  if (!steps.length) return;
+  const i = Math.min(app.state.stepIndex, steps.length - 1);
+  const step = steps[i];
+  const dist = step ? fmtDistance(step.distance) : '';
+  const dir = step ? step.instruction : 'Continue';
+  const name = step && step.name ? ` <b>${step.name}</b>` : '';
+  $('#navBanner').innerHTML = `
+    <button id="navStop" class="nav-stop" aria-label="Stop navigation">■</button>
+    <div class="nav-step">
+      <div class="nav-dist">${dist}</div>
+      <div class="nav-dir">${dir}${name}</div>
+    </div>
+    <div class="nav-eta">${fmtDuration(steps.reduce((a, s) => a + s.duration, 0))}</div>`;
+  const stop = $('#navStop');
+  if (stop) stop.addEventListener('click', stopNav);
 }
 
 function swapEndpoints() {
