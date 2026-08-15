@@ -10,7 +10,7 @@ Live: https://deseretsaint.github.io/ghostway/
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
 | Traffic / ETA accuracy | 8 | Full Wasatch coverage; 3/5 corridors match Valhalla exactly, 2 diverge on route choice |
 | Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, alerts, waypoint drag, live camera counter |
-| Visual polish | 9 | Splash, onboarding, mission icons, motion, legend; states done |
+| Visual polish | 9 | Splash, onboarding, mission icons, motion, legend, compact banner density mode |
 | Camera data layer | 9 | ALPR-aware coloring, rich tap-details, community reports, monthly-refreshed bundled snapshot, outage-resilient avoidance |
 
 ## Workstreams
@@ -386,4 +386,26 @@ Next (iteration 15):
 - B: real-drive ground truth from Keaton's PG→Costco run (needs his time).
 - D: banner density option (compact mode for small screens).
 - A: extend graph bbox south (Provo → Spanish Fork growth corridor).
+
+### Iteration 15 — Compact banner density mode (Workstream D)
+First, checked the queued "extend graph south" item: measured the southern
+corridors directly — Provo→Spanish Fork, Spanish Fork→Payson, Payson→Santaquin,
+Provo→SLC all already route on the local graph (3-62 ms, inside bbox). The
+expansion was already done in iteration 10; no work needed. Then shipped the
+last queued polish item:
+- **Banner density toggle** (▤/▦ button next to the voice toggle): compact
+  mode slims the banner 151px→100px — hides the next-step preview and the
+  speed-limit sign, shrinks the maneuver icon/countdown, keeps everything
+  mission-critical (camera chip, speed chip, ETA, stop, voice).
+- **Persisted** via `gw-compact` in localStorage; survives reload (verified).
+- Verified: `scripts/compact-check.mjs` — hit-tested toggle click, full mode
+  has preview+limit, compact mode hides both visually (getClientRects),
+  shorter height, persisted, survives reload. Vision-reviewed both states:
+  clean, no clutter either way. All 17 suites green, zero console errors.
+
+Next (iteration 16):
+- B: real-drive ground truth from Keaton's PG→Costco run (needs his time) —
+  the only remaining ETA validation gap.
+- Camera layer: cluster the heatmap halo at mid-zoom (visual polish).
+- Docs: README for the public repo (mission, screenshots, self-host, data).
 

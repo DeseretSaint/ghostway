@@ -20,6 +20,7 @@ const app = {
     to: null,
     mode: localStorage.getItem('gw-mode') || 'moderate', // strict | moderate | off
     avoid: true, // derived from mode !== 'off' (kept for legacy path)
+    compactBanner: localStorage.getItem('gw-compact') === '1',
     route: null,
     options: [], // engine route options
     chosen: 0,
@@ -902,6 +903,7 @@ function renderNavStep() {
   const limitMph = limit ? Math.round(limit * 0.621371 / 5) * 5 : null;
   const eta = app._totalDuration ? fmtDuration(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0]))) : '';
   const voiceOn = voiceEnabled();
+  const compact = app.state.compactBanner;
 
   $('#navBanner').innerHTML = `
     <button id="navStop" class="nav-stop" aria-label="Stop navigation">✕</button>
@@ -912,17 +914,26 @@ function renderNavStep() {
       ${next ? `<div class="nav-then">then ${stepIcon(step.modifier)} ${lower(step.instruction)}${step.name ? ` · ${step.name}` : ''}</div>` : ''}
     </div>
     <div class="nav-side">
-      <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" title="Voice guidance">🔊</button>
+      <div class="nav-side-row">
+        <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" title="Voice guidance">🔊</button>
+        <button id="densityBtn" class="nav-voice" aria-label="Toggle banner density" title="Compact / full banner">${compact ? '▦' : '▤'}</button>
+      </div>
       ${limitMph ? `<div class="speed-limit"><span class="sl-num">${limitMph}</span><span class="sl-lbl">MAX</span></div>` : ''}
       <div id="speedChip" class="speed-chip" hidden></div>
       <div id="camChip" class="cam-chip" title="Cameras passed / ahead on this route">📷 0</div>
       <div class="nav-eta">${eta}</div>
     </div>`;
+  $('#navBanner').classList.toggle('compact', !!compact);
   $('#navStop').addEventListener('click', () => stopNav(false));
   $('#voiceBtn').addEventListener('click', () => {
     const on = toggleVoice();
     $('#voiceBtn').classList.toggle('on', on);
     if (on) speak('Voice guidance on.');
+  });
+  $('#densityBtn').addEventListener('click', () => {
+    app.state.compactBanner = !app.state.compactBanner;
+    localStorage.setItem('gw-compact', app.state.compactBanner ? '1' : '0');
+    renderNavStep();
   });
   // Initialize the camera chip from the real progress, not a hardcoded 0.
   updateCamChip(traveled);
