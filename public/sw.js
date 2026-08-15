@@ -1,8 +1,11 @@
 // Ghostway service worker — makes the app installable and usable offline.
-// Caches the app shell immediately; caches map/API responses on first use
-// (stale-while-revalidate) so a saved route still renders without signal.
+// Caches map/API responses on first use (stale-while-revalidate) so a viewed
+// area still renders without signal. The APP SHELL is served network-first and
+// only falls back to cache when offline, so a new deploy reaches users
+// immediately (a cached shell would otherwise stick forever across versions).
 
-const VERSION = 'ghostway-v1';
+// Bump this on every release that changes the shell — it invalidates old caches.
+const VERSION = 'ghostway-v2';
 const SHELL = `${VERSION}-shell`;
 const TILES = `${VERSION}-tiles`;
 
@@ -27,16 +30,12 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(
-          keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))
-        )
+        Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k)))
       )
       .then(() => self.clients.claim())
   );
 });
 
-// Classify a request: tile (PMTiles/MVT/XYZ) and API (routing/search) get
-// stale-while-revalidate; the app shell gets cache-first then network.
 function isTile(url) {
   return (
     /\.(pbf|mvt|png|jpg|webp)(\?|$)/.test(url.pathname) ||
@@ -61,20 +60,32 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
+  // Only handle same-origin navigations + tiles + api.
+  if (url.origin !== self.location.origin && !isTile(url) && !isApi(url)) return;
+
   if (isApi(url) || isTile(url)) {
     event.respondWith(staleWhileRevalidate(req, TILES));
     return;
   }
 
-  // App shell: cache-first, fall back to cached index when offline.
-  event.respondWith(
-    caches.match(req).then(
-      (hit) =>
-        hit ||
-        fetch(req).catch(() => caches.match('./index.html').then((h) => h || Response.error()))
-    )
-  );
+  // App shell (navigation / index.html / manifest / icons): NETWORK-FIRST so a
+  // new deploy is picked up immediately; fall back to cache when offline.
+  if (url.origin === self.location.origin) {
+    event.respondWith(networkFirst(req, SHELL));
+  }
 });
+
+async function networkFirst(req, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const res = await fetch(req);
+    if (res && res.status === 200 && req.method === 'GET') cache.put(req, res.clone());
+    return res;
+  } catch (e) {
+    const hit = await cache.match(req);
+    return hit || (await cache.match('./index.html')) || Response.error();
+  }
+}
 
 async function staleWhileRevalidate(req, cacheName) {
   const cache = await caches.open(cacheName);
