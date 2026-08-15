@@ -1,0 +1,5 @@
+{
+  "type": "FeatureCollection",
+  "features": [],
+  "_note": "Empty fallback. The live app uses DeFlock vector tiles (tiles.dontgetflocked.com). Run `npm run fetch-cameras` to bundle a real camera snapshot here for offline/routing fallback, or leave this empty to avoid shipping a large file."
+}
