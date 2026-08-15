@@ -21,6 +21,12 @@ export const CONFIG = {
   // --- Turn-by-turn (OSRM, used only for human-readable instructions) ---
   osrm: 'https://routing.openstreetmap.de/routed-car',
 
+  // --- National-coverage fallback engine (Valhalla demo, key-free, CORS-open).
+  //     Used outside Ghostway's own graph region. For higher limits / no rate
+  //     risk, point this at a self-hosted Docker instance — see
+  //     docs/valhalla-docker.md. Leave empty to use the public demo.
+  valhallaUrl: 'https://valhalla1.openstreetmap.de',
+
   // --- Avoidance tuning ---
   avoidance: {
     // Radius (meters) of the no-go circle placed around each camera.

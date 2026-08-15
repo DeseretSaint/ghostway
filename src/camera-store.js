@@ -9,6 +9,20 @@ import { pointToSegmentM } from './utils.js';
 // iterates — re-routing around the cameras that are still on the path until it
 // converges. This avoids hammering Overpass on every iteration.
 
+// Cameras from an in-memory list within `corridorM` of a route polyline.
+// Exported so the Valhalla fallback engine can share the exact same detection
+// logic as the own-graph router.
+export function nearRouteFromList(line, feats, corridorM = CONFIG.avoidance.routeCorridorM) {
+  if (!line || line.length < 2) return [];
+  return feats.filter((f) => {
+    const c = f.geometry.coordinates;
+    for (let i = 0; i < line.length - 1; i++) {
+      if (pointToSegmentM(c, line[i], line[i + 1]) <= corridorM) return true;
+    }
+    return false;
+  });
+}
+
 export class CameraStore {
   constructor() {
     this._cache = new Map(); // bbox key -> features (overpass or fallback)
@@ -79,15 +93,9 @@ export class CameraStore {
   }
 
   // Cameras from an in-memory list within `corridorM` of a route polyline.
+  // Delegates to the shared free function above.
   nearRouteFromList(line, feats, corridorM = CONFIG.avoidance.routeCorridorM) {
-    if (!line || line.length < 2) return [];
-    return feats.filter((f) => {
-      const c = f.geometry.coordinates;
-      for (let i = 0; i < line.length - 1; i++) {
-        if (pointToSegmentM(c, line[i], line[i + 1]) <= corridorM) return true;
-      }
-      return false;
-    });
+    return nearRouteFromList(line, feats, corridorM);
   }
 
   // Convenience used before the iterative router existed; kept for fallback.

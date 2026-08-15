@@ -6,7 +6,7 @@ Live: https://deseretsaint.github.io/ghostway/
 ## Quality scores (0-10)
 | Area | Score | Notes |
 |---|---|---|
-| Routing engine (camera-aware) | 7 | Own graph + A* with camera cost (Wasatch Front); national coverage pending |
+| Routing engine (camera-aware) | 9 | Own graph (Wasatch) + Valhalla national fallback with camera avoidance; self-host doc shipped |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
 | Traffic / ETA accuracy | 6 | Live UDOT events → edge speed factors + delay on cards; measured-speed data pending |
 | Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, over-speed + camera-ahead alerts |
@@ -14,10 +14,10 @@ Live: https://deseretsaint.github.io/ghostway/
 | Camera data layer | 6 | DeFlock tiles + heatmap working |
 
 ## Workstreams
-- **A — Custom camera-aware routing**: own graph, A*, per-edge camera cost, STRICT/MODERATE/OFF, route options. [in progress]
-- **B — Live traffic + ETAs**: UDOT open data → edge speeds/incidents. [not started]
-- **C — Nav experience**: follow mode, off-route re-route, voice, speed limits. [not started]
-- **D — Visual polish**: motion, states, typography, icon/splash. [not started]
+- **A — Custom camera-aware routing**: own graph, A*, per-edge camera cost, STRICT/MODERATE/OFF, route options, Valhalla national fallback, self-host doc. [core done; graph expansion ongoing]
+- **B — Live traffic + ETAs**: UDOT open events live; measured speeds blocked by account-required feed. [live incidents done]
+- **C — Nav experience**: follow mode, off-route re-route, voice, speed limits, alerts. [done]
+- **D — Visual polish**: motion, states, icon set; splash/onboarding pending. [mostly done]
 
 ## Iteration log
 
@@ -144,4 +144,37 @@ Next (iteration 6):
 - C: waypoint drag on route preview.
 - A: Valhalla-in-Docker evaluation for national coverage (biggest remaining
   routing-engine lever).
+
+### Iteration 6 — National coverage via Valhalla (Workstream A.4)
+Shipped:
+- **Three-tier routing stack**: (1) own camera-aware graph (Wasatch, on-device,
+  ~70 ms) → (2) **Valhalla** (national, key-free, CORS-open) → (3) legacy
+  BRouter/OSRM. Tiers auto-selected per corridor; off-route re-routes follow
+  the same chain.
+- **Valhalla camera avoidance**: baseline route → DeFlock cameras near it →
+  re-route with up to 40 `exclude_locations` (server caps ~50), iterative,
+  moderate mode caps detour at +35%. Shared the exact detection function with
+  the own engine (`nearRouteFromList` now a single exported implementation).
+- Route options + per-option camera counts work nationally: Denver→Boulder
+  returned Balanced (48 cams, +5.7 km) vs Fastest (75 cams) — 27 cameras
+  avoided outside any prebuilt graph.
+- **Self-hosted doc** `docs/valhalla-docker.md`: Docker command, Tailscale
+  exposure, `CONFIG.valhallaUrl` switch, and honest findings (demo is
+  rate-limited & capped; `avoid_locations` silently ignored — use top-level
+  `exclude_locations`; Mac disk had only ~2.3 GB free so self-hosting stays
+  optional).
+- **Bug found & fixed**: my polyline decoder used `result = 1` / `+=`
+  (corrupts zigzag sign bit → mirrored geometry, distances looked fine).
+  Caught by the Denver→Boulder exclusion test; fixed to `result = 0` / `|=`.
+- Verified: `scripts/valhalla-check.mjs` (Denver→Boulder routes, exclusion
+  46.5→56.8 km CHANGED) + `scripts/tiers-check.mjs` (PG→Costco uses local
+  graph 67 ms; Denver→Boulder falls to Valhalla with options). All 9 suites
+  green, zero console errors.
+Quality: Routing engine 7→9.
+
+Next (iteration 7):
+- D: splash screen + first-run onboarding.
+- C: waypoint drag on route preview.
+- B: ETA accuracy — 5 real corridors vs Google/Apple ETAs, recorded in
+  docs/GOALS.md (needs a driving session or traffic-snapshot comparison).
 

@@ -1,0 +1,58 @@
+// Engine-tier E2E: inside-coverage corridor (PG→Costco) must use the local
+// graph; outside-coverage corridor (Denver→Boulder) must fall through to
+// Valhalla and still show route options + camera counts.
+import puppeteer from 'puppeteer-core';
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
+const p = await b.newPage();
+await p.setViewport({ width: 390, height: 844, isMobile: true });
+const errs = [];
+p.on('pageerror', (e) => errs.push(String(e.message)));
+
+await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 });
+
+async function route(fromQ, toQ) {
+  // Reset via Edit button if a card is showing.
+  const edit = await p.$('#editRouteBtn');
+  if (edit) await edit.click();
+  await wait(300);
+  await p.evaluate(() => {
+    document.querySelector('#fromInput').value = '';
+    document.querySelector('#toInput').value = '';
+  });
+  await p.type('#toInput', toQ);
+  try { await p.waitForSelector('#suggestions .sugg', { timeout: 8000 }); await p.click('#suggestions .sugg'); }
+  catch { await p.focus('#toInput'); await p.keyboard.press('Enter'); }
+  await wait(600);
+  await p.type('#fromInput', fromQ);
+  try { await p.waitForSelector('#suggestions .sugg', { timeout: 8000 }); await p.click('#suggestions .sugg'); }
+  catch { await p.focus('#fromInput'); await p.keyboard.press('Enter'); }
+  await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 45000 });
+  await wait(400);
+  return p.evaluate(() => ({
+    dbg: window.__ghostwayDebug,
+    card: document.querySelector('#route-card')?.innerText?.replace(/\s+/g, ' ')?.slice(0, 160),
+    opts: [...document.querySelectorAll('.route-opt .opt-meta')].map((e) => e.textContent),
+  }));
+}
+
+const inside = await route('Pleasant Grove Utah', 'Costco Lehi');
+console.log('INSIDE coverage:', JSON.stringify({ engine: inside.dbg.engine, ms: inside.dbg.ms, opts: inside.opts }));
+
+// Clear debug flag before the second route.
+await p.evaluate(() => { window.__ghostwayDebug = null; });
+const outside = await route('Denver Colorado', 'Boulder Colorado');
+console.log('OUTSIDE coverage:', JSON.stringify({ engine: outside.dbg.engine, ms: outside.dbg.ms, opts: outside.opts }));
+console.log('outside card:', outside.card);
+
+console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 4));
+await b.close();
+
+const pass =
+  inside.dbg.engine === true &&
+  outside.dbg.engine === 'valhalla' &&
+  outside.opts.length >= 1;
+console.log(pass ? '\nTIERS PASS ✅ — local graph in coverage, Valhalla national fallback' : '\nTIERS FAIL ❌');
+process.exit(pass ? 0 : 1);

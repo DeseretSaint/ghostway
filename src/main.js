@@ -4,6 +4,7 @@ import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
 import { planRoutes, loadGraph, inGraphRegion, graphStatus } from './router.js';
+import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic } from './traffic.js';
 import { $, el, debounce, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
@@ -233,7 +234,28 @@ async function onRoute() {
     }
   }
 
-  // --- Legacy fallback (outside coverage or engine failure) ---
+  // --- Valhalla fallback: national coverage + camera avoidance via
+  //     exclude_locations (same options UX as the own engine). ---
+  try {
+    const t0 = performance.now();
+    const mode = app.state.avoid ? (app.state.mode || 'moderate') : 'off';
+    const { options } = await valhallaPlanRoutes(from.coords, to.coords, app.cameras, { mode });
+    const ms = Math.round(performance.now() - t0);
+    app.state.options = options;
+    const chosen = pickOptionForMode(options);
+    app.state.chosen = chosen;
+    app.state.route = { engine: true, source: 'valhalla', options, chosen };
+    drawEngineRoutes();
+    renderRouteCard(app, app.state.route);
+    clearStatus();
+    enginePill(`🌐 Valhalla engine · ${ms} ms · ${options.length} option${options.length > 1 ? 's' : ''}`);
+    window.__ghostwayDebug = { routed: true, engine: 'valhalla', options: options.length, ms };
+    return;
+  } catch (e) {
+    console.warn('valhalla route failed, falling back to legacy', e);
+  }
+
+  // --- Legacy fallback (BRouter + OSRM; flaky but works everywhere) ---
   try {
     const result = await planRoute(from.coords, to.coords, {
       avoid: app.state.avoid,
@@ -561,9 +583,25 @@ async function reRoute(fromC) {
       app.state.route = { engine: true, options, chosen: app.state.chosen };
       drawEngineRoutes();
     } else {
-      const result = await planRoute(fromC, to.coords, { avoid: app.state.avoid, cameraStore: app.cameras });
-      app.state.route = result;
-      drawRoute(result);
+      // Outside own-graph coverage: try Valhalla (national + camera avoidance),
+      // then the legacy BRouter/OSRM path.
+      let done = false;
+      try {
+        const mode = app.state.avoid ? (app.state.mode || 'moderate') : 'off';
+        const { options } = await valhallaPlanRoutes(fromC, to.coords, app.cameras, { mode });
+        app.state.options = options;
+        app.state.chosen = pickOptionForMode(options);
+        app.state.route = { engine: true, source: 'valhalla', options, chosen: app.state.chosen };
+        drawEngineRoutes();
+        done = true;
+      } catch (ve) {
+        console.warn('reroute valhalla failed', ve);
+      }
+      if (!done) {
+        const result = await planRoute(fromC, to.coords, { avoid: app.state.avoid, cameraStore: app.cameras });
+        app.state.route = result;
+        drawRoute(result);
+      }
     }
     app.state.stepIndex = 0;
     app._voiceAnnounced = {};
@@ -814,7 +852,7 @@ function handleDrawer(action) {
         <li><b>Cameras:</b> DeFlock (OpenStreetMap + volunteer ALPR map)</li>
         <li><b>Live traffic:</b> UDOT open events (roadwork, closures, incidents)</li>
         <li><b>Search:</b> Photon (OpenStreetMap)</li>
-        <li><b>Routing:</b> Ghostway engine (Wasatch Front) · BRouter + OSRM fallback</li>
+        <li><b>Routing:</b> Ghostway engine (Wasatch Front) · Valhalla (national) · BRouter + OSRM fallback</li>
       </ul>
       <p class="muted small">All sources are open and free to use. No account, no tracking.</p>
     `);
