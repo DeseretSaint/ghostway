@@ -63,7 +63,17 @@ Optional: bundle a camera snapshot for offline/routing fallback:
 npm run fetch-cameras   # writes public/cameras/cameras.geojson
 ```
 
-## Configure donation links
+## Installable PWA
+
+Ghostway is a Progressive Web App. After `npm run build`, the `dist/` folder is
+fully installable: add it to your phone's home screen and it runs like a native
+app (standalone, no browser chrome). A service worker caches the app shell plus
+map and camera tiles as you use them, so a previously viewed area still renders
+offline. Routing and search need a connection to the open servers above.
+
+To host it: serve the static `dist/` from any HTTPS origin (required for
+geolocation and installability on mobile).
+
 
 Open `src/config.js` and set `CONFIG.donate.methods` / `CONFIG.donate.crypto`
 to your own Ko-fi, GitHub Sponsors, Liberapay, or wallet addresses. The donate

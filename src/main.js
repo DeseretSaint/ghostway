@@ -5,6 +5,7 @@ import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
 import { $, el, debounce, fmtDistance, fmtDuration } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
+import { registerSW } from './pwa.js';
 
 const app = {
   map: null,
@@ -33,6 +34,7 @@ async function init() {
 
   // Default view: Pleasant Grove, UT (Keaton's home turf) to demonstrate.
   showStatus('Tap ◎ to start from your location, or search a destination.', 'info');
+  registerSW();
 }
 
 function wireApp() {

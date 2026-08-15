@@ -1,0 +1,68 @@
+// PWA verification: load the built app, confirm the manifest is served,
+// the service worker registers, and the app is installable (has a manifest
+// with icons + a SW with a fetch handler).
+import { spawn } from 'node:child_process';
+import puppeteer from 'puppeteer-core';
+
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function main() {
+  const srv = spawn('npx', ['vite', 'preview', '--port', '4173', '--host'], {
+    cwd: process.cwd(),
+    stdio: 'ignore',
+  });
+  await wait(2500);
+  const browser = await puppeteer.launch({
+    executablePath: CHROME,
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+  const page = await browser.newPage();
+  const logs = [];
+  page.on('console', (m) => logs.push(`${m.type()}: ${m.text()}`));
+
+  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await wait(2000);
+
+  // 1) Manifest is fetchable + parseable.
+  const manifest = await page.evaluate(async () => {
+    const res = await fetch('/manifest.webmanifest');
+    const j = await res.json();
+    return { ok: res.ok, name: j.name, icons: (j.icons || []).length };
+  });
+
+  // 2) Service worker registered.
+  const sw = await page.evaluate(async () => {
+    if (!('serviceWorker' in navigator)) return { supported: false };
+    await new Promise((r) => setTimeout(r, 500));
+    const reg = await navigator.serviceWorker.getRegistration();
+    return { supported: true, registered: !!reg, scope: reg?.scope };
+  });
+
+  // 3) Installability: a manifest with >=1 icon + SW with fetch handler => installable.
+  const swTxt = await page.evaluate(async () => {
+    const res = await fetch('/sw.js');
+    return res.text();
+  });
+
+  console.log('manifest   :', JSON.stringify(manifest));
+  console.log('sw         :', JSON.stringify(sw));
+  console.log('sw has fetch handler:', /addEventListener\(['"]fetch/.test(swTxt));
+  console.log('console    :', logs.filter((l) => l.startsWith('error')).slice(0, 5));
+
+  const pass =
+    manifest.ok &&
+    manifest.icons >= 1 &&
+    sw.registered &&
+    /addEventListener\(['"]fetch/.test(swTxt);
+
+  await browser.close();
+  srv.kill('SIGTERM');
+  console.log(pass ? '\nPWA PASS ✅ — installable, offline-ready' : '\nPWA FAIL ❌');
+  process.exit(pass ? 0 : 1);
+}
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

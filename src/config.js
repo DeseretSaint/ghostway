@@ -10,7 +10,7 @@ export const CONFIG = {
   //  1) Vector tiles (fast, on-demand, recommended) — used for the live map.
   cameraTileUrl: 'https://tiles.dontgetflocked.com/cameras/{z}/{x}/{y}.mvt',
   //  2) Full GeoJSON (bundled snapshot) — used as a fallback / for offline & routing.
-  cameraGeojson: '/cameras/cameras.geojson',
+  cameraGeojson: './cameras/cameras.geojson',
 
   // --- Geocoding / search (Photon, OpenStreetMap-based, no key) ---
   photon: 'https://photon.komoot.io/api',
