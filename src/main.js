@@ -457,7 +457,31 @@ function updateSpeed(pos) {
   if (chip) {
     chip.textContent = fmtSpeed(app._navSpeed);
     chip.hidden = app._navSpeed == null;
+    checkOverSpeed();
   }
+}
+
+// Over-speed alert (Workstream C): compare smoothed GPS speed against the
+// current step's posted limit. Visual: red chip. Voice: at most once/minute.
+function checkOverSpeed() {
+  const chip = $('#speedChip');
+  if (!chip || !app.state.navigating || app._navSpeed == null) return;
+  const steps = app._navSteps || [];
+  const step = steps[Math.min(app.state.stepIndex, steps.length - 1)];
+  const limitKmh = step && step.speedLimit;
+  if (!limitKmh) {
+    chip.classList.remove('over');
+    return;
+  }
+  const speedKmh = app._navSpeed * 3.6;
+  const over = speedKmh > limitKmh + 8; // tolerance ~5 mph
+  chip.classList.toggle('over', over);
+  const now = Date.now();
+  if (over && (!app._lastOverVoice || now - app._lastOverVoice > 60000)) {
+    app._lastOverVoice = now;
+    speak(`You're over the ${Math.round(limitKmh * 0.621371 / 5) * 5} mile per hour limit.`);
+  }
+  if (!over) app._lastOverVoice = 0;
 }
 
 function stopNav(arrived = false) {
@@ -596,6 +620,19 @@ function advanceStep(userC) {
         app._voiceAnnounced[idx + '_near'] = 1;
         speak(phraseManeuver(Math.max(30, distToManeuver), s.instruction, s.name));
       }
+    }
+    // Camera-ahead warning: find the nearest later step that passes cameras;
+    // if we're within ~250m of entering it, alert once.
+    for (let k = idx + 1; k < steps.length; k++) {
+      if (!steps[k].cameras) continue;
+      if (app._voiceAnnounced['cam' + k]) continue; // already warned for this one
+      const distToCam = steps[k].startS - traveled;
+      if (distToCam > 0 && distToCam <= 250) {
+        app._voiceAnnounced['cam' + k] = 1;
+        speak('Camera ahead. You will pass it in about 200 meters.');
+        haptic();
+      }
+      break; // only ever consider the nearest camera step
     }
   }
 }

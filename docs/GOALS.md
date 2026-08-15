@@ -9,7 +9,7 @@ Live: https://deseretsaint.github.io/ghostway/
 | Routing engine (camera-aware) | 7 | Own graph + A* with camera cost (Wasatch Front); national coverage pending |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
 | Traffic / ETA accuracy | 6 | Live UDOT events → edge speed factors + delay on cards; measured-speed data pending |
-| Nav experience (follow, voice) | 9 | Follow-mode bearing camera, pitch, pan-pause + recenter; voice + banner + arrival |
+| Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, over-speed + camera-ahead alerts |
 | Visual polish | 8 | Mission icon set (route avoiding camera's gaze), motion, legend, layer toggle; splash next |
 | Camera data layer | 6 | DeFlock tiles + heatmap working |
 
@@ -116,9 +116,32 @@ Shipped:
   suites green (smoke, engine, interact, nav-playback, follow, traffic).
 Quality: Nav experience 8→9 · Visual polish 7→8.
 
-Next (iteration 5):
-- D: splash screen polish + first-run onboarding state design.
-- C: waypoint drag on route preview; speed-limit over-speed alert.
-- B stretch: probe UDOT TMS 5-min speed feeds for a no-token endpoint.
-- A: Valhalla-in-Docker evaluation for national coverage.
+### Iteration 5 — Driving alerts (Workstream C) + traffic research findings (B)
+Shipped:
+- **Camera-ahead warning** (the mission alert): when the chosen route passes a
+  camera, Ghostway says *"Camera ahead. You will pass it in about 200 meters"*
+  exactly once per camera ~250 m before it, with a haptic tap. Works off the
+  per-step camera accounting added to the router in iteration 2.
+- **Over-speed alert**: GPS speed vs the current step's posted limit (OSM
+  maxspeed), ~5 mph tolerance. Speed chip pulses red + voice warning at most
+  once/minute.
+- Verified by `scripts/alert-check.mjs` driving the real PG→Costco route at
+  30 m/s with captured speechSynthesis: both warnings fired in order, zero
+  errors.
+Research finding (Workstream B — measured speeds still blocked):
+- UDOT's WZDx work-zone feed (`udottraffic.utah.gov/wzdx/udot/v40/data`) is
+  key-free but (a) has no CORS headers and (b) is STALE — last updated
+  2023-03-19, all 744 events have past end dates. Built a CI-refresh pipeline
+  (fetch script + workflow) but pulled it: shipping stale data would mislead
+  routing. Kept the engine fetch script for when UDOT revives the feed.
+- 5-min TMS measured speeds remain behind UDOT's registered-data portal
+  (account required — violates the no-key rule). Point-event ArcGIS feed stays
+  the live source.
+Quality: Nav experience 9 (alerts complete the parity set).
+
+Next (iteration 6):
+- D: splash screen + first-run onboarding states.
+- C: waypoint drag on route preview.
+- A: Valhalla-in-Docker evaluation for national coverage (biggest remaining
+  routing-engine lever).
 
