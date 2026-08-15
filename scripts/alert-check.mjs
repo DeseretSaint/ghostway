@@ -11,6 +11,7 @@ const errs = [];
 p.on('pageerror', (e) => errs.push(String(e.message)));
 
 await p.evaluateOnNewDocument(() => {
+  localStorage.setItem('gw-onboarded', '1'); // returning user — skip onboarding
   window.__gps = { handlers: [] };
   const mock = {
     getCurrentPosition: (cb) => cb({ coords: { longitude: -111.759, latitude: 40.364, speed: 0 } }),

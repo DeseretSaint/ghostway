@@ -106,6 +106,42 @@
           <div id="modalBody"></div>
         </div>
       </div>
+
+      <!-- Splash: shown instantly while the map/engine boot (Workstream D) -->
+      <div id="splash" aria-hidden="true">
+        <div class="splash-inner">
+          <div class="splash-logo">
+            <svg viewBox="0 0 512 512" role="img" aria-label="Ghostway icon">
+              <path d="M372 148 L236 306 A190 190 0 0 0 372 338 Z" fill="#ff4d6d" opacity="0.28"/>
+              <path d="M372 148 L300 296 A150 150 0 0 0 372 332 Z" fill="#ff4d6d" opacity="0.30"/>
+              <circle cx="372" cy="168" r="34" fill="#ff4d6d"/>
+              <circle cx="372" cy="168" r="34" fill="none" stroke="#0b0f17" stroke-width="7"/>
+              <circle cx="372" cy="168" r="11" fill="#0b0f17"/>
+              <path d="M124 408 C 210 386, 168 300, 218 244 C 262 194, 286 176, 294 112" fill="none" stroke="#3ad6c5" stroke-width="34" stroke-linecap="round"/>
+              <circle cx="124" cy="408" r="26" fill="#e8eef7"/>
+              <path d="M294 66 L324 126 L294 110 L264 126 Z" fill="#3ad6c5"/>
+            </svg>
+          </div>
+          <div class="splash-name">Ghostway</div>
+          <div class="splash-tag">Navigate beyond surveillance</div>
+          <div class="splash-load"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+
+      <!-- First-run onboarding (Workstream D) -->
+      <div id="onboarding" class="onboarding" hidden>
+        <div class="ob-card">
+          <button id="obSkip" class="ob-skip" type="button">Skip</button>
+          <div id="obStep" class="ob-step"></div>
+          <div class="ob-dots">
+            <span class="ob-dot on"></span><span class="ob-dot"></span><span class="ob-dot"></span>
+          </div>
+          <div class="ob-actions">
+            <button id="obBack" class="ghost-btn" type="button" hidden>Back</button>
+            <button id="obNext" class="primary-btn" type="button">Next</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

@@ -8,9 +8,9 @@ Live: https://deseretsaint.github.io/ghostway/
 |---|---|---|
 | Routing engine (camera-aware) | 9 | Own graph (Wasatch) + Valhalla national fallback with camera avoidance; self-host doc shipped |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
-| Traffic / ETA accuracy | 6 | Live UDOT events → edge speed factors + delay on cards; measured-speed data pending |
+| Traffic / ETA accuracy | 6 | Live UDOT events → edge delays; benchmark shows own engine ~30% optimistic vs Valhalla — turn-penalty fix next |
 | Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, over-speed + camera-ahead alerts |
-| Visual polish | 8 | Mission icon set (route avoiding camera's gaze), motion, legend, layer toggle; splash next |
+| Visual polish | 9 | Splash, onboarding, mission icons, motion, legend; states done |
 | Camera data layer | 6 | DeFlock tiles + heatmap working |
 
 ## Workstreams
@@ -177,4 +177,35 @@ Next (iteration 7):
 - C: waypoint drag on route preview.
 - B: ETA accuracy — 5 real corridors vs Google/Apple ETAs, recorded in
   docs/GOALS.md (needs a driving session or traffic-snapshot comparison).
+
+### Iteration 7 — Splash + onboarding (D), ETA benchmark (B), Valhalla hardening
+Shipped:
+- **Splash screen**: instant mission-icon splash, auto-dismisses on first map
+  `idle` (4 s cap, never traps the user), fade-out animation. Favicon updated
+  to the new mission icon set.
+- **First-run onboarding**: 3-step intro (mission · privacy · how to navigate),
+  real Back/Next/Skip controls, progress dots, persists via `gw-onboarded`;
+  second load skips it. New users learn the Strict/Moderate/Off concept
+  without reading docs.
+- **ETA accuracy benchmark** (`scripts/eta-benchmark.mjs`, 5 real corridors):
+  | corridor | Valhalla (production ref) | own engine | diff |
+  | PG → Costco Lehi | 10 min / 10.5 km | 7 min / 10.0 km | -3 min (30% optimistic) |
+  | PG → Provo BYU | 20 min / 22.5 km | outside graph | — |
+  | Lehi → SLC Downtown | 32 min / 48.6 km | outside graph | — |
+  | American Fork → Park City | 55 min / 87.9 km | outside graph | — |
+  | Orem → SLC Airport | 54 min / 71.6 km | outside graph | — |
+  FINDING: own engine runs ~30% optimistic vs production costing — it uses
+  posted maxspeed with no signal/turn delay. Fix direction: junction penalty
+  (per-traffic-signal ~8-12 s) + road-class derate for urban arterials.
+- **Valhalla hardening**: 3× retry with backoff on demo-server burst 400s
+  (hit while benchmarking); benchmark fetch shim bug fixed (POST body dropped).
+- Test hygiene: all route-flow E2E scripts now run as a RETURNING user
+  (gw-onboarded seeded) so the new onboarding overlay doesn't block clicks;
+  onboard-check.mjs verifies the overlay separately. All 10 suites green.
+Quality: Visual polish 8→9 (splash/onboarding/icon consistency).
+
+Next (iteration 8):
+- B: junction/turn penalty + urban road-class derate in the own graph cost
+  model, re-run benchmark, target <10% deviation from Valhalla reference.
+- C: waypoint drag on route preview.
 

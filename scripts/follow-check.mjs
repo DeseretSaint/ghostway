@@ -14,6 +14,7 @@ p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 
 // Mock geolocation with heading + speed so follow mode has real inputs.
 await p.evaluateOnNewDocument(() => {
+  localStorage.setItem('gw-onboarded', '1'); // returning user — skip onboarding
   window.__gps = { handlers: [] };
   const mock = {
     getCurrentPosition: (cb) => cb({ coords: { longitude: -111.759, latitude: 40.364, speed: 0 } }),

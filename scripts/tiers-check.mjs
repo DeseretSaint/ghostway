@@ -10,6 +10,8 @@ await p.setViewport({ width: 390, height: 844, isMobile: true });
 const errs = [];
 p.on('pageerror', (e) => errs.push(String(e.message)));
 
+// Returning user: skip first-run onboarding overlay.
+await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
 await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
 await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 });
 

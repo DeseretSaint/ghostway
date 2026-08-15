@@ -44,6 +44,24 @@ async function init() {
   await app.map.ready();
   window.__gw = app; // test/diagnostic hook
 
+  // Splash: hide once tiles are actually on screen (or 4s max), fade out.
+  {
+    const splash = $('#splash');
+    let hidden = false;
+    const hideSplash = () => {
+      if (hidden || !splash) return;
+      hidden = true;
+      splash.classList.add('leaving');
+      setTimeout(() => { splash.hidden = true; }, 420);
+      window.__ghostwaySplash = 'done';
+    };
+    app.map.map.once('idle', hideSplash);
+    setTimeout(hideSplash, 4000); // never trap the user behind a splash
+  }
+
+  // First-run onboarding (Workstream D).
+  if (!localStorage.getItem('gw-onboarded')) startOnboarding();
+
   // Camera click -> info modal.
   app.map.onCameraClick(async (props, coords) => {
     openCameraModal(props, coords);
@@ -889,3 +907,55 @@ function openDonate() {
 }
 
 init();
+
+// ---- First-run onboarding (Workstream D) ----
+function startOnboarding() {
+  const wrap = $('#onboarding');
+  const stepEl = $('#obStep');
+  if (!wrap || !stepEl) return;
+
+  const steps = [
+    {
+      icon: '🛡️',
+      title: 'Avoid surveillance cameras',
+      body: 'Ghostway routes you around Flock and ALPR cameras by default. You pick how hard it tries: Strict, Moderate, or Off.',
+    },
+    {
+      icon: '🗺️',
+      title: 'Your data stays with you',
+      body: 'Routing and search run in your browser against open data. No account, no telemetry, no history sent anywhere.',
+    },
+    {
+      icon: '🧭',
+      title: 'Navigate like a pro',
+      body: 'Pick a destination, choose a route, then start navigation for voice guidance, live speed, and camera-ahead warnings.',
+    },
+  ];
+  let i = 0;
+
+  const render = () => {
+    const s = steps[i];
+    stepEl.innerHTML = `<div class="ob-icon">${s.icon}</div><h3>${s.title}</h3><p>${s.body}</p>`;
+    document.querySelectorAll('.ob-dot').forEach((d, k) => d.classList.toggle('on', k === i));
+    $('#obBack').hidden = i === 0;
+    $('#obNext').textContent = i === steps.length - 1 ? 'Get started' : 'Next';
+  };
+
+  const finish = () => {
+    localStorage.setItem('gw-onboarded', '1');
+    wrap.hidden = true;
+    window.__ghostwayOnboarded = 'done';
+  };
+
+  $('#obNext').addEventListener('click', () => {
+    if (i < steps.length - 1) { i++; render(); }
+    else finish();
+  });
+  $('#obBack').addEventListener('click', () => {
+    if (i > 0) { i--; render(); }
+  });
+  $('#obSkip').addEventListener('click', finish);
+
+  render();
+  wrap.hidden = false;
+}

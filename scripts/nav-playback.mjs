@@ -13,6 +13,7 @@ p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 
 // Mock watchPosition so we can drive the car along the route in-page.
 await p.evaluateOnNewDocument(() => {
+  localStorage.setItem('gw-onboarded', '1'); // returning user — skip onboarding
   window.__gps = { handlers: [], pos: null, speed: 12 };
   const mock = {
     getCurrentPosition: (cb) => cb({ coords: { longitude: -111.759, latitude: 40.364, speed: 0 } }),

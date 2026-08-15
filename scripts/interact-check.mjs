@@ -13,6 +13,8 @@ async function main() {
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+  // Test as a RETURNING user so first-run onboarding doesn't cover the map.
+  await page.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
   await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
   await wait(2500);
 

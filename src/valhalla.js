@@ -26,24 +26,31 @@ export async function valhallaRoute(from, to, excludes) {
   if (excludes && excludes.length) {
     body.exclude_locations = excludes.map((c) => ({ lat: c[1], lon: c[0] }));
   }
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 20000);
-  try {
-    const res = await fetch(`${SERVER}/route`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`Valhalla ${res.status}`);
-    const j = await res.json();
-    const leg = j.trip.legs[0];
-    const coords = decodePolyline(leg.shape);
-    // Count cameras passed using the caller-supplied pool.
-    return { coords, distance: leg.summary.length * 1000, duration: leg.summary.time, maneuvers: leg.maneuvers };
-  } finally {
-    clearTimeout(t);
+  // The public demo rate-limits bursts (400s); retry with backoff.
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const res = await fetch(`${SERVER}/route`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      clearTimeout(t);
+      if (!res.ok) throw new Error(`Valhalla ${res.status}`);
+      const j = await res.json();
+      const leg = j.trip.legs[0];
+      const coords = decodePolyline(leg.shape);
+      return { coords, distance: leg.summary.length * 1000, duration: leg.summary.time, maneuvers: leg.maneuvers };
+    } catch (e) {
+      clearTimeout(t);
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+    }
   }
+  throw lastErr;
 }
 
 // Valhalla-encoded polyline (6 digits) → [[lon,lat], ...]

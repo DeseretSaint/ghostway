@@ -16,6 +16,8 @@ const errs = [];
 p.on('pageerror', (e) => errs.push(String(e.message)));
 p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 
+// Returning user: skip first-run onboarding overlay.
+await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
 await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
 
 // Wait for engine graph to load.
