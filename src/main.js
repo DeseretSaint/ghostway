@@ -346,6 +346,10 @@ async function reRouteViaWaypoint() {
       duration: opt1.duration + opt2.duration,
       delay: (opt1.delay || 0) + (opt2.delay || 0),
       cameras: (opt1.cameras || 0) + (opt2.cameras || 0),
+      cameraPoints: [
+        ...(opt1.cameraPoints || []),
+        ...(opt2.cameraPoints || []).map((c) => ({ ...c, at: c.at + opt1.distance })),
+      ],
       instructions: [...(opt1.instructions || []), ...leg2Steps],
     };
     app.state.options = [stitched];
@@ -363,6 +367,7 @@ async function reRouteViaWaypoint() {
       app._navRouteCoords = stitched.coords;
       app._routeCum = cumulativeDistances(stitched.coords);
       app._routeTotal = app._routeCum[app._routeCum.length - 1] || stitched.distance;
+      app._camPts = stitched.cameraPoints || [];
       app._voiceAnnounced = {};
       renderNavStep();
     }
@@ -417,6 +422,7 @@ function drawEngineRoutes() {
   app._routeCum = cumulativeDistances(rawCoords);
   app._routeTotal = app._routeCum[app._routeCum.length - 1] || sel.distance;
   app._totalDuration = sel.duration;
+  app._camPts = sel.cameraPoints || [];
   window.__ghostwayNavCoords = rawCoords;
   window.__ghostwayDebug = { ...(window.__ghostwayDebug || {}), navCoords: sel.coords.length };
 }
@@ -464,6 +470,7 @@ function drawRoute(result) {
   app._routeTotal = app._routeCum[app._routeCum.length - 1] || 1;
   app._navRouteCoords = shown.coords;
   app._totalDuration = shown.duration;
+  app._camPts = []; // legacy engine has no per-cluster positions
 }
 
 function cumulativeDistances(coords) {
@@ -793,6 +800,34 @@ function updateCountdown(traveled) {
   } else {
     el.textContent = fmtNavDistance(Math.max(0, (app._routeTotal || 0) - traveled));
   }
+  updateCamChip(traveled);
+}
+
+// Live camera accounting during navigation: counts camera clusters already
+// passed and flags the next one within 250 m as "ahead" (mission visibility).
+function updateCamChip(traveled) {
+  const chip = $('#camChip');
+  const pts = app._camPts || [];
+  if (!chip) return;
+  if (!pts.length) {
+    chip.textContent = '📷 0';
+    chip.classList.remove('ahead', 'passed');
+    chip.title = 'This route passes zero known cameras';
+    return;
+  }
+  let passed = 0;
+  let nextCam = null;
+  for (const c of pts) {
+    if (c.at <= traveled) passed++;
+    else if (!nextCam) nextCam = c;
+  }
+  const ahead = nextCam && nextCam.at - traveled <= 250;
+  chip.textContent = ahead ? `📷 ${passed} ⚠` : `📷 ${passed}`;
+  chip.title = ahead
+    ? `Camera ${fmtNavDistance(Math.max(0, nextCam.at - traveled))} ahead`
+    : `${passed} camera${passed === 1 ? '' : 's'} passed on this route`;
+  chip.classList.toggle('ahead', !!ahead);
+  chip.classList.toggle('passed', passed > 0 && !ahead);
 }
 
 function showNavBanner() {
@@ -832,6 +867,7 @@ function renderNavStep() {
       <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" title="Voice guidance">🔊</button>
       ${limitMph ? `<div class="speed-limit"><span class="sl-num">${limitMph}</span><span class="sl-lbl">MAX</span></div>` : ''}
       <div id="speedChip" class="speed-chip" hidden></div>
+      <div id="camChip" class="cam-chip" title="Cameras passed / ahead on this route">📷 0</div>
       <div class="nav-eta">${eta}</div>
     </div>`;
   $('#navStop').addEventListener('click', () => stopNav(false));
@@ -840,6 +876,8 @@ function renderNavStep() {
     $('#voiceBtn').classList.toggle('on', on);
     if (on) speak('Voice guidance on.');
   });
+  // Initialize the camera chip from the real progress, not a hardcoded 0.
+  updateCamChip(traveled);
 }
 
 function lower(s) {

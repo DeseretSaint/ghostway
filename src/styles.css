@@ -904,3 +904,23 @@ details summary {
 .ob-actions .primary-btn { min-width: 150px; }
 @keyframes slide-up { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Live camera counter in the nav banner */
+.cam-chip {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--accent);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.cam-chip.passed { color: #9fb2c9; }
+.cam-chip.ahead {
+  color: #fff;
+  background: #d92645;
+  border-color: #ff5570;
+  animation: over-pulse 0.9s ease-in-out infinite;
+}

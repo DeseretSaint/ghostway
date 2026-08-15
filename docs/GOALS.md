@@ -9,7 +9,7 @@ Live: https://deseretsaint.github.io/ghostway/
 | Routing engine (camera-aware) | 9 | Own graph (Wasatch) + Valhalla national fallback with camera avoidance; self-host doc shipped |
 | Avoidance modes | 8 | strict/moderate/off toggle, per-option camera counts |
 | Traffic / ETA accuracy | 8 | Full Wasatch coverage; 3/5 corridors match Valhalla exactly, 2 diverge on route choice |
-| Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, alerts, waypoint drag |
+| Nav experience (follow, voice) | 9 | Follow camera, voice, banner, arrival, off-route, alerts, waypoint drag, live camera counter |
 | Visual polish | 9 | Splash, onboarding, mission icons, motion, legend; states done |
 | Camera data layer | 8 | ALPR-aware map coloring, rich tap-details (direction/mount/freshness), unified classification |
 
@@ -309,9 +309,27 @@ and fixed what the app was doing with it:
   Mounted on pole. Mapped Jun 2025"). All 13 suites green, zero console errors.
 Quality: Camera data layer 6→8.
 
-Next (iteration 12):
-- B: real-drive ground truth (Keaton's PG→Costco time) for the two divergent
-  corridors.
-- A: contraction hierarchies for faster long-distance routing on the own graph.
-- Camera layer: report-a-camera flow (contribute back to DeFlock).
+### Iteration 12 — Live camera counter in the nav banner (mission visibility)
+Problem: the camera count only appeared at arrival — during the drive itself,
+the mission was invisible. Shipped:
+- **Live 📷 chip in the nav banner**: counts camera clusters passed as you
+  drive (derived from per-cluster positions on the raw route, computed by
+  `cameraClusterPositions()` in router.js), and flashes red with a ⚠ when the
+  next camera is within 250 m. Zero-camera routes show a calm "📷 0".
+- Wired through all route paths: engine options, stitched via-routes
+  (cluster distances offset by leg 1), legacy fallback (no positions → 0).
+- Decision recorded: contraction hierarchies NOT needed — measured A* times on
+  the expanded graph are 9 ms (PG→Costco) to 295 ms (88 km corridor).
+- Fixed a chip-reset bug found by the E2E drive test: renderNavStep
+  initialized the chip to hardcoded 0; now initializes from real progress.
+- Verified: `scripts/camchip-check.mjs` drives the Fastest PG→Costco route and
+  asserts the count progression (0→1→1⚠→2, final 2) — PASS. Vision-reviewed
+  screenshot: chip legible in the banner stack, no crowding. All 14 suites
+  green, zero console errors.
+Quality: Nav experience 9→9 (feature-complete; quality deepened).
+
+Next (iteration 13):
+- B: real-drive ground truth from Keaton's PG→Costco run (needs his time).
+- Camera layer: report-a-camera flow (contribute back to DeFlock/OSM).
+- D: banner density option (compact mode for small screens).
 

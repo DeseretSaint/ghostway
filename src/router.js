@@ -414,6 +414,36 @@ export function instructionsFor(g, route) {
   return steps;
 }
 
+// One position per camera cluster along the path (contiguous exposed arcs =
+// one pass), with its distance along the route. Powers the live camera
+// counter during navigation.
+function cameraClusterPositions(g, route) {
+  const pts = [];
+  let inCluster = false;
+  let clusterStart = 0;
+  let acc = 0;
+  for (const p of route.arcs) {
+    const e = g.arcEdge[p];
+    const exposed = g.eCam[e] > 40;
+    if (exposed && !inCluster) {
+      inCluster = true;
+      clusterStart = acc;
+    }
+    if (!exposed && inCluster) {
+      const toNode = g.arcTo[p];
+      pts.push({ at: Math.round((clusterStart + acc) / 2), lon: g.nodeLon[toNode] / 1e6, lat: g.nodeLat[toNode] / 1e6 });
+      inCluster = false;
+    }
+    acc += g.eLen[e];
+  }
+  if (inCluster) {
+    const lastArc = route.arcs[route.arcs.length - 1];
+    const toNode = g.arcTo[lastArc];
+    pts.push({ at: Math.round((clusterStart + acc) / 2), lon: g.nodeLon[toNode] / 1e6, lat: g.nodeLat[toNode] / 1e6 });
+  }
+  return pts;
+}
+
 function turnFor(deg) {
   if (deg > 150) return 'u-turn';
   if (deg > 55) return 'right';
@@ -506,6 +536,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     o.instructions = instructionsFor(g, o.route);
     o.coords = simplify(o.route.coords);
     o.cameras = o.route.cameras;
+    o.cameraPoints = cameraClusterPositions(g, o.route);
     o.distance = o.route.distance;
     o.duration = o.route.duration;
     o.delay = o.route.delay || 0;
