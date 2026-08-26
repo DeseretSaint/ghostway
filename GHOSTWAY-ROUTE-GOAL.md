@@ -45,3 +45,15 @@ Started: 2026-08-26 ~16:40 MDT. Cron loop PAUSED for duration (router.js content
 | round | focus | result | proof |
 |-------|-------|--------|-------|
 | R0 | diagnostics: audit harness + road probe + picker trace | done | route-quality-audit.mjs; findings above |
+| R1 | picker fallback fix + detour budget enforcement + avoid-highways option | done | commit 90293a6; PG→Costco Clearest +3.8→+0.8 min; AF→Park City +18.6→+3.4 min; No-highways option 7.9 km/15 min/0% hw |
+| R2 | GPS instant first fix + progressive refinement | done | commit (speed R2); cached/instant fix, 2-stage geolocation, async reverse-geocode, jitter guard |
+| R3 | Valhalla avoid-highways + over-budget badge + road icon | done | commit be145af; use_highways:0.15 fallback path; 'costs extra time' badge |
+| R4 | deploy + live verification | done | deploy run 33020747962 success; live HTTP 200; bundle grep confirms gw-loc-cache/avoidHwBtn/no_highways shipped |
+
+## Final state (2026-08-26)
+- ETA parity vs Valhalla: 0/0/0/+5/−10 min on 5 benchmark corridors (unchanged).
+- PG→Costco: default (moderate) now picks Fastest (10 min, matches Valhalla's own
+  I-15 shape); Clearest costs only +0.8 min; No-highways option = 7.9 km/15 min
+  surface streets for users who want the State-Street-style drive.
+- GPS: instant first fix from cache; high-accuracy refines in background.
+- Cron loop resumed after loop completion.
