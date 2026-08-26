@@ -1099,8 +1099,29 @@ function openDrawer() {
   $('#scrim').hidden = false;
 }
 function closeDrawer() {
-  $('#drawer').hidden = true;
-  $('#scrim').hidden = true;
+  const drawer = $('#drawer');
+  const scrim = $('#scrim');
+  // Play the exit animation, then hide. Respect reduced-motion (no anim).
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced || drawer.hidden) {
+    drawer.hidden = true;
+    scrim.hidden = true;
+    return;
+  }
+  drawer.classList.add('closing');
+  scrim.classList.add('closing');
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    drawer.hidden = true;
+    scrim.hidden = true;
+    drawer.classList.remove('closing');
+    scrim.classList.remove('closing');
+  };
+  drawer.addEventListener('animationend', done, { once: true });
+  // Safety: if animationend never fires, still hide.
+  setTimeout(done, 260);
 }
 function openModal(html) {
   $('#modalBody').innerHTML = html;

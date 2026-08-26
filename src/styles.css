@@ -73,7 +73,9 @@ summary {
   pointer-events: none;
 }
 
-/* MapLibre control overrides — match Ghostway chrome + touch targets. */
+/* MapLibre control overrides — match Ghostway chrome + touch targets.
+   MapLibre's own rules are `.maplibregl-ctrl button.maplibregl-ctrl-*`
+   (specificity 0,2,1), so we must match or beat that to resize them. */
 .maplibregl-ctrl-group {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -82,7 +84,9 @@ summary {
   box-shadow: var(--shadow-2);
   overflow: hidden;
 }
-.maplibregl-ctrl-group button {
+.maplibregl-ctrl-group button,
+.maplibregl-ctrl button.maplibregl-ctrl-zoom-in,
+.maplibregl-ctrl button.maplibregl-ctrl-zoom-out {
   width: 44px;
   height: 44px;
   background: transparent;
@@ -100,6 +104,16 @@ summary {
 }
 .maplibregl-ctrl-attrib a {
   color: var(--muted);
+  padding: 2px 3px;
+  border-radius: 4px;
+}
+.maplibregl-ctrl-attrib a:hover {
+  color: var(--ink);
+}
+/* Attribution summary button — give it a real tap target. */
+.maplibregl-ctrl-attrib-button {
+  width: 44px !important;
+  height: 44px !important;
 }
 
 /* Loading spinner (buttons + panels). */
@@ -490,6 +504,10 @@ body {
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
   z-index: 8;
+  animation: fade-in 0.2s ease;
+}
+.scrim.closing {
+  animation: fade-out 0.18s ease forwards;
 }
 .drawer {
   position: absolute;
@@ -505,9 +523,30 @@ body {
   box-shadow: var(--shadow-3);
   animation: slide 0.2s ease;
 }
+.drawer.closing {
+  animation: slide-out 0.18s ease forwards;
+}
 @keyframes slide {
   from {
     transform: translateX(-100%);
+  }
+}
+@keyframes slide-out {
+  to {
+    transform: translateX(-100%);
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .drawer.closing,
+  .scrim,
+  .scrim.closing {
+    animation: none;
   }
 }
 .drawer-head {
