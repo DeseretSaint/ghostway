@@ -401,8 +401,34 @@ body {
 .avoid-toggle {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   padding: 4px 2px 2px;
+}
+/* "Avoid highways" preference chip — toggle, not a mode. */
+.chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.chip-toggle:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+.chip-toggle.on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .switch-label {
   font-size: 14px;

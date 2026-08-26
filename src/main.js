@@ -21,6 +21,7 @@ const app = {
     to: null,
     mode: localStorage.getItem('gw-mode') || 'moderate', // strict | moderate | off
     avoid: true, // derived from mode !== 'off' (kept for legacy path)
+    avoidHighways: localStorage.getItem('gw-avoid-hw') === '1', // prefer surface streets
     compactBanner: localStorage.getItem('gw-compact') === '1',
     route: null,
     options: [], // engine route options
@@ -212,6 +213,15 @@ function wireApp() {
 
   $('#camInfoBtn').addEventListener('click', openWhyModal);
 
+  // Avoid-highways preference: adds a "No highways" route option and, when
+  // active, prefers it. Persisted like the avoidance mode.
+  $('#avoidHwBtn').addEventListener('click', () => {
+    app.state.avoidHighways = !app.state.avoidHighways;
+    localStorage.setItem('gw-avoid-hw', app.state.avoidHighways ? '1' : '0');
+    applyModeUI();
+    if (app.state.from && app.state.to) onRoute();
+  });
+
   // Drawer actions.
   $('#drawer').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
@@ -229,6 +239,11 @@ function applyModeUI() {
   pill.querySelector('.label').textContent =
     mode === 'strict' ? 'Strict avoidance' : mode === 'moderate' ? 'Avoid cameras' : 'Fastest route';
   document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+  const hwBtn = $('#avoidHwBtn');
+  if (hwBtn) {
+    hwBtn.classList.toggle('on', !!app.state.avoidHighways);
+    hwBtn.setAttribute('aria-pressed', app.state.avoidHighways ? 'true' : 'false');
+  }
 }
 
 function setEndpoints(from, to) {
@@ -294,7 +309,17 @@ async function nationalClosures(fromC, toC) {
 }
 
 function pickOptionForMode(options) {
-  const modeRank = { strict: ['strict', 'moderate', 'off'], moderate: ['moderate', 'strict', 'off'], off: ['off', 'moderate', 'strict'] };
+  // Fallback order matters: a moderate (avoid-cameras) user who has no
+  // Balanced option should get FASTEST — never silently the most extreme
+  // Clearest route. That silent strict-fallback was the "forced detour"
+  // complaint: on PG→Costco no Balanced exists, so moderate users were
+  // handed a +38% time weave through side streets.
+  const modeRank = {
+    strict: ['strict', 'moderate', 'off'],
+    moderate: ['moderate', 'off', 'strict'],
+    off: ['off', 'moderate', 'strict'],
+    no_highways: ['no_highways', 'off', 'moderate'],
+  };
   const pref = modeRank[app.state.mode] || modeRank.moderate;
   let chosen = options.findIndex((o) => o.mode === pref[0]);
   if (chosen === -1) chosen = options.findIndex((o) => o.mode === pref[1]);
@@ -334,7 +359,7 @@ async function routeWithFallbacks(from, to) {
   if (engineCovers(from.coords, to.coords)) {
     try {
       const t0 = performance.now();
-      const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
+      const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams(), avoidHighways: app.state.avoidHighways });
       const ms = Math.round(performance.now() - t0);
       app.state.options = options;
       // Default pick: closest to the user's mode preference.
@@ -409,8 +434,8 @@ async function reRouteViaWaypoint() {
     if (local) {
       source = 'local';
       const cc = communityCams();
-      const r1 = await planRoutes(from.coords, via, { traffic: app.traffic || null, communityCams: cc });
-      const r2 = await planRoutes(via, to.coords, { traffic: app.traffic || null, communityCams: cc });
+      const r1 = await planRoutes(from.coords, via, { traffic: app.traffic || null, communityCams: cc, avoidHighways: app.state.avoidHighways });
+      const r2 = await planRoutes(via, to.coords, { traffic: app.traffic || null, communityCams: cc, avoidHighways: app.state.avoidHighways });
       opt1 = r1.options[pickOptionForMode(r1.options)];
       opt2 = r2.options[pickOptionForMode(r2.options)];
     } else {

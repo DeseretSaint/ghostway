@@ -242,7 +242,7 @@ class Heap {
   get size() { return this.k.length; }
 }
 
-function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = false } = {}) {
+function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = false, maxCost = Infinity, penalty = null } = {}) {
   const cfg = MODES[mode];
   // Hard exposure floor (strict): forbidden edges, except roads touching the
   // origin/destination — those may legitimately sit beside a camera.
@@ -252,6 +252,9 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
   const prevArc = new Int32Array(N).fill(-1);
   const prevFrom = new Int32Array(N).fill(-1); // node each arc was entered from
   const closed = new Uint8Array(N);
+  // Time-only accumulation for the detour budget: camera cost must not eat
+  // into the budget (maxCost is real driving seconds, not avoidance weight).
+  const tScore = maxCost < Infinity ? new Float64Array(N).fill(Infinity) : null;
 
   const tLon = g.nodeLon[endNode] / 1e6;
   const tLat = g.nodeLat[endNode] / 1e6;
@@ -292,8 +295,16 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
       // Junction delay: entering an intersection (degree ≥ 3) costs signal/turn time.
       if (g.nodeDeg[v] >= 3) timeSec += junctionPenalty(spd);
       const camCost = cfg.camWeight * (g.eCam[e] / 255) * (len / 100); // exposure scales with length under camera
-      const ng = gScore[u] + timeSec + camCost;
+      // Avoid-highways penalty: search-only multiplier (metrics stay honest).
+      const pen = penalty ? penalty[e] : 1;
+      const ng = gScore[u] + (timeSec + camCost) * pen;
       if (ng < gScore[v]) {
+        // Detour budget: prune paths whose real driving time exceeds it.
+        if (tScore) {
+          const nt = tScore[u] + timeSec * pen;
+          if (nt > maxCost) continue;
+          tScore[v] = nt;
+        }
         gScore[v] = ng;
         prevArc[v] = p;
         prevFrom[v] = u;
@@ -518,7 +529,7 @@ function maneuverText(t) {
 }
 
 // ---- Public planning API: returns up to 3 options ----
-export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [] } = {}) {
+export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [], avoidHighways = false } = {}) {
   const g = await loadGraph();
   const s = nearestNode(from[0], from[1]);
   const t = nearestNode(to[0], to[1]);
@@ -599,6 +610,18 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
 
   const options = [{ mode: 'off', label: 'Fastest', route: fastest }];
 
+  // Avoid-highways option: penalize freeway-class edges (≥95 km/h posted) in
+  // the search only — reported metrics stay honest. Offered when it produces
+  // a genuinely different shape within a sane detour (≤1.6x distance).
+  if (avoidHighways) {
+    const hwPenalty = new Float32Array(graph.edgeCount);
+    for (let e = 0; e < graph.edgeCount; e++) hwPenalty[e] = graph.eSpd[e] >= 95 ? 3.0 : 1.0;
+    const noHw = astar(graph, s.node, t.node, 'off', edgeFactor, edgeDelay, { penalty: hwPenalty });
+    if (noHw && !similar(noHw, fastest) && noHw.distance <= fastest.distance * 1.6) {
+      options.push({ mode: 'no_highways', label: 'No highways', route: noHw });
+    }
+  }
+
   const balanced = astar(graph, s.node, t.node, 'moderate', edgeFactor, edgeDelay);
   if (balanced && balanced.cameras < fastest.cameras && balanced.distance <= fastest.distance * 1.35) {
     options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
@@ -606,17 +629,29 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
   }
 
-  // Strict = hard safety floor first (no edge within ALPR read range). If the
-  // floor makes the pair unreachable (camera-walled origin/destination), fall
-  // back to soft weighting so the user still gets a clearest option — flagged
-  // so the UI/audit can tell it's best-effort, not a guaranteed clear path.
-  let clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay);
+  // Strict = hard safety floor first (no edge within ALPR read range), under
+  // a DETOUR BUDGET: avoidance may cost at most 25% extra time plus a 90 s
+  // absolute floor (short trips still dodge cameras near the endpoints).
+  // capFactor was declared on MODES but never enforced — this is the fix for
+  // the "forced detour" complaint (PG→Costco Clearest was +38% time).
+  const strictBudget = fastest.duration * 1.25 + 90;
+  let clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { maxCost: strictBudget });
   let strictFallback = false;
+  let overBudget = false;
   if (!clearest) {
-    clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true });
+    // Camera-walled or budget-exhausted: soften the floor, still in budget.
+    clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true, maxCost: strictBudget });
     strictFallback = true;
   }
+  if (!clearest) {
+    // Nothing fits the budget: give the user the true clearest path anyway,
+    // flagged so the UI can say "best effort — costs extra time".
+    clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true });
+    strictFallback = true;
+    overBudget = true;
+  }
   if (clearest) clearest.strictFallback = strictFallback;
+  if (clearest) clearest.overBudget = overBudget;
   if (clearest) {
     // strict is only a distinct option if it actually avoids more cameras
     const bestSoFar = Math.min(...options.map((o) => o.route.cameras));
@@ -642,7 +677,10 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     o.distance = o.route.distance;
     o.duration = o.route.duration;
     o.delay = o.route.delay || 0;
-    if (o.mode === 'strict') o.strictFallback = !!o.route.strictFallback;
+    if (o.mode === 'strict') {
+      o.strictFallback = !!o.route.strictFallback;
+      o.overBudget = !!o.route.overBudget;
+    }
   }
 
   return { options: uniq, graph: g, snapFrom: s, snapTo: t, trafficLive: !!(traffic && traffic.ok && traffic.events.length) };
