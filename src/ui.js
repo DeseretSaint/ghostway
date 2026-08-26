@@ -1,6 +1,7 @@
 import { CONFIG } from './config.js';
 import { $, el, debounce, fmtDistance, fmtDuration } from './utils.js';
 import { searchPlaces } from './search.js';
+import { icon, stepIconSvg } from './icons.js';
 
 // Builds the live search panel: typing shows suggestions; selecting fills an endpoint.
 
@@ -61,8 +62,21 @@ export function buildPanel(app) {
   const debFrom = debounce((q) => render(q, 'from'), 280);
   const debTo = debounce((q) => render(q, 'to'), 280);
 
-  fromInput.addEventListener('input', (e) => debFrom(e.target.value));
-  toInput.addEventListener('input', (e) => debTo(e.target.value));
+  // Clear buttons only appear when the field has a value.
+  const syncClear = (inp) => {
+    const btn = document.querySelector(`.clear-btn[data-clear="${inp.id}"]`);
+    if (btn) btn.hidden = !inp.value;
+  };
+  fromInput.addEventListener('input', (e) => {
+    debFrom(e.target.value);
+    syncClear(e.target);
+  });
+  toInput.addEventListener('input', (e) => {
+    debTo(e.target.value);
+    syncClear(e.target);
+  });
+  syncClear(fromInput);
+  syncClear(toInput);
 
   // Enter commits the typed text and routes.
   const onEnter = (e) => {
@@ -84,7 +98,9 @@ export function buildPanel(app) {
   document.querySelectorAll('.clear-btn').forEach((b) =>
     b.addEventListener('click', () => {
       const id = b.dataset.clear;
-      $('#' + id).value = '';
+      const inp = $('#' + id);
+      inp.value = '';
+      b.hidden = true;
       if (id === 'fromInput') app.state.from = null;
       else app.state.to = null;
     })
@@ -126,7 +142,7 @@ function renderEngineCard(app, card, result) {
       const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
       // Strict safety floor couldn't find a fully clear path (camera-walled
       // origin/destination) — be honest that this is best effort.
-      const bestEffort = o.strictFallback ? ` · <span class="opt-warn">⚠ best effort</span>` : '';
+      const bestEffort = o.strictFallback ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort</span>` : '';
       return `
         <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
@@ -155,19 +171,19 @@ function renderEngineCard(app, card, result) {
     .join('');
 
   card.innerHTML = `
-    <button id="editRouteBtn" class="text-link rc-edit" type="button">✎ Edit route</button>
+    <button id="editRouteBtn" class="text-link rc-edit" type="button">${icon('edit', { size: 14 })} Edit route</button>
     <div class="rc-head">
       <div class="rc-time">${fmtDuration(sel.duration)}</div>
       <div class="rc-dist">${fmtDistance(sel.distance)}</div>
     </div>
     <div class="rc-badge">${
       sel.cameras === 0
-        ? '🛡️ Fully clear of known cameras'
-        : `🛡️ Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
+        ? `${icon('shield', { size: 15 })} Fully clear of known cameras`
+        : `${icon('shield', { size: 15 })} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
     }</div>
     ${detourVsFastest}
     <div class="route-options">${optHtml}</div>
-    <button id="startNavBtn" class="primary-btn">▶ Start navigation</button>
+    <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : ''}
   `;
   card.hidden = false;
@@ -182,7 +198,7 @@ function renderEngineCard(app, card, result) {
 }
 
 function modeEmoji(mode) {
-  return { strict: '🕶', moderate: '🛡', off: '🚀' }[mode] || '🛡';
+  return { strict: icon('glasses', { size: 15 }), moderate: icon('shield', { size: 15 }), off: icon('rocket', { size: 15 }) }[mode] || icon('shield', { size: 15 });
 }
 
 function renderLegacyCard(app, card, result) {
@@ -196,15 +212,15 @@ function renderLegacyCard(app, card, result) {
 
   let headline;
   if (result.routerDown) {
-    headline = `⚠️ Avoidance offline — routing server down. Showing a normal route; cameras still shown on the map.`;
+    headline = `${icon('warning', { size: 15 })} Avoidance offline — routing server down. Showing a normal route; cameras still shown on the map.`;
   } else if (result.avoid && result.applied) {
-    headline = `🛡️ Routed clear of <b>${result.avoidedCount}</b> camera${result.avoidedCount === 1 ? '' : 's'}`;
+    headline = `${icon('shield', { size: 15 })} Routed clear of <b>${result.avoidedCount}</b> camera${result.avoidedCount === 1 ? '' : 's'}`;
   } else if (result.avoid && result.avoidedCount === 0) {
-    headline = `✅ No known cameras along the way`;
+    headline = `${icon('check', { size: 15 })} No known cameras along the way`;
   } else if (result.avoid && !result.applied) {
-    headline = `⚠️ No clear detour — showing fastest (${result.avoidedCount} camera${result.avoidedCount === 1 ? '' : 's'} nearby)`;
+    headline = `${icon('warning', { size: 15 })} No clear detour — showing fastest (${result.avoidedCount} camera${result.avoidedCount === 1 ? '' : 's'} nearby)`;
   } else {
-    headline = `🚀 Fastest route (avoidance off)`;
+    headline = `${icon('rocket', { size: 15 })} Fastest route (avoidance off)`;
   }
 
   const steps = result.steps || [];
@@ -219,14 +235,14 @@ function renderLegacyCard(app, card, result) {
     .join('');
 
   card.innerHTML = `
-    <button id="editRouteBtn" class="text-link rc-edit" type="button">✎ Edit route</button>
+    <button id="editRouteBtn" class="text-link rc-edit" type="button">${icon('edit', { size: 14 })} Edit route</button>
     <div class="rc-head">
       <div class="rc-time">${fmtDuration(shown.duration)}</div>
       <div class="rc-dist">${fmtDistance(shown.distance)}</div>
     </div>
     <div class="rc-badge">${headline}</div>
     ${result.applied ? `<div class="rc-detour">+${fmtDistance(detour)} · +${extraMin} min vs fastest</div>` : ''}
-    <button id="startNavBtn" class="primary-btn">▶ Start navigation</button>
+    <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : '<p class="muted small">Turn-by-turn directions unavailable right now.</p>'}
     ${result.applied ? `<button id="showFastest" class="text-link">Show fastest route instead</button>` : ''}
   `;
@@ -249,20 +265,7 @@ function renderLegacyCard(app, card, result) {
 }
 
 function stepIcon(mod) {
-  return (
-    {
-      left: '↰',
-      right: '↱',
-      slight_left: '↰',
-      slight_right: '↱',
-      straight: '↑',
-      sharp_left: '⤺',
-      sharp_right: '⤻',
-      'u-turn': '⮌',
-      depart: '◎',
-      arrive: '⊗',
-    }[mod] || '↑'
-  );
+  return stepIconSvg(mod, 18);
 }
 
 export function showStatus(msg, kind = 'info') {

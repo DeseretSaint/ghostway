@@ -64,10 +64,13 @@ summary {
   font-variant-numeric: tabular-nums;
 }
 
-/* Inline SVG icons inherit currentColor and sit on the text baseline. */
+/* Inline SVG icons inherit currentColor and sit on the text baseline.
+   pointer-events: none so clicks land on the parent button/link — this keeps
+   hit-testing (elementFromPoint) and event targets on the interactive element. */
 .ic {
   display: block;
   flex: none;
+  pointer-events: none;
 }
 
 /* MapLibre control overrides — match Ghostway chrome + touch targets. */

@@ -9,6 +9,7 @@ import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
 import { $, el, debounce, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
+import { icon, stepIconSvg } from './icons.js';
 import { registerSW } from './pwa.js';
 import { speak, phraseManeuver, phraseArrival, cancel as cancelVoice, toggleVoice, voiceEnabled, setVoiceEnabled } from './voice.js';
 
@@ -126,7 +127,7 @@ async function init() {
     onRoute();
   });
 
-  showStatus('Tap ◎ to start from your location, or search a destination.', 'info');
+  showStatus('Tap the locate button to start from your location, or search a destination.', 'info');
   registerSW();
   preloadEngine();
   applyModeUI();
@@ -152,9 +153,9 @@ async function preloadEngine() {
     app.traffic = traffic;
     if (traffic.ok && traffic.events.length) {
       app.map.setIncidents(traffic.events);
-      enginePill(`🛡 Engine ready · 🚧 ${traffic.events.length} live traffic events`);
+      enginePill(`${icon('shield', { size: 13 })} Engine ready · ${icon('warning', { size: 13 })} ${traffic.events.length} live traffic events`);
     } else {
-      enginePill('🛡 Local camera-aware engine ready');
+      enginePill(`${icon('shield', { size: 13 })} Local camera-aware engine ready`);
     }
     window.__ghostwayTraffic = traffic.ok ? traffic.events.length : 'failed';
   } catch (e) {
@@ -310,7 +311,25 @@ async function onRoute() {
   }
   setEndpoints(from, to);
   showStatus('Routing…', 'info');
+  setGoLoading(true);
+  try {
+    await routeWithFallbacks(from, to);
+  } finally {
+    setGoLoading(false);
+  }
+}
 
+// Visual loading state on the Route button so taps feel acknowledged.
+function setGoLoading(on) {
+  const btn = $('#goBtn');
+  if (!btn) return;
+  btn.classList.toggle('loading', on);
+  btn.disabled = on;
+  if (on) btn.dataset.label = btn.textContent;
+  btn.textContent = on ? 'Routing…' : btn.dataset.label || 'Route me clear';
+}
+
+async function routeWithFallbacks(from, to) {
   // --- Ghostway's own camera-aware engine (in coverage) ---
   if (engineCovers(from.coords, to.coords)) {
     try {
@@ -325,7 +344,7 @@ async function onRoute() {
       drawEngineRoutes();
       renderRouteCard(app, app.state.route);
       clearStatus();
-      enginePill(`🛡 Local engine · ${ms} ms · ${options.length} option${options.length > 1 ? 's' : ''}`);
+      enginePill(`${icon('shield', { size: 13 })} Local engine · ${ms} ms · ${options.length} option${options.length > 1 ? 's' : ''}`);
       window.__ghostwayDebug = { routed: true, engine: true, options: options.length, ms };
       return;
     } catch (e) {
@@ -348,7 +367,7 @@ async function onRoute() {
     drawEngineRoutes();
     renderRouteCard(app, app.state.route);
     clearStatus();
-    enginePill(`🌐 Valhalla engine · ${ms} ms · ${options.length} option${options.length > 1 ? 's' : ''}`);
+    enginePill(`${icon('layers', { size: 13 })} Valhalla engine · ${ms} ms · ${options.length} option${options.length > 1 ? 's' : ''}`);
     window.__ghostwayDebug = { routed: true, engine: 'valhalla', options: options.length, ms };
     return;
   } catch (e) {
@@ -956,8 +975,9 @@ function updateCamChip(traveled) {
   const chip = $('#camChip');
   const pts = app._camPts || [];
   if (!chip) return;
+  const camIc = icon('camera', { size: 14 });
   if (!pts.length) {
-    chip.textContent = '📷 0';
+    chip.innerHTML = `${camIc} 0`;
     chip.classList.remove('ahead', 'passed');
     chip.title = 'This route passes zero known cameras';
     return;
@@ -969,7 +989,7 @@ function updateCamChip(traveled) {
     else if (!nextCam) nextCam = c;
   }
   const ahead = nextCam && nextCam.at - traveled <= 250;
-  chip.textContent = ahead ? `📷 ${passed} ⚠` : `📷 ${passed}`;
+  chip.innerHTML = ahead ? `${camIc} ${passed} ${icon('warning', { size: 14 })}` : `${camIc} ${passed}`;
   chip.title = ahead
     ? `Camera ${fmtNavDistance(Math.max(0, nextCam.at - traveled))} ahead`
     : `${passed} camera${passed === 1 ? '' : 's'} passed on this route`;
@@ -996,7 +1016,7 @@ function renderNavStep() {
     : fmtNavDistance(Math.max(0, step.distance));
   const dir = next ? next.instruction : step.instruction;
   const road = next && next.name ? ` onto <b>${next.name}</b>` : next && step.name ? ` onto <b>${step.name}</b>` : '';
-  const icon = next ? stepIcon(next.modifier) : stepIcon(step.modifier);
+  const maneuverIcon = next ? stepIcon(next.modifier) : stepIcon(step.modifier);
   const limit = (next && next.speedLimit) || step.speedLimit;
   const limitMph = limit ? Math.round(limit * 0.621371 / 5) * 5 : null;
   const eta = app._totalDuration ? fmtDuration(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0]))) : '';
@@ -1004,8 +1024,8 @@ function renderNavStep() {
   const compact = app.state.compactBanner;
 
   $('#navBanner').innerHTML = `
-    <button id="navStop" class="nav-stop" aria-label="Stop navigation">✕</button>
-    <div class="nav-icon" aria-hidden="true">${icon}</div>
+    <button id="navStop" class="nav-stop" aria-label="Stop navigation">${icon('close', { size: 18 })}</button>
+    <div class="nav-icon" aria-hidden="true">${maneuverIcon}</div>
     <div class="nav-step">
       <div class="nav-dist" id="navDist">${dist}</div>
       <div class="nav-dir">${dir}${road}</div>
@@ -1013,12 +1033,12 @@ function renderNavStep() {
     </div>
     <div class="nav-side">
       <div class="nav-side-row">
-        <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" title="Voice guidance">🔊</button>
-        <button id="densityBtn" class="nav-voice" aria-label="Toggle banner density" title="Compact / full banner">${compact ? '▦' : '▤'}</button>
+        <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" title="Voice guidance">${icon(voiceOn ? 'volume' : 'volumeOff', { size: 16 })}</button>
+        <button id="densityBtn" class="nav-voice" aria-label="Toggle banner density" title="Compact / full banner">${icon(compact ? 'densityFull' : 'densityCompact', { size: 16 })}</button>
       </div>
       ${limitMph ? `<div class="speed-limit"><span class="sl-num">${limitMph}</span><span class="sl-lbl">MAX</span></div>` : ''}
       <div id="speedChip" class="speed-chip" hidden></div>
-      <div id="camChip" class="cam-chip" title="Cameras passed / ahead on this route">📷 0</div>
+      <div id="camChip" class="cam-chip" title="Cameras passed / ahead on this route">${icon('camera', { size: 14 })} 0</div>
       <div class="nav-eta">${eta}</div>
     </div>`;
   $('#navBanner').classList.toggle('compact', !!compact);
@@ -1042,20 +1062,7 @@ function lower(s) {
 }
 
 function stepIcon(mod) {
-  return (
-    {
-      left: '↰',
-      right: '↱',
-      slight_left: '↰',
-      slight_right: '↱',
-      straight: '↑',
-      sharp_left: '⤺',
-      sharp_right: '⤻',
-      'u-turn': '⮌',
-      depart: '◎',
-      arrive: '⊗',
-    }[mod] || '↑'
-  );
+  return stepIconSvg(mod, 20);
 }
 
 function swapEndpoints() {
@@ -1340,17 +1347,17 @@ function startOnboarding() {
 
   const steps = [
     {
-      icon: '🛡️',
+      icon: icon('shield', { size: 44 }),
       title: 'Avoid surveillance cameras',
       body: 'Ghostway routes you around Flock and ALPR cameras by default. You pick how hard it tries: Strict, Moderate, or Off.',
     },
     {
-      icon: '🗺️',
+      icon: icon('lock', { size: 44 }),
       title: 'Your data stays with you',
       body: 'Routing and search run in your browser against open data. No account, no telemetry, no history sent anywhere.',
     },
     {
-      icon: '🧭',
+      icon: icon('compass', { size: 44 }),
       title: 'Navigate like a pro',
       body: 'Pick a destination, choose a route, then start navigation for voice guidance, live speed, and camera-ahead warnings.',
     },
