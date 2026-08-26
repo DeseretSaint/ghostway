@@ -98,6 +98,24 @@ from this queue first when it's non-empty.
 - [ ] Test infra: engine-e2e startNavBtn hit-test returned maplibregl-canvas
       (banner still showed + click worked) — investigate whether the collapsed
       panel overlaps the button center after strict re-route
+- [x] PRIORITY camera-avoidance: RESOLVED 2026-08-26 (round 25) — FALSE ALARM.
+      The "10 strict-legal edges at 4.3-25.1 m" came from a stride bug in the
+      /tmp audit script (read edge endpoints at offA+e instead of offA+e*4 →
+      garbage geometry; 411k/551k edges decoded out-of-range). Corrected audit
+      (now scripts/floor-audit.mjs): shipped graph has 0 violations, min true
+      distance 30-40 m bucket. Rebuild `node engine/build-graph.mjs` produced a
+      BYTE-IDENTICAL graph (cmp clean) — the Aug 15 .gz already honored the
+      floor. No graph change shipped; the permanent guard is the deliverable.
+- [ ] Data freshness: camera-refresh.yml (monthly) only refreshes the shipped
+      public/cameras/cameras.geojson fallback — it does NOT refresh
+      engine/data/cameras-usa.geojson (gitignored) nor rebuild the graph, so the
+      graph's cam bytes can silently go stale between manual rebuilds. Mitigation
+      now exists: run scripts/floor-audit.mjs after any rebuild (CI hook idea:
+      refetch snapshot + rebuild + floor-audit + commit .gz monthly).
+- [x] Ops: stale-lock handling verified 2026-08-26 (round 25): found 49-min-old
+      lock from a crashed research run; confirmed holder dead (no live procs,
+      its queue findings uncommitted in working tree), deleted it, proceeded.
+      Rule stands: lock >60 min stale (or holder provably dead) → delete + go.
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -115,6 +133,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | test-infra (round 22) | fixed SVG-hit-test false FAILs (SVGAnimatedString className + descendant hits count as control hits) in interact/report/compact/engine-e2e; splash wait before hit-tests; poll-until-up preview server; watchdog (150s force-exit) + close-race in all 19 puppeteer suites | interact-check: was HANG forever + false FAIL (menuHit='splash') → PASS 31.7s; report/compact/engine-e2e/smoke/heatmap all PASS with clean exits; node --check all 35 scripts | shipped |
 | 2026-08-26 | test-infra (round 23) | shared scripts/lib-preview.mjs (spawn+poll-until-up + process-group kill-tree); pwa/shot/ux-audit/ux-shots/interact all ported off fixed 2.5s sleeps; fixed shot.mjs dead flow (waited for hidden #goBtn → 30s timeout) + ux-shots/shot teardown hang (no process.exit → watchdog exit 2 after "done") | all 5 suites PASS exit 0 (pwa/interact/ux-audit/shot/ux-shots); smoke + engine-e2e PASS; ports clear after — zero orphan vite servers (was leaking 2/run) | shipped |
 | 2026-08-26 | security (round 24) | XSS hardening: escHtml() + escaped 10 innerHTML injection points (street names, camera brand/operator/mount, report brand/note/noteId); new scripts/xss-check.mjs E2E with real dot-click | xss-check red-green: payload executes w/o escape (fired:true) → inert with fix; smoke/interact/report/camchip/compact/engine-check/engine-e2e PASS, 0 console errors | shipped |
+| 2026-08-26 | camera-avoidance (round 25) | resolved queued "PRIORITY floor violation" as FALSE ALARM (audit stride bug: offA+e vs offA+e*4); promoted corrected audit to scripts/floor-audit.mjs as permanent floor-regression guard; rebuilt graph to confirm determinism | floor-audit PASS on shipped .gz AND fresh rebuild (0 violations, min bucket 30-40 m); rebuild byte-identical (cmp); red test: mutated graph → FAIL exit 1; engine-check/avoidance-audit/smoke PASS; build exit 0 | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
