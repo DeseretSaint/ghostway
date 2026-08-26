@@ -13,14 +13,14 @@ import { nearRouteFromList } from './camera-store.js';
 
 const SERVER = CONFIG.valhallaUrl || 'https://valhalla1.openstreetmap.de';
 
-export async function valhallaRoute(from, to, excludes) {
+export async function valhallaRoute(from, to, excludes, { useHighways = true } = {}) {
   const body = {
     locations: [
       { lat: from[1], lon: from[0] },
       { lat: to[1], lon: to[0] },
     ],
     costing: 'auto',
-    costing_options: { auto: { use_living_streets: 0.8 } },
+    costing_options: { auto: { use_living_streets: 0.8, ...(useHighways ? {} : { use_highways: 0.15 }) } },
     directions_options: { units: 'kilometers' },
   };
   if (excludes && excludes.length) {
@@ -119,8 +119,8 @@ export function valhallaInstructions(maneuvers) {
 
 // Full avoidance pipeline. Mirrors the own-graph engine's return shape closely
 // enough for the UI: { options: [{ mode, label, route: {coords,...}, instructions, cameras, distance, duration, delay }] }.
-export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'moderate', closures = [] } = {}) {
-  const baseline = await valhallaRoute(from, to, null);
+export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'moderate', closures = [], avoidHighways = false } = {}) {
+  const baseline = await valhallaRoute(from, to, null, { useHighways: !avoidHighways });
 
   if (mode === 'off') {
     const opt = {
@@ -161,7 +161,7 @@ export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'modera
     if (seed.length) {
       excludes = excludes.concat(seed);
       try {
-        const rerouted = await valhallaRoute(from, to, excludes);
+        const rerouted = await valhallaRoute(from, to, excludes, { useHighways: !avoidHighways });
         if (rerouted) current = rerouted;
       } catch (e) { /* keep baseline */ }
     }
@@ -180,7 +180,7 @@ export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'modera
     excludes = excludes.concat(add);
     let next;
     try {
-      next = await valhallaRoute(from, to, excludes);
+      next = await valhallaRoute(from, to, excludes, { useHighways: !avoidHighways });
     } catch (e) {
       break; // server cap / timeout — keep the best route we have
     }

@@ -143,10 +143,12 @@ function renderEngineCard(app, card, result) {
       // Strict safety floor couldn't find a fully clear path (camera-walled
       // origin/destination) — be honest that this is best effort.
       const bestEffort = o.strictFallback ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort</span>` : '';
+      // Over the detour budget: avoidance costs real extra time — say so.
+      const overBudget = o.overBudget ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} costs extra time</span>` : '';
       return `
         <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
-          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}${bestEffort}</span>
+          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}${bestEffort}${overBudget}</span>
         </button>`;
     })
     .join('');
@@ -198,7 +200,7 @@ function renderEngineCard(app, card, result) {
 }
 
 function modeEmoji(mode) {
-  return { strict: icon('glasses', { size: 15 }), moderate: icon('shield', { size: 15 }), off: icon('rocket', { size: 15 }) }[mode] || icon('shield', { size: 15 });
+  return { strict: icon('glasses', { size: 15 }), moderate: icon('shield', { size: 15 }), off: icon('rocket', { size: 15 }), no_highways: icon('road', { size: 15 }) }[mode] || icon('shield', { size: 15 });
 }
 
 function renderLegacyCard(app, card, result) {

@@ -41,6 +41,7 @@ const P = {
   layers: '<path d="M12 3.5l8.5 4.5L12 12.5 3.5 8z"/><path d="M3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5"/>',
   warning: '<path d="M12 4L2.8 19.5h18.4z"/><path d="M12 10v4.5"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  road: '<path d="M4 19 8 5"/><path d="M20 19 16 5"/><path d="M12 8v2"/><path d="M12 13v2"/><path d="M12 18v1"/>',
 };
 
 export function icon(name, { size = 20, cls = '' } = {}) {

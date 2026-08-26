@@ -460,7 +460,7 @@ async function routeWithFallbacks(from, to) {
     const t0 = performance.now();
     const mode = app.state.avoid ? (app.state.mode || 'moderate') : 'off';
     const closures = await nationalClosures(from.coords, to.coords);
-    const { options } = await valhallaPlanRoutes(from.coords, to.coords, app.cameras, { mode, closures });
+    const { options } = await valhallaPlanRoutes(from.coords, to.coords, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
     const ms = Math.round(performance.now() - t0);
     app.state.options = options;
     const chosen = pickOptionForMode(options);
@@ -518,8 +518,8 @@ async function reRouteViaWaypoint() {
     } else {
       source = 'valhalla';
       const closures = await nationalClosures(from.coords, to.coords);
-      const r1 = await valhallaPlanRoutes(from.coords, via, app.cameras, { mode, closures });
-      const r2 = await valhallaPlanRoutes(via, to.coords, app.cameras, { mode, closures });
+      const r1 = await valhallaPlanRoutes(from.coords, via, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
+      const r2 = await valhallaPlanRoutes(via, to.coords, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
       opt1 = r1.options[pickOptionForMode(r1.options)];
       opt2 = r2.options[pickOptionForMode(r2.options)];
     }
