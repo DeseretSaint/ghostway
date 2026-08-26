@@ -188,10 +188,20 @@ export function nearestNode(lon, lat) {
 
 // ---- Cost modes ----
 // camWeight is in seconds per unit of camera exposure (0-255 per edge).
+// hardCam (strict only): edges whose exposure byte exceeds this are FORBIDDEN,
+// not just expensive. Derivation: the builder scores (1 - d/100m)·255 per
+// camera, sampling every ≤40 m along each edge. An edge whose true closest
+// approach is <30 m therefore samples ≥ (1 - √(30²+20²)/100)·255 ≈ 163 even
+// in the worst case (closest point midway between samples). Threshold 160
+// catches every sub-30 m pass with margin → strict can never route within
+// ALPR read range (~10-23 m at speed) plus buffer. Multiple cameras only add
+// exposure (safe direction); non-ALPR cameras weigh 0.5 and alone stay under
+// the floor, which is intended (they don't read plates).
+export const HARD_CAM_EXPOSURE = 160;
 const MODES = {
-  off: { camWeight: 0, capFactor: Infinity, label: 'Fastest' },
-  moderate: { camWeight: 6, capFactor: 1.25, label: 'Balanced' },
-  strict: { camWeight: 60, capFactor: Infinity, label: 'Clearest' },
+  off: { camWeight: 0, capFactor: Infinity, hardCam: 0, label: 'Fastest' },
+  moderate: { camWeight: 6, capFactor: 1.25, hardCam: 0, label: 'Balanced' },
+  strict: { camWeight: 60, capFactor: Infinity, hardCam: HARD_CAM_EXPOSURE, label: 'Clearest' },
 };
 
 // ---- Binary min-heap on Float64 keys ----
@@ -232,8 +242,11 @@ class Heap {
   get size() { return this.k.length; }
 }
 
-function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay) {
+function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = false } = {}) {
   const cfg = MODES[mode];
+  // Hard exposure floor (strict): forbidden edges, except roads touching the
+  // origin/destination — those may legitimately sit beside a camera.
+  const hardFloor = cfg.hardCam && !softCam ? cfg.hardCam : 0;
   const N = g.nodeCount;
   const gScore = new Float64Array(N).fill(Infinity);
   const prevArc = new Int32Array(N).fill(-1);
@@ -268,6 +281,9 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay) {
       const v = g.arcTo[p];
       if (closed[v]) continue;
       const e = g.arcEdge[p];
+      // Strict safety floor: never traverse a high-exposure edge unless it is
+      // the first/last road of the trip (endpoint exemption).
+      if (hardFloor && g.eCam[e] > hardFloor && u !== startNode && v !== endNode) continue;
       const len = g.eLen[e];
       const spd = g.eSpd[e];
       // Effective speed: posted speed derated for signals/urban friction.
@@ -590,7 +606,17 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
   }
 
-  const clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay);
+  // Strict = hard safety floor first (no edge within ALPR read range). If the
+  // floor makes the pair unreachable (camera-walled origin/destination), fall
+  // back to soft weighting so the user still gets a clearest option — flagged
+  // so the UI/audit can tell it's best-effort, not a guaranteed clear path.
+  let clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay);
+  let strictFallback = false;
+  if (!clearest) {
+    clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true });
+    strictFallback = true;
+  }
+  if (clearest) clearest.strictFallback = strictFallback;
   if (clearest) {
     // strict is only a distinct option if it actually avoids more cameras
     const bestSoFar = Math.min(...options.map((o) => o.route.cameras));
@@ -616,6 +642,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     o.distance = o.route.distance;
     o.duration = o.route.duration;
     o.delay = o.route.delay || 0;
+    if (o.mode === 'strict') o.strictFallback = !!o.route.strictFallback;
   }
 
   return { options: uniq, graph: g, snapFrom: s, snapTo: t, trafficLive: !!(traffic && traffic.ok && traffic.events.length) };

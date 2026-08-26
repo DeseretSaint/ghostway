@@ -124,10 +124,13 @@ function renderEngineCard(app, card, result) {
           ? `<span class="opt-cams clear">0 cameras</span>`
           : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
       const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
+      // Strict safety floor couldn't find a fully clear path (camera-walled
+      // origin/destination) — be honest that this is best effort.
+      const bestEffort = o.strictFallback ? ` · <span class="opt-warn">⚠ best effort</span>` : '';
       return `
         <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
-          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}</span>
+          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}${bestEffort}</span>
         </button>`;
     })
     .join('');

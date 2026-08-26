@@ -43,6 +43,17 @@ free, privacy-first.
   heatmap-check.mjs: isolate circle layer before measuring (dots matched the
   heat ramp colors → false residue) + race b.close() (hung forever under
   swiftshader). Suite now exits PASS in ~40s.
+- 2026-08-26 (round 21): camera-avoidance safety floor — strict mode now HARD-
+  forbids edges with exposure >160 (≈ any road passing <30 m from an ALPR
+  camera; builder scores (1-d/100)·255 sampled ≤40 m apart, worst-case ≥163),
+  with endpoint exemption (first/last road may sit beside a camera) and a
+  soft-weighting fallback when the floor makes the pair unreachable. New
+  scripts/avoidance-audit.mjs measures true min camera distance (10 m steps,
+  raw graph geometry, 127k ALPR cams indexed) on 5 corridors. Before: 4/5
+  Clearest routes passed 5-25 m from cameras (within read range). After: all
+  ≥30 m (165/100/96/40 m); BYU is provably camera-walled (no ≥32 m path
+  exists at any floor) → served best-effort + honest "⚠ best effort" badge in
+  the route card (verified in real headless UI).
 - Known remaining: real-drive ETA ground truth (blocked on Keaton's PG→Costco time).
 
 ## Improvement Queue
@@ -51,6 +62,12 @@ from this queue first when it's non-empty.
 - [x] Mid-zoom heatmap clustering (visual noise reduction) — landed 2026-08-26
 - [ ] Route-line anti-cut: Douglas-Peucker already in; audit edge cases on highways
 - [ ] Speed: chunk the graph load / show progress; measure on throttled connection
+- [ ] Test infra: interact-check menuHit/gpsHit return {} (elementFromPoint hits
+      SVG child; SVG className is SVGAnimatedString, not string) → false FAIL
+      risk; also add watchdog to every puppeteer suite (browser.close() hangs
+      under swiftshader — hit twice this round)
+- [ ] Camera-walled destinations: BYU has no ≥30 m approach road; consider
+      "clear within N m of endpoint" messaging or parking-gate snapping
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -64,6 +81,7 @@ block on these — it queues and moves on.
 |------|------|--------------|-------|--------|
 | 2026-08-26 | (seed) | loop created | cron live | active |
 | 2026-08-26 | visual | heatmap zoom crossfade (z10.5→z12.5 fade) + check-script fixes | heatmap-check PASS (z9.5 1.17% → z12.5 0.05%), smoke PASS, interact-check PASS, build exit 0 | shipped |
+| 2026-08-26 | camera-avoidance | strict hard safety floor (no edge <30 m from ALPR) + best-effort badge + avoidance-audit suite | audit PASS: 4/5 corridors were 5-25 m → now all ≥30 m; BYU camera-walled flagged; engine-check/smoke PASS; badge verified in live UI | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
