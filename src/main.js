@@ -255,26 +255,103 @@ function setEndpoints(from, to) {
   if (to) $('#toInput').value = to.label || '';
 }
 
+// ---- My-location: instant first fix, progressive refinement ----
+// The old flow blocked the UI on a cold high-accuracy GPS fix (~3 s) AND on
+// the reverse-geocode network call before showing anything. Now:
+//   1. instant fix from session/persisted last-known position (0 ms),
+//   2. fast low-accuracy fix (cached/network, ≤30 s old accepted),
+//   3. high-accuracy GPS refines in the background — never blocks,
+//   4. reverse-geocode fills the label async; "My location" shows at once.
+const LOC_KEY = '***';
+
+function cachedLoc(maxAgeMs = 24 * 3600 * 1000) {
+  try {
+    const raw = localStorage.getItem(LOC_KEY);
+    if (!raw) return null;
+    const { lon, lat, t } = JSON.parse(raw);
+    if (typeof lon !== 'number' || typeof lat !== 'number' || !t) return null;
+    if (Date.now() - t > maxAgeMs) return null;
+    return [lon, lat];
+  } catch {
+    return null;
+  }
+}
+
+function saveLoc(coords) {
+  try {
+    localStorage.setItem(LOC_KEY, JSON.stringify({ lon: coords[0], lat: coords[1], t: Date.now() }));
+  } catch { /* private mode etc. */ }
+}
+
+function distM(a, b) {
+  const latm = ((a[1] + b[1]) / 2) * Math.PI / 180;
+  const dx = (b[0] - a[0]) * 111320 * Math.cos(latm);
+  const dy = (b[1] - a[1]) * 111320;
+  return Math.hypot(dx, dy);
+}
+
+function applyMyLocation(coords) {
+  app.state.userLoc = coords;
+  saveLoc(coords);
+  setEndpoints({ coords, label: 'My location', isMyLoc: true }, app.state.to);
+  app.map.flyTo(coords, 14);
+  clearStatus();
+  // Label arrives async — never block the route on it.
+  reverseGeocode(coords)
+    .then((l) => {
+      if (l && app.state.from && app.state.from.isMyLoc) {
+        app.state.from.label = l;
+        const inp = $('#fromInput');
+        if (inp && !inp.value.trim()) inp.value = l;
+        else if (inp && inp.value === 'My location') inp.value = l;
+      }
+    })
+    .catch(() => {});
+  maybeAutoRoute();
+}
+
+function onLocationFix(coords) {
+  const prev = app.state.userLoc;
+  if (!prev) {
+    applyMyLocation(coords);
+    return;
+  }
+  const moved = distM(prev, coords);
+  if (moved < 25) return; // GPS jitter guard
+  app.state.userLoc = coords;
+  saveLoc(coords);
+  if (moved > 200) app.map.flyTo(coords, 14); // stale cache corrected far away
+  if (app.state.from && app.state.from.isMyLoc) {
+    app.state.from.coords = coords;
+    if (!app.state.navigating && moved > 40) maybeAutoRoute();
+  }
+}
+
 async function useMyLocation() {
-  showStatus('Locating…', 'info');
   if (!navigator.geolocation) {
     showStatus('Geolocation not available in this browser.', 'warn');
     return;
   }
+  // 1) Instant first fix from last known position (this session or persisted).
+  const instant = app.state.userLoc || cachedLoc();
+  if (instant) {
+    applyMyLocation(instant);
+  } else {
+    showStatus('Locating…', 'info');
+  }
+  // 2) Fast fix: accept a cached/network position up to 30 s old, 4 s timeout.
   navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const coords = [pos.coords.longitude, pos.coords.latitude];
-      app.state.userLoc = coords;
-      const label = (await reverseGeocode(coords).catch(() => null)) || 'My location';
-      setEndpoints({ coords, label }, app.state.to);
-      app.map.flyTo(coords, 14);
-      clearStatus();
-      maybeAutoRoute();
-    },
+    (pos) => onLocationFix([pos.coords.longitude, pos.coords.latitude]),
+    () => {}, // stage 3 gets the final word on errors
+    { enableHighAccuracy: false, maximumAge: 30000, timeout: 4000 }
+  );
+  // 3) High-accuracy GPS refine — runs in the background, never blocks the UI.
+  navigator.geolocation.getCurrentPosition(
+    (pos) => onLocationFix([pos.coords.longitude, pos.coords.latitude]),
     (err) => {
-      showStatus('Could not get location: ' + err.message, 'warn');
+      if (!app.state.userLoc) showStatus('Could not get location: ' + err.message, 'warn');
     },
-    { enableHighAccuracy: true, timeout: 10000 }
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
   );
 }
 
