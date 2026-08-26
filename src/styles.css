@@ -70,6 +70,35 @@ summary {
   flex: none;
 }
 
+/* MapLibre control overrides — match Ghostway chrome + touch targets. */
+.maplibregl-ctrl-group {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.maplibregl-ctrl-group button {
+  width: 44px;
+  height: 44px;
+  background: transparent;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--line);
+}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(0.85) sepia(0.15) saturate(2) hue-rotate(130deg);
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(11, 15, 23, 0.7);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--muted);
+}
+
 /* Loading spinner (buttons + panels). */
 .spinner {
   width: 18px;
@@ -783,12 +812,37 @@ details summary {
   font-weight: 600;
 }
 .steps-wrap { margin-top: 8px; }
+.steps-wrap summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  list-style: none;
+}
+.steps-wrap summary::-webkit-details-marker { display: none; }
+.steps-wrap summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--accent);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  margin-right: 8px;
+  transition: transform 0.15s ease;
+}
+.steps-wrap[open] summary::before { transform: rotate(90deg); }
 #startNavBtn { margin-top: 8px; }
 .rc-edit {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
   margin-bottom: 4px;
-  font-size: 12px;
+  min-height: 44px;
+  padding: 0 8px;
+  font-size: 13px;
 }
 
 /* ---- Iteration 2: upgraded nav banner ---- */
@@ -1030,9 +1084,10 @@ details summary {
   position: relative;
 }
 .ob-skip {
-  position: absolute; top: 8px; right: 8px;
+  position: absolute; top: 4px; right: 4px;
   background: none; border: none; color: var(--muted);
-  font-size: 13px; cursor: pointer; padding: 10px;
+  font-size: 13px; cursor: pointer; padding: 12px;
+  min-height: 44px; min-width: 44px;
 }
 .ob-step { text-align: center; height: 170px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
 .ob-icon { font-size: 44px; }
