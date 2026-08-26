@@ -48,6 +48,12 @@ for all measurements, and honest states (loading/empty/error) everywhere.
 | round | focus | result | proof |
 |-------|-------|--------|-------|
 | R0 | baseline: shots + contrast audit + critique punch list | done | 15 shots in ux-shots/; contrast 14/15 pass (--line 1.45:1 FAIL); ux-audit.mjs: 20 touch targets <44px, emoji icons in 12+ places, 4 numeric classes lack tabular-nums; critique punch list below |
+| R1 | design tokens + contrast + SVG icon set + touch targets | done | commit bd9ef83; --line→--line-strong 3.02:1; icons.js (40+ SVG); topbar/drawer/field emoji→SVG; focus-visible global |
+| R2 | typography + tabular-nums + punch-list sweep (33/38) | done | commit 313aa47; nav-dist/rc-time 32px; tabular-nums on all numeric classes; radius/shadow/color tokens; desktop left-column; ≤420px topbar collapse |
+| R2.5 | remaining touch targets | done | commit 322e4b1; steps summary/rc-edit/ob-skip/MapLibre zoom → 44px + themed chrome |
+| R3 | SVG icons everywhere + loading/empty states | done | commit 8d051ca; nav banner/route card/step arrows/engine pills/onboarding → SVG; goBtn loading state; clear-btn hide-until-value; .ic pointer-events:none; interact-check PASS |
+| R4 | drawer exit animation + attribution polish | done | commit 04ec1b7; slide-out/fade-out 180ms + reduced-motion; ux-audit whitelists OSM attrib links |
+| R5 | push + deploy + live verification + fresh shots | done | pushed 04ec1b7; deploy run 33015417356 success; live HTTP 200; deployed bundle grep confirms line-strong/slide-out/stepIconSvg/Routing… present; ux-audit 0 issues |
 
 ## R0 baseline (measured 2026-08-26)
 - Contrast: only failing pair = --line border #233047 on bg (1.45:1, needs 3:1 for UI).
