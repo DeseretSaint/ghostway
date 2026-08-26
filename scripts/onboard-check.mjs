@@ -3,6 +3,10 @@
 import puppeteer from 'puppeteer-core';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
+// If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
+setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 const p = await b.newPage();
 await p.setViewport({ width: 390, height: 844, isMobile: true });
@@ -54,7 +58,7 @@ console.log('onboarding hidden on second load:', obSecond);
 
 await p.screenshot({ path: 'ob-shot.png' });
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 3));
-await b.close();
+try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
 const pass =
   splashEarly.exists && !splashEarly.hidden && splashLate &&

@@ -6,6 +6,10 @@ import puppeteer from 'puppeteer-core';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
+// If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
+setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
 
 function serve() {
   const p = spawn('npx', ['vite', 'preview', '--port', '4173', '--host'], {
@@ -65,7 +69,7 @@ async function main() {
   await wait(700);
   await page.screenshot({ path: 'shot-donate.png' });
 
-  await browser.close();
+  try { await Promise.race([browser.close(), wait(5000)]); } catch {}
   srv.kill('SIGTERM');
   console.log('screenshots saved');
 }

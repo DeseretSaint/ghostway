@@ -8,6 +8,10 @@
 import puppeteer from 'puppeteer-core';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
+// If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
+setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 const p = await b.newPage();
@@ -27,18 +31,17 @@ console.log('engine status:', engine);
 
 // Real hit-test helper: elementFromPoint at element center.
 async function hit(sel) {
-  const box = await p.evaluate((s) => {
+  return p.evaluate((s) => {
     const el = document.querySelector(s);
     if (!el || el.hidden || el.offsetParent === null) return null;
     const r = el.getBoundingClientRect();
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2, id: el.id || el.className };
+    const t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    if (!t) return 'none';
+    // A hit on a descendant (SVG icon inside a button) still activates the
+    // control — treat it as hitting the control itself.
+    if (t === el || el.contains(t)) return el.id || el.getAttribute('class') || el.tagName;
+    return t.id || t.getAttribute('class') || t.tagName;
   }, sel);
-  if (!box) return null;
-  const top = await p.evaluate(({ x, y }) => {
-    const t = document.elementFromPoint(x, y);
-    return t ? (t.id || t.className || t.tagName) : 'none';
-  }, box);
-  return top;
 }
 
 // Robust pick: wait for a suggestion, else press Enter (commits typed text).
@@ -112,4 +115,5 @@ console.log('voice toggle in banner:', hasVoiceBtn);
 
 await p.screenshot({ path: 'engine-e2e.png' });
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 5));
-await b.close();
+try { await Promise.race([b.close(), wait(5000)]); } catch {}
+process.exit(0); // explicit: puppeteer can leave handles open and hang node

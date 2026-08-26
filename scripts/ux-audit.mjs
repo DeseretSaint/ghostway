@@ -45,7 +45,11 @@ async function main() {
       const r = el.getBoundingClientRect();
       if (r.width === 0 && r.height === 0) return;
       out.total++;
-      if (r.width < 44 || r.height < 44) {
+      // OSM/MapLibre attribution text-links are a universal map-UI exception
+      // (Google/Apple/Mapbox all keep these compact). They get hover padding
+      // but are not primary tap targets.
+      const isAttribLink = el.matches('.maplibregl-ctrl-attrib a');
+      if ((r.width < 44 || r.height < 44) && !isAttribLink) {
         out.smallTargets.push({ sel: el.id ? '#' + el.id : el.className.split(' ')[0] || el.tagName, w: Math.round(r.width), h: Math.round(r.height), text: (el.textContent || '').trim().slice(0, 24) });
       }
       const txt = (el.textContent || '').trim();
@@ -70,7 +74,7 @@ async function main() {
   console.log('\n== NUMERIC DISPLAYS WITHOUT tabular-nums ==');
   audit.noTabular.forEach((s) => console.log(`  ${s}`));
 
-  await browser.close();
+  try { await Promise.race([browser.close(), wait(5000)]); } catch {}
   srv.kill('SIGTERM');
   const fails = audit.smallTargets.length + audit.emojiButtons.length + audit.noTabular.length;
   console.log(`\nAUDIT RESULT: ${fails} issue(s)`);

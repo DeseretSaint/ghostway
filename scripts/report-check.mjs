@@ -6,6 +6,10 @@
 import puppeteer from 'puppeteer-core';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
+// If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
+setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 const p = await b.newPage();
 await p.setViewport({ width: 390, height: 844, isMobile: true });
@@ -25,7 +29,8 @@ const reportHit = await p.evaluate(() => {
   if (!el) return 'missing';
   const r = el.getBoundingClientRect();
   const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-  return top === el ? 'hit' : top ? top.tagName : 'none';
+  // A hit on a descendant (SVG icon inside the button) still activates it.
+  return top && (top === el || el.contains(top)) ? 'hit' : top ? top.tagName : 'none';
 });
 console.log('report button hit-test:', reportHit);
 await p.click('.drawer-item[data-action="report"]');
@@ -54,7 +59,7 @@ const saveHit = await p.evaluate(() => {
   const el = document.querySelector('#rpSave');
   const r = el.getBoundingClientRect();
   const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-  return top === el ? 'hit' : top ? top.tagName : 'none';
+  return top && (top === el || el.contains(top)) ? 'hit' : top ? top.tagName : 'none';
 });
 console.log('save button hit-test:', saveHit);
 await p.click('#rpSave');
@@ -76,7 +81,7 @@ const state = await p.evaluate(() => {
 console.log('state:', JSON.stringify(state));
 
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 3));
-await b.close();
+try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
 const pass =
   reportHit === 'hit' && introShown && placing && formShown &&

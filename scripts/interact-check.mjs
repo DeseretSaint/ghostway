@@ -3,10 +3,22 @@ import puppeteer from 'puppeteer-core';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
+// If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
+setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
 
 async function main() {
   const srv = spawn('npx', ['vite', 'preview', '--port', '4173', '--host'], { cwd: process.cwd(), stdio: 'ignore' });
-  await wait(2500);
+  // Wait for the preview server to actually accept connections (a fixed sleep
+  // is flaky — npx cold-start can exceed it → ERR_CONNECTION_REFUSED).
+  let up = false;
+  for (let i = 0; i < 40 && !up; i++) {
+    try {
+      const res = await fetch('http://localhost:4173/', { method: 'HEAD' });
+      up = res.status < 500;
+    } catch { await wait(500); }
+  }
+  if (!up) { srv.kill('SIGTERM'); throw new Error('preview server never came up on :4173'); }
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   await page.setViewport({ width: 1100, height: 800 });
@@ -16,16 +28,32 @@ async function main() {
   // Test as a RETURNING user so first-run onboarding doesn't cover the map.
   await page.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
   await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
-  await wait(2500);
+  // Wait for the splash to dismiss (it hides up to ~4.4s; hit-testing through
+  // it yields 'splash' for every control = false FAIL).
+  try {
+    await page.waitForFunction(() => {
+      const s = document.querySelector('#splash');
+      return !s || s.hidden;
+    }, { timeout: 8000 });
+  } catch { /* proceed anyway; hits will show what's covering */ }
+  await wait(500);
 
   // Helper: what element is at the center of a selector?
+  // NOTE: SVG children have className as SVGAnimatedString (an object, not a
+  // string) — coerce with getAttribute('class') so hits serialize usefully.
+  // A hit on a DESCENDANT of the control (e.g. an SVG icon path inside a
+  // button) still activates the control, so it counts as hitting the control.
   const atCenter = (sel) =>
     page.evaluate((s) => {
       const el = document.querySelector(s);
       if (!el) return 'missing';
       const r = el.getBoundingClientRect();
       const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-      return hit ? hit.id || hit.className || hit.tagName : 'none';
+      if (!hit) return 'none';
+      if (hit === el || el.contains(hit)) {
+        return el.id || el.getAttribute('class') || el.tagName;
+      }
+      return hit.id || hit.getAttribute('class') || hit.tagName;
     }, sel);
 
   const checks = {};
@@ -90,7 +118,8 @@ async function main() {
     checks.startNavHit === 'startNavBtn' &&
     errs.filter((e) => !/favicon/.test(e)).length === 0;
 
-  await browser.close();
+  // browser.close() can hang forever under swiftshader; race it, then force-exit.
+  try { await Promise.race([browser.close(), wait(5000)]); } catch {}
   srv.kill('SIGTERM');
   console.log(pass ? '\nINTERACTION PASS ✅ — full flow clickable + routes' : '\nINTERACTION FAIL ❌');
   process.exit(pass ? 0 : 1);

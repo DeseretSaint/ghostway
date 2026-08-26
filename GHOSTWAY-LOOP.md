@@ -54,6 +54,13 @@ free, privacy-first.
   ≥30 m (165/100/96/40 m); BYU is provably camera-walled (no ≥32 m path
   exists at any floor) → served best-effort + honest "⚠ best effort" badge in
   the route card (verified in real headless UI).
+- 2026-08-26 (round 22): test-infra hardening — hit-tests no longer false-FAIL
+  on SVG icons (SVGAnimatedString className coerced via getAttribute; hits on
+  descendants count as control hits); interact-check waits for splash dismiss
+  + polls preview server until up (was fixed 2.5s sleep → flaky refused);
+  every puppeteer suite now has a 150s watchdog + browser.close() race so no
+  suite can hang CI/cron forever. interact-check went from hang+false-FAIL to
+  PASS in 31.7s; report/compact/engine-e2e/smoke/heatmap all PASS, clean exits.
 - Known remaining: real-drive ETA ground truth (blocked on Keaton's PG→Costco time).
 
 ## Improvement Queue
@@ -62,12 +69,18 @@ from this queue first when it's non-empty.
 - [x] Mid-zoom heatmap clustering (visual noise reduction) — landed 2026-08-26
 - [ ] Route-line anti-cut: Douglas-Peucker already in; audit edge cases on highways
 - [ ] Speed: chunk the graph load / show progress; measure on throttled connection
-- [ ] Test infra: interact-check menuHit/gpsHit return {} (elementFromPoint hits
+- [x] Test infra: interact-check menuHit/gpsHit return {} (elementFromPoint hits
       SVG child; SVG className is SVGAnimatedString, not string) → false FAIL
       risk; also add watchdog to every puppeteer suite (browser.close() hangs
-      under swiftshader — hit twice this round)
+      under swiftshader — hit twice this round) — LANDED 2026-08-26 (round 22)
 - [ ] Camera-walled destinations: BYU has no ≥30 m approach road; consider
       "clear within N m of endpoint" messaging or parking-gate snapping
+- [ ] Test infra: ux-shots/shot/ux-audit/pwa-check still use fixed sleeps
+      (2.5-2.6s) for vite preview startup — same flaky class interact-check
+      had (ERR_CONNECTION_REFUSED on npx cold-start); port the poll-until-up loop
+- [ ] Test infra: engine-e2e startNavBtn hit-test returned maplibregl-canvas
+      (banner still showed + click worked) — investigate whether the collapsed
+      panel overlaps the button center after strict re-route
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -82,6 +95,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | (seed) | loop created | cron live | active |
 | 2026-08-26 | visual | heatmap zoom crossfade (z10.5→z12.5 fade) + check-script fixes | heatmap-check PASS (z9.5 1.17% → z12.5 0.05%), smoke PASS, interact-check PASS, build exit 0 | shipped |
 | 2026-08-26 | camera-avoidance | strict hard safety floor (no edge <30 m from ALPR) + best-effort badge + avoidance-audit suite | audit PASS: 4/5 corridors were 5-25 m → now all ≥30 m; BYU camera-walled flagged; engine-check/smoke PASS; badge verified in live UI | shipped |
+| 2026-08-26 | test-infra (round 22) | fixed SVG-hit-test false FAILs (SVGAnimatedString className + descendant hits count as control hits) in interact/report/compact/engine-e2e; splash wait before hit-tests; poll-until-up preview server; watchdog (150s force-exit) + close-race in all 19 puppeteer suites | interact-check: was HANG forever + false FAIL (menuHit='splash') → PASS 31.7s; report/compact/engine-e2e/smoke/heatmap all PASS with clean exits; node --check all 35 scripts | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).

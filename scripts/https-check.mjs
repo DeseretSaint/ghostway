@@ -2,6 +2,10 @@ import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer-core';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
+// If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
+setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
 const srv = spawn('node', ['scripts/serve-https.mjs'], { cwd: process.cwd(), stdio: 'ignore' });
 await wait(2500);
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--ignore-certificate-errors'] });
@@ -17,7 +21,7 @@ const r = await p.evaluate(async () => {
 });
 console.log('over HTTPS ->', JSON.stringify(r), 'pageerrors:', errs.slice(0, 3));
 const pass = r.sw && r.manifestIcons >= 1;
-await b.close();
+try { await Promise.race([b.close(), wait(5000)]); } catch {}
 srv.kill('SIGTERM');
 console.log(pass ? 'HTTPS PWA PASS ✅' : 'HTTPS PWA FAIL ❌');
 process.exit(pass ? 0 : 1);
