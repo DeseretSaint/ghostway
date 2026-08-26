@@ -24,3 +24,6 @@ ob-shot.png
 
 banner-full.png
 banner-compact.png
+
+# UX polish loop working screenshots (regenerate via scripts/ux-shots.mjs)
+ux-shots/

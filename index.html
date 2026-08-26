@@ -26,7 +26,9 @@
 
       <!-- Top brand bar -->
       <header id="topbar">
-        <button id="menuBtn" class="icon-btn" aria-label="Open menu" title="Menu">☰</button>
+        <button id="menuBtn" class="icon-btn" aria-label="Open menu" title="Menu">
+          <svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
         <div id="brand">
           <span class="brand-mark" aria-hidden="true">◈</span>
           <span class="brand-name">Ghostway</span>
@@ -34,25 +36,35 @@
         <div id="safety-pill" class="safety-pill" title="Current avoidance setting">
           <span class="dot"></span><span class="label">Avoid cameras</span>
         </div>
-        <button id="gpsBtn" class="icon-btn" aria-label="Use my location" title="Use my location">◎</button>
+        <button id="gpsBtn" class="icon-btn" aria-label="Use my location" title="Use my location">
+          <svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="7.5"/></svg>
+        </button>
       </header>
 
       <div id="navBanner" class="nav-banner" hidden></div>
 
-      <button id="recenterBtn" class="recenter-btn" hidden aria-label="Recenter map on my position" title="Recenter">🧭</button>
+      <button id="recenterBtn" class="recenter-btn" hidden aria-label="Recenter map on my position" title="Recenter">
+        <svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2.2 5-4.8 2 2.2-5z" fill="currentColor" stroke="none"/></svg>
+      </button>
 
-      <button id="camLayerBtn" class="map-chip" title="Show/hide camera layer" aria-label="Toggle camera layer">📷</button>
+      <button id="camLayerBtn" class="map-chip" title="Show/hide camera layer" aria-label="Toggle camera layer">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.4-2h6.2L16.5 7h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="13" r="3.4"/></svg>
+      </button>
 
       <!-- Search / control panel -->
       <section id="panel" class="panel">
         <div id="search">
           <div class="field">
-            <span class="field-ic">⟩</span>
-            <input id="fromInput" type="text" placeholder="Start (tap ◎ for here)" autocomplete="off" />
+            <span class="field-ic" aria-hidden="true">
+              <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/></svg>
+            </span>
+            <input id="fromInput" type="text" placeholder="Start (tap locate for here)" autocomplete="off" />
             <button class="clear-btn" data-clear="fromInput" aria-label="Clear">×</button>
           </div>
           <div class="field">
-            <span class="field-ic">⊗</span>
+            <span class="field-ic" aria-hidden="true">
+              <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4h11l-2.4 3.5L17 11H6"/></svg>
+            </span>
             <input id="toInput" type="text" placeholder="Where to?" autocomplete="off" />
             <button class="clear-btn" data-clear="toInput" aria-label="Clear">×</button>
           </div>
@@ -88,13 +100,31 @@
           <button id="closeDrawer" class="icon-btn" aria-label="Close">×</button>
         </div>
         <nav class="drawer-nav">
-          <button data-action="report" class="drawer-item accent">📷 Report a camera</button>
-          <button data-action="about" class="drawer-item">About Ghostway</button>
-          <button data-action="data" class="drawer-item">Data sources</button>
-          <button data-action="donate" class="drawer-item">Support the developer</button>
-          <button data-action="privacy" class="drawer-item">Privacy & how it works</button>
+          <button data-action="report" class="drawer-item accent">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.4-2h6.2L16.5 7h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="13" r="3.4"/></svg>
+            Report a camera
+          </button>
+          <button data-action="about" class="drawer-item">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/></svg>
+            About Ghostway
+          </button>
+          <button data-action="data" class="drawer-item">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l8.5 4.5L12 12.5 3.5 8z"/><path d="M3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5"/></svg>
+            Data sources
+          </button>
+          <button data-action="donate" class="drawer-item">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.4-7 10-7 10z"/></svg>
+            Support the developer
+          </button>
+          <button data-action="privacy" class="drawer-item">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+            Privacy &amp; how it works
+          </button>
           <hr />
-          <button data-action="github" class="drawer-item">View source on GitHub</button>
+          <button data-action="github" class="drawer-item">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a9 9 0 0 0-2.85 17.54c.45.08.62-.2.62-.43v-1.7c-2.5.54-3.03-1.06-3.03-1.06-.41-1.04-1-1.32-1-1.32-.82-.56.06-.55.06-.55.9.06 1.38.93 1.38.93.8 1.38 2.11.98 2.63.75.08-.58.31-.98.57-1.2-2-.23-4.1-1-4.1-4.45 0-.98.35-1.79.93-2.42-.1-.23-.4-1.15.08-2.4 0 0 .76-.24 2.48.92a8.6 8.6 0 0 1 4.52 0c1.72-1.16 2.47-.92 2.47-.92.49 1.25.18 2.17.09 2.4.58.63.92 1.44.92 2.42 0 3.47-2.1 4.22-4.11 4.44.32.28.61.83.61 1.67v2.48c0 .24.16.52.62.43A9 9 0 0 0 12 3z" fill="currentColor" stroke="none"/></svg>
+            View source on GitHub
+          </button>
         </nav>
         <p class="drawer-foot">Free & open source · No tracking · No account</p>
       </aside>
