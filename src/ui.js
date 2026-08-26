@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { $, el, debounce, fmtDistance, fmtDuration } from './utils.js';
+import { $, el, debounce, escHtml, fmtDistance, fmtDuration } from './utils.js';
 import { searchPlaces } from './search.js';
 import { icon, stepIconSvg } from './icons.js';
 
@@ -164,8 +164,8 @@ function renderEngineCard(app, card, result) {
     .slice(0, 12)
     .map(
       (s) =>
-        `<li><span class="step-ic">${stepIcon(s.modifier)}</span><span>${s.instruction}${
-          s.name ? ` <b>${s.name}</b>` : ''
+        `<li><span class="step-ic">${stepIcon(s.modifier)}</span><span>${escHtml(s.instruction)}${
+          s.name ? ` <b>${escHtml(s.name)}</b>` : ''
         }</span><span class="step-dist">${fmtDistance(s.distance)}</span></li>`
     )
     .join('');
@@ -228,8 +228,8 @@ function renderLegacyCard(app, card, result) {
     .slice(0, 12)
     .map(
       (s) =>
-        `<li><span class="step-ic">${stepIcon(s.modifier)}</span><span>${s.instruction}${
-          s.name ? ` <b>${s.name}</b>` : ''
+        `<li><span class="step-ic">${stepIcon(s.modifier)}</span><span>${escHtml(s.instruction)}${
+          s.name ? ` <b>${escHtml(s.name)}</b>` : ''
         }</span><span class="step-dist">${fmtDistance(s.distance)}</span></li>`
     )
     .join('');

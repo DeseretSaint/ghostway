@@ -7,7 +7,7 @@ import { planRoute } from './routing.js';
 import { planRoutes, loadGraph, inGraphRegion, graphStatus } from './router.js';
 import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
-import { $, el, debounce, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
+import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
 import { icon, stepIconSvg } from './icons.js';
 import { registerSW } from './pwa.js';
@@ -78,9 +78,9 @@ async function init() {
     if (!rec) return;
     openModal(`
       <h3>📷 Community report</h3>
-      <p><b>${{ alpr: 'ALPR / plate reader', redlight: 'Red-light camera', speed: 'Speed camera', fixed: 'Fixed camera', other: 'Camera (type unknown)' }[rec.kind] || 'Camera'}</b>${rec.brand ? ` — ${rec.brand}` : ''}</p>
-      ${rec.note ? `<p class="muted">${rec.note}</p>` : ''}
-      <p class="muted small">Reported ${new Date(rec.createdAt).toLocaleDateString()} · ${rec.publishedNoteId ? `Published to OSM note ${rec.publishedNoteId}` : 'Not yet published to OSM'}</p>
+      <p><b>${{ alpr: 'ALPR / plate reader', redlight: 'Red-light camera', speed: 'Speed camera', fixed: 'Fixed camera', other: 'Camera (type unknown)' }[rec.kind] || 'Camera'}</b>${rec.brand ? ` — ${escHtml(rec.brand)}` : ''}</p>
+      ${rec.note ? `<p class="muted">${escHtml(rec.note)}</p>` : ''}
+      <p class="muted small">Reported ${new Date(rec.createdAt).toLocaleDateString()} · ${rec.publishedNoteId ? `Published to OSM note ${escHtml(rec.publishedNoteId)}` : 'Not yet published to OSM'}</p>
       <div class="rp-actions">
         ${rec.publishedNoteId ? '' : '<button id="rptPub" class="primary-btn" type="button">Publish to OSM</button>'}
         <button id="rptDel" class="ghost-btn" type="button">Delete report</button>
@@ -1015,7 +1015,7 @@ function renderNavStep() {
     ? fmtNavDistance(Math.max(0, next.startS - traveled))
     : fmtNavDistance(Math.max(0, step.distance));
   const dir = next ? next.instruction : step.instruction;
-  const road = next && next.name ? ` onto <b>${next.name}</b>` : next && step.name ? ` onto <b>${step.name}</b>` : '';
+  const road = next && next.name ? ` onto <b>${escHtml(next.name)}</b>` : next && step.name ? ` onto <b>${escHtml(step.name)}</b>` : '';
   const maneuverIcon = next ? stepIcon(next.modifier) : stepIcon(step.modifier);
   const limit = (next && next.speedLimit) || step.speedLimit;
   const limitMph = limit ? Math.round(limit * 0.621371 / 5) * 5 : null;
@@ -1028,8 +1028,8 @@ function renderNavStep() {
     <div class="nav-icon" aria-hidden="true">${maneuverIcon}</div>
     <div class="nav-step">
       <div class="nav-dist" id="navDist">${dist}</div>
-      <div class="nav-dir">${dir}${road}</div>
-      ${next ? `<div class="nav-then">then ${stepIcon(step.modifier)} ${lower(step.instruction)}${step.name ? ` · ${step.name}` : ''}</div>` : ''}
+      <div class="nav-dir">${escHtml(dir)}${road}</div>
+      ${next ? `<div class="nav-then">then ${stepIcon(step.modifier)} ${escHtml(lower(step.instruction))}${step.name ? ` · ${escHtml(step.name)}` : ''}</div>` : ''}
     </div>
     <div class="nav-side">
       <div class="nav-side-row">
@@ -1145,11 +1145,11 @@ function openCameraModal(props, coords) {
     ? `Mapped ${new Date(props.osmTimestamp).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}`
     : '';
   openModal(`
-    <h3>📷 ${brand}</h3>
-    ${op && op.toLowerCase() !== brand.toLowerCase() ? `<p class="muted">Operator: ${op}</p>` : ''}
+    <h3>📷 ${escHtml(brand)}</h3>
+    ${op && op.toLowerCase() !== brand.toLowerCase() ? `<p class="muted">Operator: ${escHtml(op)}</p>` : ''}
     <p>${isAlpr ? '<b>Automated license plate reader (ALPR)</b> — reads every passing plate.' : 'Surveillance camera.'}</p>
     <p class="muted">
-      ${dir ? `Faces ${dir}. ` : ''}${mount ? `Mounted on ${mount.replace(/_/g, ' ')}. ` : ''}${age}
+      ${dir ? `Faces ${dir}. ` : ''}${mount ? `Mounted on ${escHtml(mount.replace(/_/g, ' '))}. ` : ''}${age}
     </p>
     <p class="muted">${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}</p>
     ${isAlpr ? '<p class="warn-text">Plate reads from cameras like this are shared with thousands of agencies. Ghostway routes around them by default.</p>' : ''}

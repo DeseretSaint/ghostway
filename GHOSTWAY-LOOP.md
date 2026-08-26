@@ -61,6 +61,18 @@ free, privacy-first.
   every puppeteer suite now has a 150s watchdog + browser.close() race so no
   suite can hang CI/cron forever. interact-check went from hang+false-FAIL to
   PASS in 31.7s; report/compact/engine-e2e/smoke/heatmap all PASS, clean exits.
+- 2026-08-26 (round 24): security — XSS hardening. Externally-editable strings
+  (OSM street names in nav banner + route steps, DeFlock camera brand/operator/
+  mount in the camera modal, community-report brand/note/noteId in the report
+  modal) were interpolated raw into innerHTML → real stored/reflected XSS
+  surface (anyone can edit OSM; DeFlock ingests those tags). Added escHtml()
+  in utils.js and escaped all 10 injection points in main.js + ui.js. New
+  scripts/xss-check.mjs E2E injects `<img src=x onerror=...>` via localStorage
+  reports + hostile step names, clicks the REAL rendered report dot, asserts
+  zero injected elements + no onerror fire + payload visible as literal text.
+  Red-green verified: reverting one escape → payload EXECUTES (fired:true);
+  with fix → inert. smoke/interact/report/camchip/compact/engine-check/
+  engine-e2e all PASS, zero console errors.
 - Known remaining: real-drive ETA ground truth (blocked on Keaton's PG→Costco time).
 
 ## Improvement Queue
@@ -101,7 +113,8 @@ block on these — it queues and moves on.
 | 2026-08-26 | visual | heatmap zoom crossfade (z10.5→z12.5 fade) + check-script fixes | heatmap-check PASS (z9.5 1.17% → z12.5 0.05%), smoke PASS, interact-check PASS, build exit 0 | shipped |
 | 2026-08-26 | camera-avoidance | strict hard safety floor (no edge <30 m from ALPR) + best-effort badge + avoidance-audit suite | audit PASS: 4/5 corridors were 5-25 m → now all ≥30 m; BYU camera-walled flagged; engine-check/smoke PASS; badge verified in live UI | shipped |
 | 2026-08-26 | test-infra (round 22) | fixed SVG-hit-test false FAILs (SVGAnimatedString className + descendant hits count as control hits) in interact/report/compact/engine-e2e; splash wait before hit-tests; poll-until-up preview server; watchdog (150s force-exit) + close-race in all 19 puppeteer suites | interact-check: was HANG forever + false FAIL (menuHit='splash') → PASS 31.7s; report/compact/engine-e2e/smoke/heatmap all PASS with clean exits; node --check all 35 scripts | shipped |
-| 2026-08-26 | test-infra (round 23) | shared scripts/lib-preview.mjs (spawn+poll-until-up + process-group kill-tree); pwa/shot/ux-audit/ux-shots/interact all ported off fixed 2.5s sleeps; fixed shot.mjs dead flow (waited for hidden #goBtn → 30s timeout) + ux-shots/shot teardown hang (watchdog exit 2 after "done") | all 5 suites PASS exit 0 (pwa/interact/ux-audit/shot/ux-shots); smoke + engine-e2e PASS; ports clear after — zero orphan vite servers (was leaking 2/run) | shipped |
+| 2026-08-26 | test-infra (round 23) | shared scripts/lib-preview.mjs (spawn+poll-until-up + process-group kill-tree); pwa/shot/ux-audit/ux-shots/interact all ported off fixed 2.5s sleeps; fixed shot.mjs dead flow (waited for hidden #goBtn → 30s timeout) + ux-shots/shot teardown hang (no process.exit → watchdog exit 2 after "done") | all 5 suites PASS exit 0 (pwa/interact/ux-audit/shot/ux-shots); smoke + engine-e2e PASS; ports clear after — zero orphan vite servers (was leaking 2/run) | shipped |
+| 2026-08-26 | security (round 24) | XSS hardening: escHtml() + escaped 10 innerHTML injection points (street names, camera brand/operator/mount, report brand/note/noteId); new scripts/xss-check.mjs E2E with real dot-click | xss-check red-green: payload executes w/o escape (fired:true) → inert with fix; smoke/interact/report/camchip/compact/engine-check/engine-e2e PASS, 0 console errors | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).

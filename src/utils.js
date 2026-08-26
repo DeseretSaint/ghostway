@@ -28,6 +28,16 @@ export function debounce(fn, ms = 300) {
   };
 }
 
+// Escape untrusted strings before interpolating into innerHTML. Street names,
+// camera brand/operator/mount tags, Photon results, and OSM note ids are all
+// externally editable (anyone can edit OSM; DeFlock ingests those tags), so
+// every one of them is a potential HTML-injection vector.
+export function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
 export function fmtDistance(m) {
   if (m == null) return '';
   if (m < 1000) return `${Math.round(m)} m`;
