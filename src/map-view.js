@@ -46,7 +46,12 @@ export class MapView {
         'heatmap-weight': 1,
         'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 1, 13, 3],
         'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 9, 14, 13, 34],
-        'heatmap-opacity': 0.75,
+        // Crossfade out as individual camera dots take over (circle minzoom 11):
+        // full density through z10.5, gone by z12.5 — no mid-zoom blob noise.
+        'heatmap-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          9, 0.75, 10.5, 0.75, 11.5, 0.35, 12.5, 0,
+        ],
         'heatmap-color': [
           'interpolate', ['linear'], ['heatmap-density'],
           0, 'rgba(0,0,0,0)',
