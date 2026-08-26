@@ -1,8 +1,8 @@
 // Screenshot proof: starts a preview server, loads Ghostway in headless Chrome,
 // drives a real route (Pleasant Grove -> a point north, past a Flock camera),
 // and saves a PNG of the result.
-import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -11,17 +11,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
 
 
-function serve() {
-  const p = spawn('npx', ['vite', 'preview', '--port', '4173', '--host'], {
-    cwd: process.cwd(),
-    stdio: 'ignore',
-  });
-  return p;
-}
-
 async function main() {
-  const srv = serve();
-  await wait(2500);
+  const { kill } = await startPreview();
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: 'new',
@@ -36,15 +27,44 @@ async function main() {
   page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
 
   await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
-  await wait(2500); // let map + camera tiles load
+  // Wait for the splash to dismiss (it covers the controls for up to ~4.4s).
+  try {
+    await page.waitForFunction(() => {
+      const s = document.querySelector('#splash');
+      return !s || s.hidden;
+    }, { timeout: 8000 });
+  } catch {}
+  await wait(500);
 
-  // Fill from/to and route. Pleasant Grove -> Lindon (passes Flock cameras).
-  await page.waitForSelector('#goBtn', { visible: true });
-  await page.type('#fromInput', 'Pleasant Grove, Utah');
-  await wait(1200);
-  await page.type('#toInput', 'Lindon, Utah');
-  await wait(1200);
-  await page.evaluate(() => document.querySelector('#goBtn').click());
+  // Fill from/to via suggestions (current UI auto-routes once both endpoints
+  // are picked; #goBtn stays hidden until the panel is expanded). In-page
+  // click + retry: the suggestion list re-renders on debounce, which can make
+  // a pre-fetched ElementHandle stale ("not clickable or not an Element").
+  async function pick(inputSel, query) {
+    await page.type(inputSel, query);
+    for (let i = 0; i < 12; i++) {
+      const ok = await page.evaluate(() => {
+        const el = document.querySelector('#suggestions .sugg');
+        if (!el) return false;
+        el.click();
+        return true;
+      });
+      if (ok) return;
+      await wait(500);
+    }
+    await page.focus(inputSel);
+    await page.keyboard.press('Enter');
+  }
+  await pick('#fromInput', 'Pleasant Grove, Utah');
+  await wait(500);
+  await pick('#toInput', 'Lindon, Utah');
+  await wait(600);
+  // If auto-route hasn't fired and Go is visible, give it a real click.
+  const goVisible = await page.evaluate(() => {
+    const r = document.querySelector('#goBtn').getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  });
+  if (goVisible) await page.click('#goBtn');
   // Wait until a route line is actually drawn (route source has features).
   try {
     await page.waitForFunction(
@@ -70,8 +90,9 @@ async function main() {
   await page.screenshot({ path: 'shot-donate.png' });
 
   try { await Promise.race([browser.close(), wait(5000)]); } catch {}
-  srv.kill('SIGTERM');
+  kill();
   console.log('screenshots saved');
+  process.exit(errors.filter((e) => !/favicon/.test(e)).length ? 1 : 0);
 }
 
 main().catch((e) => {

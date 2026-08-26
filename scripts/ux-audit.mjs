@@ -1,20 +1,15 @@
 // Mechanical UX audit: touch targets, emoji-as-icons, tabular numerals,
 // focus-visible coverage. Exits non-zero if any hard rule fails.
 // Usage: node scripts/ux-audit.mjs
-import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
 
-function serve() {
-  return spawn('npx', ['vite', 'preview', '--port', '4173', '--host'], { cwd: process.cwd(), stdio: 'ignore' });
-}
-
 async function main() {
-  const srv = serve();
-  await wait(2600);
+  const { kill } = await startPreview();
   const browser = await puppeteer.launch({
     executablePath: CHROME, headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--enable-unsafe-swiftshader'],
@@ -75,7 +70,7 @@ async function main() {
   audit.noTabular.forEach((s) => console.log(`  ${s}`));
 
   try { await Promise.race([browser.close(), wait(5000)]); } catch {}
-  srv.kill('SIGTERM');
+  kill();
   const fails = audit.smallTargets.length + audit.emojiButtons.length + audit.noTabular.length;
   console.log(`\nAUDIT RESULT: ${fails} issue(s)`);
   process.exit(fails ? 1 : 0);

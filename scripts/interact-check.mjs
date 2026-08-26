@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -8,17 +8,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
 
 async function main() {
-  const srv = spawn('npx', ['vite', 'preview', '--port', '4173', '--host'], { cwd: process.cwd(), stdio: 'ignore' });
-  // Wait for the preview server to actually accept connections (a fixed sleep
-  // is flaky — npx cold-start can exceed it → ERR_CONNECTION_REFUSED).
-  let up = false;
-  for (let i = 0; i < 40 && !up; i++) {
-    try {
-      const res = await fetch('http://localhost:4173/', { method: 'HEAD' });
-      up = res.status < 500;
-    } catch { await wait(500); }
-  }
-  if (!up) { srv.kill('SIGTERM'); throw new Error('preview server never came up on :4173'); }
+  // Poll until the preview server accepts connections (fixed sleeps are flaky
+  // — npx cold-start can exceed them → ERR_CONNECTION_REFUSED).
+  const { kill } = await startPreview();
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   await page.setViewport({ width: 1100, height: 800 });
@@ -120,7 +112,7 @@ async function main() {
 
   // browser.close() can hang forever under swiftshader; race it, then force-exit.
   try { await Promise.race([browser.close(), wait(5000)]); } catch {}
-  srv.kill('SIGTERM');
+  kill();
   console.log(pass ? '\nINTERACTION PASS ✅ — full flow clickable + routes' : '\nINTERACTION FAIL ❌');
   process.exit(pass ? 0 : 1);
 }

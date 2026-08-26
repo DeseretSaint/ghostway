@@ -15,6 +15,11 @@ public/graph/wasatch-graph.bin
 
 # Test artifacts
 engine-e2e.png
+shot-route.png
+shot-donate.png
+
+# Loop lock files (ephemeral, never commit)
+.ghostway-*.lock
 
 # test screenshots
 follow-shot.png

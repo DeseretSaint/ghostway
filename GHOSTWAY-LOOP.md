@@ -75,9 +75,14 @@ from this queue first when it's non-empty.
       under swiftshader — hit twice this round) — LANDED 2026-08-26 (round 22)
 - [ ] Camera-walled destinations: BYU has no ≥30 m approach road; consider
       "clear within N m of endpoint" messaging or parking-gate snapping
-- [ ] Test infra: ux-shots/shot/ux-audit/pwa-check still use fixed sleeps
+- [x] Test infra: ux-shots/shot/ux-audit/pwa-check still use fixed sleeps
       (2.5-2.6s) for vite preview startup — same flaky class interact-check
       had (ERR_CONNECTION_REFUSED on npx cold-start); port the poll-until-up loop
+      — LANDED 2026-08-26 (round 23): shared scripts/lib-preview.mjs
+      (spawn+poll-until-200); all 5 suites on it. Also fixed shot.mjs stale
+      flow (waited for hidden #goBtn → 30s timeout; now suggestion-pick +
+      auto-route, in-page click w/ retry for stale handles) and ux-shots/shot
+      teardown hang (no process.exit → watchdog exit 2 after "done").
 - [ ] Test infra: engine-e2e startNavBtn hit-test returned maplibregl-canvas
       (banner still showed + click worked) — investigate whether the collapsed
       panel overlaps the button center after strict re-route
@@ -96,6 +101,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | visual | heatmap zoom crossfade (z10.5→z12.5 fade) + check-script fixes | heatmap-check PASS (z9.5 1.17% → z12.5 0.05%), smoke PASS, interact-check PASS, build exit 0 | shipped |
 | 2026-08-26 | camera-avoidance | strict hard safety floor (no edge <30 m from ALPR) + best-effort badge + avoidance-audit suite | audit PASS: 4/5 corridors were 5-25 m → now all ≥30 m; BYU camera-walled flagged; engine-check/smoke PASS; badge verified in live UI | shipped |
 | 2026-08-26 | test-infra (round 22) | fixed SVG-hit-test false FAILs (SVGAnimatedString className + descendant hits count as control hits) in interact/report/compact/engine-e2e; splash wait before hit-tests; poll-until-up preview server; watchdog (150s force-exit) + close-race in all 19 puppeteer suites | interact-check: was HANG forever + false FAIL (menuHit='splash') → PASS 31.7s; report/compact/engine-e2e/smoke/heatmap all PASS with clean exits; node --check all 35 scripts | shipped |
+| 2026-08-26 | test-infra (round 23) | shared scripts/lib-preview.mjs (spawn+poll-until-up + process-group kill-tree); pwa/shot/ux-audit/ux-shots/interact all ported off fixed 2.5s sleeps; fixed shot.mjs dead flow (waited for hidden #goBtn → 30s timeout) + ux-shots/shot teardown hang (watchdog exit 2 after "done") | all 5 suites PASS exit 0 (pwa/interact/ux-audit/shot/ux-shots); smoke + engine-e2e PASS; ports clear after — zero orphan vite servers (was leaking 2/run) | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).

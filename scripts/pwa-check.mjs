@@ -1,8 +1,8 @@
 // PWA verification: load the built app, confirm the manifest is served,
 // the service worker registers, and the app is installable (has a manifest
 // with icons + a SW with a fetch handler).
-import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -12,11 +12,7 @@ setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); proce
 
 
 async function main() {
-  const srv = spawn('npx', ['vite', 'preview', '--port', '4173', '--host'], {
-    cwd: process.cwd(),
-    stdio: 'ignore',
-  });
-  await wait(2500);
+  const { kill } = await startPreview();
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: 'new',
@@ -62,7 +58,7 @@ async function main() {
     /addEventListener\(['"]fetch/.test(swTxt);
 
   try { await Promise.race([browser.close(), wait(5000)]); } catch {}
-  srv.kill('SIGTERM');
+  kill();
   console.log(pass ? '\nPWA PASS ✅ — installable, offline-ready' : '\nPWA FAIL ❌');
   process.exit(pass ? 0 : 1);
 }

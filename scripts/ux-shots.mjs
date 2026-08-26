@@ -4,9 +4,9 @@
 // nav banner (injected), drawer, and a modal. Saves PNGs under ux-shots/.
 //
 // Usage: node scripts/ux-shots.mjs
-import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -15,13 +15,6 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
 
 const OUT = 'ux-shots';
-
-function serve() {
-  return spawn('npx', ['vite', 'preview', '--port', '4173', '--host'], {
-    cwd: process.cwd(),
-    stdio: 'ignore',
-  });
-}
 
 const VIEWPORTS = [
   { name: 'mobile-390', width: 390, height: 844, deviceScaleFactor: 3 },
@@ -37,14 +30,14 @@ async function capture(page, vp, label) {
 
 async function main() {
   mkdirSync(OUT, { recursive: true });
-  const srv = serve();
-  await wait(2600);
+  const { kill } = await startPreview();
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--enable-unsafe-swiftshader'],
   });
 
+  let allErrors = 0;
   for (const vp of VIEWPORTS) {
     const page = await browser.newPage();
     await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: vp.deviceScaleFactor });
@@ -116,12 +109,15 @@ async function main() {
     await capture(page, vp, 'modal');
 
     console.log(`[${vp.name}] console errors:`, errors.length ? errors.slice(0, 6) : 'none');
+    allErrors += errors.filter((e) => !/favicon/.test(e)).length;
     await page.close();
   }
 
   try { await Promise.race([browser.close(), wait(5000)]); } catch {}
-  srv.kill('SIGTERM');
+  kill();
   console.log('done');
+  // Teardown can hang under swiftshader; exit explicitly with the real status.
+  process.exit(allErrors ? 1 : 0);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
