@@ -392,7 +392,7 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
   arcs.reverse();
 
   // Path metrics.
-  let distance = 0, time = 0, camUnits = 0, delay = 0;
+  let distance = 0, time = 0, camUnits = 0, delay = 0, highwayKm = 0;
   const coords = [];
   let cameraClusters = 0, inCluster = false;
   coords.push([g.nodeLon[startNode] / 1e6, g.nodeLat[startNode] / 1e6]);
@@ -402,6 +402,7 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
     const len = g.eLen[e];
     const spd = g.eSpd[e];
     distance += len;
+    if (spd >= 95) highwayKm += len / 1000; // freeway-class (posted ≥95 km/h)
     let seg = (len / ((spd * effFactor(spd)) / 3.6)) / edgeFactor[e];
     if (g.nodeDeg[toNode] >= 3) seg += junctionPenalty(spd);
     time += seg;
@@ -419,6 +420,8 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
   return {
     coords, distance, duration: time,
     cameras: cameraClusters, camUnits,
+    highwayKm, // freeway-class kilometers (posted ≥95 km/h) — for the
+                // "avoid highway + avoid camera + shortest" smart default
     delay, // seconds lost to live traffic
     expansions, arcs,
   };
@@ -746,13 +749,18 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
 
   const options = [{ mode: 'off', label: 'Fastest', route: fastest }];
 
-  // Avoid-highways option: penalize freeway-class edges (≥95 km/h posted) in
-  // the search only — reported metrics stay honest. Offered when it produces
-  // a genuinely different shape within a sane detour (≤1.6x distance).
+  // Avoid-highways option (surface-street preference knob, engine-rebuild plan
+  // step 3 — Valhalla use_highways analog): freeway-class edges (≥95 km/h
+  // posted) carry a search-only cost factor (reported metrics stay honest).
+  // Runs on the GENERALIZED cost model (mode 'moderate' = distance disutility
+  // + light camera weighting) instead of pure time, so the option picks the
+  // natural arterial chain a local would take — shorter distance, camera-aware
+  // — not just the time-optimal surface path. Offered when it produces a
+  // genuinely different shape within a sane detour (≤1.6x distance).
   if (avoidHighways) {
     const hwPenalty = new Float32Array(graph.edgeCount);
     for (let e = 0; e < graph.edgeCount; e++) hwPenalty[e] = graph.eSpd[e] >= 95 ? 3.0 : 1.0;
-    const noHw = astar(graph, s.node, t.node, 'off', edgeFactor, edgeDelay, { penalty: hwPenalty });
+    const noHw = astar(graph, s.node, t.node, 'moderate', edgeFactor, edgeDelay, { penalty: hwPenalty });
     if (noHw && !similar(noHw, fastest) && noHw.distance <= fastest.distance * 1.6) {
       options.push({ mode: 'no_highways', label: 'No highways', route: noHw });
     }
@@ -877,6 +885,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     o.coords = simplify(o.route.coords);
     o.cameras = o.route.cameras;
     o.cameraPoints = cameraClusterPositions(graph, o.route);
+    o.highwayKm = o.route.highwayKm || 0;
     o.distance = o.route.distance;
     o.duration = o.route.duration;
     o.delay = o.route.delay || 0;
