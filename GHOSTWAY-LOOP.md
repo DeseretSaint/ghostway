@@ -161,10 +161,9 @@ block on these — it queues and moves on.
 - [ ] Donation setup: BTC/Lightning + Monero addresses needed to fill
       src/config.js placeholders (decided: crypto-primary, Ko-fi optional).
 - [ ] Real-drive ETA ground truth: Keaton's actual PG→Costco drive time.
-- [ ] GitHub auth — token INVALID AGAIN as of 2026-08-26 19:20 MST (was fixed
-      round 28 at 18:56). Round-29 commit (local HEAD, "data-freshness (round
-      29)") is STRANDED locally (safe, not lost). Next run with valid auth:
-      `git push origin main` + watch deploy + curl live site 200.
+- [x] GitHub auth — RESOLVED 2026-08-26 (round 30): token valid again; pushed
+      stranded round-29 commit (3fbfdc1..63d78bf), deploy run 33030124464
+      success, live site HTTP 200.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -178,7 +177,8 @@ block on these — it queues and moves on.
 | 2026-08-26 | camera-avoidance (round 25) | resolved queued "PRIORITY floor violation" as FALSE ALARM (audit stride bug: offA+e vs offA+e*4); promoted corrected audit to scripts/floor-audit.mjs as permanent floor-regression guard; rebuilt graph to confirm determinism | floor-audit PASS on shipped .gz AND fresh rebuild (0 violations, min bucket 30-40 m); rebuild byte-identical (cmp); red test: mutated graph → FAIL exit 1; engine-check/avoidance-audit/smoke PASS; build exit 0 | shipped |
 | 2026-08-26 | coverage/speed (round 26) | finished crashed run's multi-region refactor: region-aware loadGraph/regionCovers/ensureLocalEngine (lazy per-region graph load), fixed stray-return that killed Valhalla fallback, restored boot preload (13 suites depend on it), dropped dead mapCenter config, fixed prepare-roads header, committed ux-lock deletion | build exit 0; engine-check/smoke/engine-e2e/interact-check/report-check/xss-check all PASS, 0 console errors | shipped |
 | 2026-08-26 | ops (round 28) | unblocked shipping: gh auth valid again → pushed stranded round-26 commit (4a40564..a949827); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (another session's in-flight work, mtimes 18:38-18:42) | push exit 0; deploy run 33028465289 success; curl https://deseretsaint.github.io/ghostway/ → HTTP 200 in 1.78s, correct title | shipped |
-| 2026-08-26 | data-freshness (round 29) | monthly graph-rebuild CI (graph-refresh.yml, 2nd of month, gated on floor-audit + engine-check) + shipped graph rebuilt from fresh Aug 25 OSM + Aug 26 DeFlock (was Aug 15) | pipeline proven locally: rebuild 1.8s/552,448 edges; floor-audit PASS (0 <31.4 m); engine-check/avoidance-audit/smoke/engine-e2e PASS, 0 console errors | committed, push STRANDED (gh token invalid again — Needs Keaton) |
+| 2026-08-26 | data-freshness (round 29) | monthly graph-rebuild CI (graph-refresh.yml, 2nd of month, gated on floor-audit + engine-check) + shipped graph rebuilt from fresh Aug 25 OSM + Aug 26 DeFlock (was Aug 15) | pipeline proven locally: rebuild 1.8s/552,448 edges; floor-audit PASS (0 <31.4 m); engine-check/avoidance-audit/smoke/engine-e2e PASS, 0 console errors | shipped (round 30) |
+| 2026-08-26 | ops (round 30) | unblocked round-29: gh auth valid → pushed stranded commit (3fbfdc1..63d78bf); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes 18:38-18:42, <24 h — still in grace window) | push exit 0; deploy run 33030124464 success; curl live site → HTTP 200 in 2.37s, correct title | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
