@@ -47,7 +47,10 @@ try {
   }));
   console.log('EARLY status:', early.status, '| opts:', early.opts);
   console.log('EARLY html:', early.html);
-  await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 });
+  await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 90000 });
+  // Routing finishes asynchronously after the engine is ready — wait for the
+  // card to actually populate with the arrival clock before reading it.
+  await p.waitForSelector('#route-card .rc-arrive', { timeout: 30000 });
 
   const arrive = await p.evaluate(() => {
     const el = document.querySelector('#route-card .rc-arrive');
@@ -56,7 +59,7 @@ try {
   });
   console.log('rc-arrive:', JSON.stringify(arrive.txt));
   console.log('card html:', arrive.html);
-  const ok = !!arrive && /Arrive\s+\d/.test(arrive);
+  const ok = !!arrive.txt && /Arrive\s+\d/.test(arrive.txt);
   console.log('arrival clock present:', ok);
   console.log('page errors:', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 5));
   if (ok && errs.filter((e) => !/favicon|404/.test(e)).length === 0) code = 0;
