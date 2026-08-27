@@ -168,10 +168,9 @@ block on these — it queues and moves on.
 - [x] GitHub auth — RESOLVED 2026-08-26 (round 30): token valid again; pushed
       stranded round-29 commit (3fbfdc1..63d78bf), deploy run 33030124464
       success, live site HTTP 200.
-- [ ] GitHub auth AGAIN (2026-08-26 ~19:40 MST): gh token invalid ("The token
-      in default is invalid"; no GH_TOKEN env, no keychain entry). Round-31
-      commit c94bf49 is stranded locally. Next run with valid auth: `git push
-      origin main`, watch deploy, curl live site.
+- [x] GitHub auth AGAIN (2026-08-26 ~19:40 MST): RESOLVED 2026-08-27 (round 32):
+      token valid again (keyring); pushed d8f4173..f078910, deploy run
+      33031062944 success, live site HTTP 200 in 0.58s, correct title.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -188,6 +187,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | data-freshness (round 29) | monthly graph-rebuild CI (graph-refresh.yml, 2nd of month, gated on floor-audit + engine-check) + shipped graph rebuilt from fresh Aug 25 OSM + Aug 26 DeFlock (was Aug 15) | pipeline proven locally: rebuild 1.8s/552,448 edges; floor-audit PASS (0 <31.4 m); engine-check/avoidance-audit/smoke/engine-e2e PASS, 0 console errors | shipped (round 30) |
 | 2026-08-26 | ops (round 30) | unblocked round-29: gh auth valid → pushed stranded commit (3fbfdc1..63d78bf); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes 18:38-18:42, <24 h — still in grace window) | push exit 0; deploy run 33030124464 success; curl live site → HTTP 200 in 2.37s, correct title | shipped |
 | 2026-08-26 | route-geometry (round 31) | closed queued "route-line anti-cut" item: new scripts/geometry-audit.mjs — permanent guard proving the drawn line never leaves road geometry (DP invariant: every raw route point ≤3 m from simplified polyline, endpoints kept) across 5 corridors × modes incl. I-15 + canyon curves | audit PASS: 9/9 routes, worst deviation 2.99 m ≤ 3 m tol, 18-43% points kept; red test PASS (tol=100 m cut → 67.5 m flagged); build exit 0; engine-check PASS | committed c94bf49 — PUSH BLOCKED (gh token invalid again; see Needs Keaton) |
+| 2026-08-27 | ops (round 32) | unblocked round-31: gh auth valid again (keyring) → pushed stranded commits c94bf49+f078910 (d8f4173..f078910); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes now ~1 h old — still in <24 h grace window) | push exit 0; deploy run 33031062944 success; curl live site → HTTP 200 in 0.58s, correct title | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
