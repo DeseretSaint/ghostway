@@ -185,17 +185,12 @@ from this queue first when it's non-empty.
       fine); camera-refresh.yml next fires Sep 1 13:40 UTC. Still only
       refreshes public/cameras/cameras.geojson, not graph cam bytes (see
       existing queue item re: monthly rebuild CI hook).
-- [ ] Ops (found 2026-08-26 18:45 MST): working tree holds an UNCOMMITTED
-      coherent changeset not authored by this loop: boot preloadEngine()
-      removed → fully lazy ensureLocalEngine() on all 3 route paths; neutral
-      CONFIG.mapCenter (CONUS z4) default view in map-view.js; 13 suites
-      ported from waiting __ghostwayEngine==='ready' to __gw boot wait
-      (engine-e2e now asserts engine-ready AFTER routing); drawer credits
-      WZDx. File mtimes 18:38-18:42, stable on re-check = another session's
-      in-flight refactor. DO NOT commit/revert/edit these 16 files until the
-      owner commits or abandons. If still uncommitted + stale (>24 h, mtimes
-      unchanged), a future run may verify (build + suites) and land it as its
-      own round, crediting it as the lazy-engine/neutral-view round.
+- [x] Ops (found 2026-08-26 18:45 MST): 16-file lazy-engine changeset —
+      RESOLVED 2026-08-27 02:05 MDT (slot-A round 48): evaluated full diff,
+      verified (build exit 0; engine-check + snap-dist-check + engine-e2e PASS,
+      lazy path proven — engine 'ready' only AFTER routing), committed 03e9224,
+      PUSHED, deploy 33052069113 success. Re-verified 2026-08-27 (slot-A):
+      working tree clean, 03e9224 on origin/main. TASK COMPLETE — DO NOT RE-DO.
 - [x] ETA AF→Park City route-choice "8 km detour" theory — DISPROVEN 2026-08-26
       (round 36, instrumented). Directed exact-cost Dijkstra over the shipped
       graph (same effFactor+junctionPenalty+nodeDeg as router.js, directed arcs)
@@ -338,20 +333,17 @@ from this queue first when it's non-empty.
 - [ ] ROUTING AXIS decoy: community-report → routing IS already implemented
       (src/router.js planRoutes communityCams → merged eCam, R=100 m, same
       weighting as builder). Verified present in working tree. No further work.
-- [ ] Ops (found 2026-08-26 22:03 MST, round 38): src/router.js holds a SECOND
-      uncommitted changeset (distinct from the 16-file lazy-engine set): a
-      nearestNode() fix — returned `dist` was sqrt(score) with the low-degree
-      penalty folded in (corrupts planRoutes' >1200 m snap guard); now returns
-      true metric distance via bestDist. mtime 21:53, paired with NEW
-      scripts/snap-dist-check.mjs (21:53) and a live `vite preview :4173`
-      started 21:58 (holder presumably mid-verify). DO NOT edit/commit/revert
-      router.js until the owner lands it; same grace rule as the 16-file set
-      (>24 h stale + mtime unchanged → future slot-A run may verify+land it,
-      then apply the ow=2 fix on top).
+- [x] Ops (found 2026-08-26 22:03 MST, round 38): router.js nearestNode()
+      true-distance fix — RESOLVED: committed a6e2994 (with snap-dist-check.mjs
+      guard: onRoad 90.0 m / offRoad 334.8 m PASS). ow=2 fix landed on top
+      (8df172d). Both on origin/main; working tree clean. DO NOT RE-DO.
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
 block on these — it queues and moves on.
+- [ ] GitHub auth AGAIN (2026-08-27 ~02:30 MDT, slot-A): gh token invalid
+  ("The token in default is invalid"). Ledger commit 1a79c06 stranded locally
+  (lazy-engine task-complete marking) — push it next run once auth recovers.
 - [ ] Donation setup: BTC/Lightning + Monero addresses needed to fill
       src/config.js placeholders (decided: crypto-primary, Ko-fi optional).
 - [ ] Real-drive ETA ground truth: Keaton's actual PG→Costco drive time.
@@ -420,6 +412,7 @@ block on these — it queues and moves on.
 | 2026-08-27 02:20 MDT | tests (slot-C) | verification sweep over NOW-COMMITTED tree (lazy-engine 03e9224 + new hermetic arrival-clock guard 94e45a3) — NO code changed, verify only. All invariants HOLD on committed code. floor-audit 0 strict-legal edges <31.4 m (630 bbox cams); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); arrival-check PASS (.rc-arrive "Arrive 2:16 AM" renders, 0 page errors — new hermetic guard works); engine-e2e PASS against a live preview — app boots (__gw), engine reaches 'ready' only AFTER routing (lazy path proven), strict options + best-effort badge + sticky startNav CTA + nav banner/voice all present, ERRORS []. NOTE: engine-e2e.mjs is still NON-HERMETIC (raw goto :4173, ERR_CONNECTION_REFUSED standalone) — already-filed QA gap (queue: 14 suites); NOT a regression, passed once a preview was up. Did NOT port it (verify-only slot). | floor-audit/engine-check/arrival-check/engine-e2e all PASS (build exit 0) | verified — committed tree healthy; non-hermetic e2e is known infra gap, no action without owner |
 
 | 2026-08-27 | ux (slot-B round 49) | arrival clock (.rc-arrive / fmtArrive) ALREADY shipped (03e9224, slot-A lazy-engine set) — re-derived it this run, confirmed present + renders ("Arrive 2:12 AM" on a 9-min PG→Lehi route); added hermetic scripts/arrival-check.mjs (spawns own preview, asserts .rc-arrive) — PASS, 0 console errors, build exit 0. No new product code (working tree == HEAD for src/) | arrival-check PASS: rc-arrive "Arrive 2:12 AM", opts≥2, engine ready, 0 page errors | shipped (test-only, not pushed) |
+| 2026-08-27 ~02:30 MDT | ops (slot-A, special task) | LAZY-ENGINE SPECIAL TASK: already DONE — verified, not re-done. Confirmed working tree CLEAN, 03e9224 (lazy-engine) + a6e2994 (nearestNode) + 8df172d (ow=2) all on origin/main, deploys 33052069113/33052180256/33052587996 all success. Marked both protected-changeset ops queue items RESOLVED so no future run re-evaluates. router.js is now fully UNBLOCKED for slot-A routing work (fix spec v2 walled-vs-budget flag is the next live item). | git status clean; origin/main == 28cf2a2 (03e9224 present); 3 deploys success | verified — task complete, ledger updated |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
