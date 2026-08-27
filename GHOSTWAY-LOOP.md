@@ -116,6 +116,29 @@ from this queue first when it's non-empty.
       lock from a crashed research run; confirmed holder dead (no live procs,
       its queue findings uncommitted in working tree), deleted it, proceeded.
       Rule stands: lock >60 min stale (or holder provably dead) → delete + go.
+- [x] NEXT RUN (crashed-run cleanup, found 2026-08-26 ~17:40 MST) — RESOLVED
+      2026-08-26 (round 26): finished the multi-region/lazy-load refactor the
+      crashed run left uncommitted. Fixed a real regression it introduced:
+      stray `return;` in routeWithFallbacks killed the Valhalla fallback when
+      the local engine failed (HEAD fell through correctly). Restored boot
+      preloadEngine() (13 suites wait for __ghostwayEngine==='ready' at load;
+      lazy-only would break them + first-route latency) while keeping the
+      region-aware loadGraph/regionCovers/ensureLocalEngine architecture for
+      future regions. Dropped dead mapCenter/mapZoom config (nothing read it;
+      boot view = last-known pos else Wasatch default). Fixed prepare-roads.mjs
+      header (output is a gitignored regenerable artifact, not committed).
+      Committed the .ghostway-ux.lock deletion (git hygiene). Verified: build
+      exit 0; engine-check/smoke/engine-e2e/interact-check/report-check/
+      xss-check all PASS, zero console errors.
+- [ ] Privacy audit 2026-08-26 (CLEAN, no action): enumerated every runtime
+      third-party call — openfreemap tiles, DeFlock MVT camera tiles, photon
+      geocoding, brouter/osrm/valhalla routing, UDOT arcgis traffic, OSM notes
+      + overpass (camera reports). All documented open-data sources; zero
+      telemetry; geolocation used locally only. Live site 200 in 0.66s.
+- [ ] Data freshness 2026-08-26: camera snapshot asOf 2026-08-15 (11 days old,
+      fine); camera-refresh.yml next fires Sep 1 13:40 UTC. Still only
+      refreshes public/cameras/cameras.geojson, not graph cam bytes (see
+      existing queue item re: monthly rebuild CI hook).
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -123,6 +146,12 @@ block on these — it queues and moves on.
 - [ ] Donation setup: BTC/Lightning + Monero addresses needed to fill
       src/config.js placeholders (decided: crypto-primary, Ko-fi optional).
 - [ ] Real-drive ETA ground truth: Keaton's actual PG→Costco drive time.
+- [ ] GitHub auth expired (found 2026-08-26 round 26): `gh auth status` →
+      "token in default is invalid"; SSH to github.com → Permission denied
+      (no registered key). Round-26 commit is LOCAL ONLY (unpushed). Fix:
+      `gh auth login -h github.com` (or add an SSH deploy key). NEXT RUN:
+      retry `git push origin main` first thing; if it lands, watch deploy +
+      curl the site, then mark this resolved.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -134,6 +163,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | test-infra (round 23) | shared scripts/lib-preview.mjs (spawn+poll-until-up + process-group kill-tree); pwa/shot/ux-audit/ux-shots/interact all ported off fixed 2.5s sleeps; fixed shot.mjs dead flow (waited for hidden #goBtn → 30s timeout) + ux-shots/shot teardown hang (no process.exit → watchdog exit 2 after "done") | all 5 suites PASS exit 0 (pwa/interact/ux-audit/shot/ux-shots); smoke + engine-e2e PASS; ports clear after — zero orphan vite servers (was leaking 2/run) | shipped |
 | 2026-08-26 | security (round 24) | XSS hardening: escHtml() + escaped 10 innerHTML injection points (street names, camera brand/operator/mount, report brand/note/noteId); new scripts/xss-check.mjs E2E with real dot-click | xss-check red-green: payload executes w/o escape (fired:true) → inert with fix; smoke/interact/report/camchip/compact/engine-check/engine-e2e PASS, 0 console errors | shipped |
 | 2026-08-26 | camera-avoidance (round 25) | resolved queued "PRIORITY floor violation" as FALSE ALARM (audit stride bug: offA+e vs offA+e*4); promoted corrected audit to scripts/floor-audit.mjs as permanent floor-regression guard; rebuilt graph to confirm determinism | floor-audit PASS on shipped .gz AND fresh rebuild (0 violations, min bucket 30-40 m); rebuild byte-identical (cmp); red test: mutated graph → FAIL exit 1; engine-check/avoidance-audit/smoke PASS; build exit 0 | shipped |
+| 2026-08-26 | coverage/speed (round 26) | finished crashed run's multi-region refactor: region-aware loadGraph/regionCovers/ensureLocalEngine (lazy per-region graph load), fixed stray-return that killed Valhalla fallback, restored boot preload (13 suites depend on it), dropped dead mapCenter config, fixed prepare-roads header, committed ux-lock deletion | build exit 0; engine-check/smoke/engine-e2e/interact-check/report-check/xss-check all PASS, 0 console errors | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).

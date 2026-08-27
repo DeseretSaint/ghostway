@@ -60,10 +60,25 @@ export const CONFIG = {
     ],
   },
 
-  // --- Routing engine coverage: Ghostway's own graph ships the Wasatch Front.
-  //     Outside this box (or if the graph fails to load) we fall back to
-  //     BRouter/OSRM with camera re-routing.
-  engineRegion: 'wasatch-front',
+  // --- Local routing graphs: prebuilt road graphs, one per coverage region ---
+  //     (currently only the Wasatch Front ships). The graph loads at boot via
+  //     preloadEngine(); when multiple regions ship, routing will lazy-load the
+  //     region a route enters (see loadGraph/regionCovers in src/router.js) so
+  //     users elsewhere never download a graph they won't use. Outside every
+  //     shipped region we fall back to the key-free national Valhalla engine,
+  //     then BRouter/OSRM.
+  //
+  //     Each entry: { id, bbox:[w,s,e,n], url }. Add more regions by shipping a
+  //     graph build + one entry here; no other code change needed. bbox MUST
+  //     match the builder's BBOX (engine/build-graph.mjs) — engineCovers()
+  //     decides coverage from this box before the graph is loaded.
+  engineRegions: [
+    {
+      id: 'wasatch-front',
+      bbox: [-112.12, 39.95, -111.33, 40.86], // [w, s, e, n]
+      url: 'graph/wasatch-graph.bin.gz',
+    },
+  ],
 
   github: 'https://github.com/DeseretSaint/ghostway',
   about: {

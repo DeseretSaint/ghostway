@@ -11,20 +11,51 @@
 // planRoutes() always returns up to 3 options (Clearest / Balanced / Fastest)
 // with per-option ETA and camera count so the user picks BEFORE driving.
 
-const GRAPH_URL = 'graph/wasatch-graph.bin.gz';
+import { CONFIG } from './config.js';
+
+// Region-aware graph loading. Ghostway may ship several prebuilt road graphs
+// (one per coverage region, see CONFIG.engineRegions). A graph is fetched
+// LAZILY — only when a route actually enters that region's coverage box — so a
+// user in, say, Denver never downloads the ~6 MB Wasatch graph they won't use.
+// Outside every shipped region we fall back to the key-free national Valhalla
+// engine (see valhalla.js), then BRouter/OSRM.
 
 let graph = null;
+let loadedRegionId = null;
 let loadPromise = null;
 
 export function graphStatus() {
   return graph ? 'ready' : loadPromise ? 'loading' : 'idle';
 }
 
-export async function loadGraph(onProgress) {
-  if (graph) return graph;
+export function loadedRegion() {
+  return loadedRegionId;
+}
+
+function inBox(lon, lat, [w, s, e, n]) {
+  return lon >= w && lon <= e && lat >= s && lat <= n;
+}
+
+// True when a coordinate falls inside any shipped graph's coverage box.
+// Does NOT require the graph to be downloaded — used to decide whether to use
+// the local engine at all (vs Valhalla), and to trigger a lazy load.
+export function regionCovers(lon, lat) {
+  return CONFIG.engineRegions.some((r) => inBox(lon, lat, r.bbox));
+}
+
+function regionFor(lon, lat) {
+  return CONFIG.engineRegions.find((r) => inBox(lon, lat, r.bbox)) || null;
+}
+
+// Load the graph for the region covering (lon,lat) — or pass a region object
+// directly. Caches the promise/result; one region loads per session.
+export async function loadGraph(lon, lat, onProgress) {
+  const region = (lon && typeof lon === 'object' ? lon : regionFor(lon, lat)) || CONFIG.engineRegions[0];
+  if (!region) throw new Error('no engine region configured');
+  if (graph && loadedRegionId === region.id) return graph;
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
-    const res = await fetch(GRAPH_URL);
+    const res = await fetch(region.url);
     if (!res.ok) throw new Error(`graph fetch ${res.status}`);
     const buf = await res.arrayBuffer();
     // Some hosts (GitHub Pages, vite preview) serve .gz with Content-Encoding:
@@ -41,6 +72,7 @@ export async function loadGraph(onProgress) {
     }
     onProgress && onProgress('parse');
     graph = parseGraph(raw);
+    loadedRegionId = region.id;
     return graph;
   })();
   loadPromise.catch(() => (loadPromise = null));

@@ -4,7 +4,7 @@ import { MapView } from './map-view.js';
 import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
-import { planRoutes, loadGraph, inGraphRegion, graphStatus } from './router.js';
+import { planRoutes, loadGraph, regionCovers, graphStatus } from './router.js';
 import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
 import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
@@ -47,6 +47,11 @@ async function init() {
   wireApp();
   await app.map.ready();
   window.__gw = app; // test/diagnostic hook
+
+  // Open on the user's last-known position if we have one (feels personal);
+  // otherwise the map keeps its default Wasatch view (the shipped region).
+  const boot = cachedLoc();
+  if (boot) app.map.map.jumpTo({ center: boot, zoom: 12 });
 
   // Splash: hide once tiles are actually on screen (or 4s max), fade out.
   {
@@ -134,35 +139,78 @@ async function init() {
   applyModeUI();
 }
 
-// Load Ghostway's own routing graph in the background (~6 MB gz).
+// Load the default region's road graph in the background (~6 MB gz) so the
+// engine is ready as soon as the app boots — first-route latency and the
+// e2e suites both depend on `window.__ghostwayEngine === 'ready'`. With one
+// shipped region this is always the right graph; once multiple regions ship,
+// gate this on the user's (cached) location and let ensureLocalEngine lazy-load
+// the rest.
 async function preloadEngine() {
   try {
-    await loadGraph();
+    const g = await loadGraph();
     app._engineReady = true;
     window.__ghostwayEngine = 'ready';
+    // Live traffic for the loaded region (UDOT for Wasatch). Fails silently →
+    // free-flow routing.
+    try {
+      const traffic = await loadTraffic(g.bbox);
+      app.traffic = traffic;
+      if (traffic.ok && traffic.events.length) {
+        app.map.setIncidents(traffic.events);
+        enginePill(`${icon('shield', { size: 13 })} Engine ready · ${icon('warning', { size: 13 })} ${traffic.events.length} live traffic events`);
+      } else {
+        enginePill(`${icon('shield', { size: 13 })} Local camera-aware engine ready`);
+      }
+      window.__ghostwayTraffic = traffic.ok ? traffic.events.length : 'failed';
+    } catch (e) {
+      console.warn('traffic load failed', e);
+      window.__ghostwayTraffic = 'failed';
+    }
   } catch (e) {
     console.warn('engine load failed', e);
     app._engineReady = false;
     window.__ghostwayEngine = 'failed';
-    return;
   }
-  // Live traffic: fetch UDOT events for the graph bbox, then show them on the
-  // map. Fails silently -> free-flow routing (Workstream B degrade path).
-  try {
-    const g = await loadGraph();
-    const traffic = await loadTraffic(g.bbox);
-    app.traffic = traffic;
-    if (traffic.ok && traffic.events.length) {
-      app.map.setIncidents(traffic.events);
-      enginePill(`${icon('shield', { size: 13 })} Engine ready · ${icon('warning', { size: 13 })} ${traffic.events.length} live traffic events`);
-    } else {
-      enginePill(`${icon('shield', { size: 13 })} Local camera-aware engine ready`);
+}
+
+// Lazily fetch the on-device road graph for the region a route enters — so a
+// user outside every shipped region never downloads a graph they won't use.
+// Called from the routing path; caches its promise so repeated calls are cheap.
+let _localEngineLoading = null;
+async function ensureLocalEngine(fromC, toC) {
+  if (app._engineReady) return true;
+  if (_localEngineLoading) return _localEngineLoading;
+  _localEngineLoading = (async () => {
+    try {
+      const g = await loadGraph(fromC[0], fromC[1]);
+      app._engineReady = true;
+      window.__ghostwayEngine = 'ready';
+      // Live traffic for the loaded region (UDOT for Wasatch, WZDx elsewhere).
+      // Skip if the boot preload already fetched it (avoids a double fetch
+      // when a route fires while preload is still in flight).
+      if (!app.traffic) try {
+        const traffic = await loadTraffic(g.bbox);
+        app.traffic = traffic;
+        if (traffic.ok && traffic.events.length) {
+          app.map.setIncidents(traffic.events);
+          enginePill(`${icon('shield', { size: 13 })} Local engine ready · ${icon('warning', { size: 13 })} ${traffic.events.length} live traffic events`);
+        } else {
+          enginePill(`${icon('shield', { size: 13 })} Local camera-aware engine ready`);
+        }
+        window.__ghostwayTraffic = traffic.ok ? traffic.events.length : 'failed';
+      } catch (e) {
+        console.warn('traffic load failed', e);
+        window.__ghostwayTraffic = 'failed';
+      }
+      return true;
+    } catch (e) {
+      console.warn('local engine load failed', e);
+      app._engineReady = false;
+      window.__ghostwayEngine = 'failed';
+      return false;
     }
-    window.__ghostwayTraffic = traffic.ok ? traffic.events.length : 'failed';
-  } catch (e) {
-    console.warn('traffic load failed', e);
-    window.__ghostwayTraffic = 'failed';
-  }
+  })();
+  return _localEngineLoading;
 }
 
 function enginePill(msg) {
@@ -360,7 +408,11 @@ function maybeAutoRoute() {
 }
 
 function engineCovers(fromC, toC) {
-  return app._engineReady && inGraphRegion(fromC[0], fromC[1]) && inGraphRegion(toC[0], toC[1]);
+  // Local engine is available for a corridor once it's loaded, OR (cheaper) we
+  // can decide up-front using the configured coverage box — no download needed
+  // to know *whether* the on-device graph would apply. The actual graph bytes
+  // load lazily inside routeWithFallbacks before we call planRoutes().
+  return regionCovers(fromC[0], fromC[1]) && regionCovers(toC[0], toC[1]);
 }
 
 // Community-reported cameras feed the local routing engine immediately.
@@ -434,24 +486,29 @@ function setGoLoading(on) {
 async function routeWithFallbacks(from, to) {
   // --- Ghostway's own camera-aware engine (in coverage) ---
   if (engineCovers(from.coords, to.coords)) {
-    try {
-      const t0 = performance.now();
-      const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams(), avoidHighways: app.state.avoidHighways });
-      const ms = Math.round(performance.now() - t0);
-      app.state.options = options;
-      // Default pick: closest to the user's mode preference.
-      const chosen = pickOptionForMode(options);
-      app.state.chosen = chosen;
-      app.state.route = { engine: true, options, chosen };
-      drawEngineRoutes();
-      renderRouteCard(app, app.state.route);
-      clearStatus();
-      enginePill(`${icon('shield', { size: 13 })} Local engine · ${ms} ms · ${options.length} option${options.length > 1 ? 's' : ''}`);
-      window.__ghostwayDebug = { routed: true, engine: true, options: options.length, ms };
-      return;
-    } catch (e) {
-      console.warn('engine route failed, falling back', e);
+    // Lazy-load the on-device graph for this region (no-op if already loaded).
+    const ok = await ensureLocalEngine(from.coords, to.coords);
+    if (ok) {
+      try {
+        const t0 = performance.now();
+        const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams(), avoidHighways: app.state.avoidHighways });
+        const ms = Math.round(performance.now() - t0);
+        app.state.options = options;
+        // Default pick: closest to the user's mode preference.
+        const chosen = pickOptionForMode(options);
+        app.state.chosen = chosen;
+        app.state.route = { engine: true, options, chosen };
+        drawEngineRoutes();
+        renderRouteCard(app, app.state.route);
+        clearStatus();
+        enginePill(`${icon('shield', { size: 13 })} Local engine · ${ms} ms · ${options.length} option${options.length > 1 ? 's' : ''}`);
+        window.__ghostwayDebug = { routed: true, engine: true, options: options.length, ms };
+        return;
+      } catch (e) {
+        console.warn('engine route failed, falling back', e);
+      }
     }
+    // Engine unavailable or failed → fall through to Valhalla below.
   }
 
   // --- Valhalla fallback: national coverage + camera avoidance via
@@ -509,12 +566,22 @@ async function reRouteViaWaypoint() {
     let opt1, opt2, source;
     const local = engineCovers(from.coords, via) && engineCovers(via, to.coords);
     if (local) {
-      source = 'local';
-      const cc = communityCams();
-      const r1 = await planRoutes(from.coords, via, { traffic: app.traffic || null, communityCams: cc, avoidHighways: app.state.avoidHighways });
-      const r2 = await planRoutes(via, to.coords, { traffic: app.traffic || null, communityCams: cc, avoidHighways: app.state.avoidHighways });
-      opt1 = r1.options[pickOptionForMode(r1.options)];
-      opt2 = r2.options[pickOptionForMode(r2.options)];
+      const ok = await ensureLocalEngine(from.coords, via);
+      if (ok) {
+        source = 'local';
+        const cc = communityCams();
+        const r1 = await planRoutes(from.coords, via, { traffic: app.traffic || null, communityCams: cc, avoidHighways: app.state.avoidHighways });
+        const r2 = await planRoutes(via, to.coords, { traffic: app.traffic || null, communityCams: cc, avoidHighways: app.state.avoidHighways });
+        opt1 = r1.options[pickOptionForMode(r1.options)];
+        opt2 = r2.options[pickOptionForMode(r2.options)];
+      } else {
+        source = 'valhalla';
+        const closures = await nationalClosures(from.coords, to.coords);
+        const r1 = await valhallaPlanRoutes(from.coords, via, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
+        const r2 = await valhallaPlanRoutes(via, to.coords, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
+        opt1 = r1.options[pickOptionForMode(r1.options)];
+        opt2 = r2.options[pickOptionForMode(r2.options)];
+      }
     } else {
       source = 'valhalla';
       const closures = await nationalClosures(from.coords, to.coords);
