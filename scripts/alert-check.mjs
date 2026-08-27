@@ -1,12 +1,17 @@
 // Workstream C alerts: over-speed chip turns red; camera-ahead voice warning
 // fires when the chosen route passes a camera and we approach it.
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
 // If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
 
+// Hermetic: spawn our own preview server (poll-until-up) instead of assuming
+// one is already running on :4173 (raw goto false-FAILed ERR_CONNECTION_REFUSED
+// standalone — the non-hermetic class filed in the QA queue).
+const pv = await startPreview();
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 const p = await b.newPage();
@@ -94,4 +99,5 @@ try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
 const pass = camWarn && overWarn;
 console.log(pass ? '\nALERTS PASS ✅ — camera-ahead + over-speed alerts work' : '\nALERTS FAIL ❌');
+pv.kill();
 process.exit(pass ? 0 : 1);

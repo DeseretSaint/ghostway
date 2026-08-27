@@ -2,11 +2,17 @@
 // Fastest option (has cameras) and assert the nav banner's camera chip shows
 // the passed count increasing and an "ahead" flag near a camera.
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
 // If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
+// Hermetic: spawn our own preview server (poll-until-up) instead of assuming
+// one is already running on :4173 (raw goto false-FAILed ERR_CONNECTION_REFUSED
+// standalone — the non-hermetic class filed in the QA queue).
+const pv = await startPreview();
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 const p = await b.newPage();
@@ -78,4 +84,5 @@ try { await Promise.race([b.close(), wait(5000)]); } catch {}
 const sawCountUp = samples.samples.some((s) => /\d/.test(s) && !/^📷 0$/.test(s));
 const pass = samples.camPts > 0 ? sawCountUp : samples.final === '📷 0';
 console.log(pass ? '\nCAM-CHIP PASS ✅ — live camera counter tracks passes' : '\nCAM-CHIP FAIL ❌');
+pv.kill();
 process.exit(pass ? 0 : 1);
