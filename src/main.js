@@ -207,6 +207,7 @@ function wireApp() {
     closeModal();
   });
   $('#modalClose').addEventListener('click', closeModal);
+  document.addEventListener('keydown', trapModalFocus);
 
   $('#gpsBtn').addEventListener('click', useMyLocation);
   $('#recenterBtn').addEventListener('click', () => setFollow(true));
@@ -1270,6 +1271,28 @@ function closeDrawer() {
   setTimeout(done, 260);
 }
 let modalReturnFocus = null;
+// Focus trap: while the modal is open, Tab / Shift+Tab cycle within the
+// dialog's focusable elements instead of escaping to the background page.
+// aria-modal="true" is a hint; without a real trap, keyboard users can still
+// tab out to controls behind the scrim.
+function trapModalFocus(e) {
+  const modal = $('#modal');
+  if (modal.hidden || e.key !== 'Tab') return;
+  const card = document.querySelector('.modal-card');
+  if (!card) return;
+  const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const list = Array.from(card.querySelectorAll(sel)).filter((el) => !el.hidden);
+  if (list.length === 0) { e.preventDefault(); return; }
+  const first = list[0];
+  const last = list[list.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first || !card.contains(document.activeElement)) {
+      e.preventDefault(); last.focus();
+    }
+  } else if (document.activeElement === last || !card.contains(document.activeElement)) {
+    e.preventDefault(); first.focus();
+  }
+}
 function openModal(html) {
   $('#modalBody').innerHTML = html;
   // Dialog semantics: label from the modal's heading so screen readers

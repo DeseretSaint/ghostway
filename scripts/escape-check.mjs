@@ -71,6 +71,22 @@ async function main() {
   });
   out.modalFocus = await page.evaluate(() =>
     !!document.activeElement && document.activeElement.id === 'modalClose');
+  // Focus trap: Tab / Shift+Tab while the modal is open must keep focus
+  // INSIDE the dialog (not escape to background controls behind the scrim).
+  await page.keyboard.press('Tab');
+  await wait(60);
+  out.modalTabTrapped = await page.evaluate(() =>
+    document.querySelector('.modal-card').contains(document.activeElement));
+  await page.keyboard.press('Tab');
+  await wait(60);
+  out.modalTabTrapped2 = await page.evaluate(() =>
+    document.querySelector('.modal-card').contains(document.activeElement));
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('Tab');
+  await page.keyboard.up('Shift');
+  await wait(60);
+  out.modalShiftTabTrapped = await page.evaluate(() =>
+    document.querySelector('.modal-card').contains(document.activeElement));
   await page.keyboard.press('Escape');
   await wait(200);
   out.modalAfterEsc = await hidden('#modal');
@@ -132,6 +148,7 @@ async function main() {
   const pass =
     out.drawerOpened === true && out.drawerAfterEsc === true && out.scrimAfterEsc === true &&
     out.modalOpened === true && out.modalDialog === true && out.modalFocus === true &&
+    out.modalTabTrapped === true && out.modalTabTrapped2 === true && out.modalShiftTabTrapped === true &&
     out.modalAfterEsc === true && out.modalFocusEscaped === true &&
     out.suggShown === true && out.suggAfterEsc === true &&
     out.obShown === true && out.obDialog === true && out.obFocus === true &&
