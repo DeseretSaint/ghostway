@@ -95,6 +95,41 @@ const w2 = await fillPct();
 const e2 = await etaMin();
 console.log('fill at ~90% drive:', w2, '| eta:', e2);
 
+// Round 65: maneuver-approach emphasis — re-scan the route sampling the
+// banner's .approach class; both states must occur (near a turn = urgent,
+// mid-block = normal) and the urgent state must carry the bundled CSS
+// (pulse animation name + warm distance color).
+const appr = await p.evaluate(async () => {
+  const coords = window.__ghostwayNavCoords;
+  const seen = { t: false, f: false, animOk: false, distColor: null };
+  let last = null;
+  const n = coords.length;
+  const step = Math.max(1, Math.floor(n / 120));
+  for (let i = Math.floor(n * 0.05); i < n * 0.95; i += step) {
+    const [lon, lat] = coords[i];
+    let heading = 0;
+    if (last) {
+      const dx = lon - last[0], dy = lat - last[1];
+      if (Math.hypot(dx, dy) > 1e-8) heading = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+    }
+    last = [lon, lat];
+    window.__gps.handlers[0]({ coords: { longitude: lon, latitude: lat, speed: 13, heading } });
+    await new Promise((r) => setTimeout(r, 60));
+    const banner = document.querySelector('#navBanner');
+    if (!banner || banner.hidden) continue;
+    if (banner.classList.contains('approach')) {
+      seen.t = true;
+      const icon = banner.querySelector('.nav-icon');
+      const dist = banner.querySelector('.nav-dist');
+      if (icon && getComputedStyle(icon).animationName === 'approach-pulse') seen.animOk = true;
+      if (dist) seen.distColor = getComputedStyle(dist).color;
+    } else seen.f = true;
+    if (seen.t && seen.f && seen.animOk) break;
+  }
+  return seen;
+});
+console.log('approach scan:', JSON.stringify(appr));
+
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 4));
 try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
@@ -109,7 +144,8 @@ const pass =
   w2 > 60 &&
   e0 !== null &&
   e1 !== null && e1 < e0 &&
-  e2 !== null && e2 < e1;
-console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills + ETA counts down with real progress' : '\nNAV-PROGRESS FAIL ❌');
+  e2 !== null && e2 < e1 &&
+  appr.t && appr.f && appr.animOk && appr.distColor === 'rgb(255, 170, 64)';
+console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills + ETA counts down + approach emphasis fires near turns' : '\nNAV-PROGRESS FAIL ❌');
 pv.kill();
 process.exit(pass ? 0 : 1);

@@ -1363,3 +1363,18 @@ select.rp-input {
 .nav-banner.compact .nav-eta { font-size: 12px; }
 .nav-banner.compact .speed-chip { font-size: 12px; padding: 1px 7px; }
 .nav-banner.compact .cam-chip { font-size: 12px; padding: 1px 7px; }
+
+/* Maneuver-approach emphasis (slot-B round 65): within ~220 m of the next
+   turn the banner goes urgent — warm distance number + softly pulsing
+   maneuver icon (the global reduced-motion rule disables the pulse). */
+.nav-banner.approach .nav-dist { color: var(--accent-2); }
+.nav-banner.approach .nav-icon {
+  color: var(--accent-2);
+  border-color: rgba(255, 170, 64, 0.55);
+  background: rgba(255, 170, 64, 0.14);
+  animation: approach-pulse 1s ease-in-out infinite;
+}
+@keyframes approach-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}

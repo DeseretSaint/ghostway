@@ -1118,6 +1118,20 @@ function updateCountdown(traveled) {
   updateProgress(traveled);
   updateEta(traveled);
   updateCamChip(traveled);
+  updateApproach(traveled);
+}
+
+// Visual maneuver-proximity emphasis (Maps parity): within ~220 m of the next
+// maneuver — the same threshold as the voice callout — the banner switches to
+// an urgent state so the upcoming turn is unmissable at a glance.
+function updateApproach(traveled) {
+  const banner = $('#navBanner');
+  const steps = app._navSteps || [];
+  if (!banner || !steps.length) return;
+  const idx = Math.min(app.state.stepIndex, steps.length - 1);
+  const next = steps[idx + 1];
+  const d = next ? next.startS - traveled : (app._routeTotal || 0) - traveled;
+  banner.classList.toggle('approach', d <= 220);
 }
 
 // Keep the banner ETA live: renderNavStep only re-runs on step changes, so a
@@ -1234,6 +1248,7 @@ function renderNavStep() {
   // Initialize the camera chip + progress bar from the real progress, not a hardcoded 0.
   updateCamChip(traveled);
   updateProgress(traveled);
+  updateApproach(traveled);
 }
 
 function lower(s) {
