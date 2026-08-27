@@ -2,11 +2,14 @@
 // active must surface UTAH Costcos nearest first — not Palm Desert/Bismarck/
 // Tulsa like the field report showed.
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
 // If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
+const pv = await startPreview();
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 const p = await b.newPage();
@@ -43,6 +46,7 @@ console.log('suggestions for "Costco":');
 results.slice(0, 6).forEach((r) => console.log('  ' + r));
 
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 3));
+pv.kill();
 try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
 const utahish = /Utah|, UT|Lehi|Orem|Saratoga|Provo|American Fork|Pleasant Grove|Sandy|Riverton|Draper/i;

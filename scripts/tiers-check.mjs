@@ -2,11 +2,14 @@
 // graph; outside-coverage corridor (Denver→Boulder) must fall through to
 // Valhalla and still show route options + camera counts.
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
 // If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
+const pv = await startPreview();
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 const p = await b.newPage();
@@ -54,6 +57,7 @@ console.log('OUTSIDE coverage:', JSON.stringify({ engine: outside.dbg.engine, ms
 console.log('outside card:', outside.card);
 
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 4));
+pv.kill();
 try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
 // Outside coverage must produce a routed result. Valhalla is the preferred
