@@ -210,6 +210,13 @@ function renderEngineCard(app, card, result) {
         o.cameras === 0
           ? `<span class="opt-cams clear">0 cameras</span>`
           : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
+      // Mission-visible callout: a fully camera-free route gets a prominent
+      // green shield badge so the privacy win is obvious at a glance (Maps-parity
+      // "eco" style badge, but for surveillance avoidance).
+      const clearBadge =
+        o.cameras === 0
+          ? `<span class="opt-clear-badge">${icon('shieldCheck', { size: 14 })} Camera-free route</span>`
+          : '';
       const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
       // Strict safety floor couldn't find a fully clear path — be honest about
       // WHY. Gate-snapped routes are clear to within a short, stated distance.
@@ -227,6 +234,7 @@ function renderEngineCard(app, card, result) {
       return `
         <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
+          ${clearBadge}
           <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}${bestEffort}${overBudget}</span>
         </button>`;
     })

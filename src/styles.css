@@ -901,6 +901,26 @@ details summary {
   color: var(--accent);
   font-weight: 600;
 }
+/* Prominent camera-free callout on route options (mission-visible). */
+.opt-clear-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 0 1px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(58, 214, 197, 0.14);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+}
+.opt-clear-badge .ic {
+  color: var(--accent);
+  flex: none;
+}
 .opt-delay {
   color: var(--accent-2);
   font-weight: 600;
