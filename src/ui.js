@@ -43,11 +43,18 @@ export function buildPanel(app) {
     }
     const near = app.state.userLoc || (app.map ? app.map.getCenter() : null);
     const places = await searchPlaces(q, 6, near).catch(() => []);
+    box.innerHTML = '';
     if (!places.length) {
-      box.hidden = true;
+      // Maps-parity empty state: tell the user the query matched nothing
+      // instead of silently vanishing the panel.
+      const empty = el('div', { class: 'sugg-empty', role: 'status' }, [
+        el('span', { class: 'sugg-name', text: 'No results' }),
+        el('span', { class: 'sugg-sub', text: `Nothing matches “${q}”. Try a different name or address.` }),
+      ]);
+      box.appendChild(empty);
+      box.hidden = false;
       return;
     }
-    box.innerHTML = '';
     places.forEach((p) => {
       const row = el('button', { class: 'sugg', type: 'button' }, [
         el('span', { class: 'sugg-name', text: p.name }),

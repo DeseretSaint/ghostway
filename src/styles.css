@@ -345,6 +345,14 @@ body {
   font-size: 12px;
   color: var(--muted);
 }
+/* Maps-parity "no results" empty state — non-interactive, full contrast. */
+.sugg-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
 
 .route-actions {
   display: flex;
