@@ -188,42 +188,54 @@ export function inGraphRegion(lon, lat) {
   return lon >= w && lon <= e && lat >= s && lat <= n;
 }
 
-export function nearestNode(lon, lat) {
+// Weighted snapping (field report #8 — airport centroid snapped to a
+// dead-end stub and the route looped): prefer well-connected through-road
+// nodes over degree-1/2 stubs even when the stub is marginally closer. A
+// 400 m penalty on low-degree nodes lets a real intersection/arterial node
+// within ~400 m win over a dead end. Selection uses distance + low-degree
+// penalty so a real arterial node wins over a closer dead-end stub; the
+// caller-facing `dist` is the TRUE snapping distance (meters), never the
+// score — folding the penalty into it corrupts every downstream snap check
+// (e.g. planRoutes' >1200 m guard).
+//
+// nearestCandidates returns the snap candidates of the first non-empty grid
+// ring (minCandidates>1 keeps scanning rings until enough are collected),
+// sorted by snap score. nearestNode is its first entry — byte-for-byte the
+// historical behaviour. Gate-snap uses the extra candidates: a geocoded
+// point can land on the wrong side of the camera wall while a sibling node
+// a few hundred metres away has a short clear tail.
+export function nearestCandidates(lon, lat, minCandidates = 1) {
   const g = graph;
   const CELL = g.CELL;
   const gx = Math.floor(lon / CELL);
   const gy = Math.floor(lat / CELL);
-  let best = -1, bestScore = Infinity, bestDist = Infinity;
-  for (let ring = 0; ring < 8 && best === -1; ring++) {
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  const out = [];
+  for (let ring = 0; ring < 8; ring++) {
     for (let dx = -ring; dx <= ring; dx++) {
       for (let dy = -ring; dy <= ring; dy++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
         const arr = g.grid.get((gx + dx) + ',' + (gy + dy));
         if (!arr) continue;
         for (const n of arr) {
-          const dLon = (g.nodeLon[n] / 1e6 - lon) * 111320 * Math.cos((lat * Math.PI) / 180);
+          const dLon = (g.nodeLon[n] / 1e6 - lon) * 111320 * cosLat;
           const dLat = (g.nodeLat[n] / 1e6 - lat) * 111320;
           const d = Math.sqrt(dLon * dLon + dLat * dLat);
-          // Weighted snapping (field report #8 — airport centroid snapped to a
-          // dead-end stub and the route looped): prefer well-connected
-          // through-road nodes over degree-1/2 stubs even when the stub is
-          // marginally closer. A 400 m penalty on low-degree nodes lets a real
-          // intersection/arterial node within ~400 m win over a dead end.
           const deg = g.nodeDeg[n];
           const penalty = deg >= 3 ? 0 : deg === 2 ? 120 : 400;
-          const score = d + penalty;
-          // Selection uses distance + low-degree penalty so a real arterial
-          // node wins over a closer dead-end stub. But the caller-facing
-          // `dist` must be the TRUE snapping distance (meters), never the
-          // score — folding the penalty into it (and sqrt-ing metres) corrupts
-          // every downstream snap check (e.g. planRoutes' >1200 m guard).
-          if (score < bestScore) { bestScore = score; best = n; bestDist = d; }
+          out.push({ node: n, dist: d, score: d + penalty });
         }
       }
     }
-    if (best !== -1) break;
+    if (out.length >= minCandidates) break;
   }
-  return { node: best, dist: bestScore === Infinity ? Infinity : bestDist };
+  out.sort((a, b) => a.score - b.score);
+  return out;
+}
+
+export function nearestNode(lon, lat) {
+  const c = nearestCandidates(lon, lat);
+  return c.length ? { node: c[0].node, dist: c[0].dist } : { node: -1, dist: Infinity };
 }
 
 // ---- Cost modes ----
@@ -570,12 +582,15 @@ function maneuverText(t) {
 
 // Camera-walled destinations: find the "gate" where the clear network ends on
 // the approach to the destination, and the driving distance of the exposed
-// tail beyond it. (1) Forward BFS from the origin over floor-legal edges (the
-// first road may sit beside a camera — mirrors astar's start exemption) marks
-// the clear set. (2) Reverse Dijkstra from the destination over ALL edges,
-// popping in increasing u→t distance; the first clear node popped is the gate
-// with the SHORTEST exposed tail. Returns { node, tailM } or null.
-function clearTail(g, sNode, tNode, floor) {
+// tail beyond it. buildClearIndex runs ONCE per origin: (1) forward BFS from
+// the origin over floor-legal edges (the first road may sit beside a camera —
+// mirrors astar's start exemption) marks the clear set; (2) reverse adjacency
+// (one O(E) pass). clearTailTo then runs a reverse Dijkstra from ANY
+// destination node over ALL edges, popping in increasing u→t distance; the
+// first clear node popped is the gate with the SHORTEST exposed tail. Returns
+// { node, tailM } or null. The split lets gate-snap probe several snap
+// candidates around a geocoded point without rebuilding the index each time.
+function buildClearIndex(g, sNode, floor) {
   const N = g.nodeCount;
   const clear = new Uint8Array(N);
   const stack = [sNode];
@@ -590,7 +605,6 @@ function clearTail(g, sNode, tNode, floor) {
       stack.push(v);
     }
   }
-  if (clear[tNode]) return null; // not actually walled
 
   // Reverse adjacency (one O(E) pass) so we can relax u→t distances from t.
   const arcCount = g.arcTo.length;
@@ -608,7 +622,13 @@ function clearTail(g, sNode, tNode, floor) {
       revEdge[q] = g.arcEdge[p];
     }
   }
+  return { g, clear, revStart, revFrom, revEdge };
+}
 
+function clearTailTo(idx, tNode) {
+  const { g, clear, revStart, revFrom, revEdge } = idx;
+  if (clear[tNode]) return null; // not actually walled
+  const N = g.nodeCount;
   const dist = new Float64Array(N).fill(Infinity);
   const closed = new Uint8Array(N);
   const heap = new Heap();
@@ -761,7 +781,22 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
       // (2x fastest + 5 min) rather than the clear-to-destination budget; it
       // is only ever offered for a walled destination, where the alternative
       // is a best-effort route that breaks the safety floor.
-      const tail = clearTail(graph, s.node, t.node, HARD_CAM_EXPOSURE);
+      //
+      // Dest-radius search: a geocoded point can snap to a node on the wrong
+      // side of the camera wall (photon's BYU centroid does — tail >200 m)
+      // while a sibling snap candidate a few hundred metres away has a short
+      // clear tail. Probe the primary snap plus up to 4 more candidates and
+      // take the shortest qualifying tail. The clear index is built once.
+      const idx = buildClearIndex(graph, s.node, HARD_CAM_EXPOSURE);
+      let tail = clearTailTo(idx, t.node);
+      let tailExtra = 0; // candidate→dest straight-line, added to the honest badge
+      if (!tail || tail.tailM > 200) {
+        for (const c of nearestCandidates(to[0], to[1], 5)) {
+          if (c.node === t.node || c.dist > 400) continue;
+          const alt = clearTailTo(idx, c.node);
+          if (alt && alt.tailM <= 200 && (!tail || alt.tailM < tail.tailM)) { tail = alt; tailExtra = c.dist; }
+        }
+      }
       if (tail && tail.tailM <= 200 && tail.node !== s.node) {
         const gateBudget = fastest.duration * 2 + 300;
         // Unbounded search, budget checked after: the in-search maxCost prune
@@ -770,7 +805,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
         const gateRoute = astar(graph, s.node, tail.node, 'strict', edgeFactor, edgeDelay, {});
         if (gateRoute && gateRoute.duration <= gateBudget) {
           clearest = gateRoute;
-          clearToM = tail.tailM;
+          clearToM = tail.tailM + tailExtra;
           overBudget = gateRoute.duration > strictBudget;
         }
       }
