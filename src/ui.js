@@ -297,11 +297,15 @@ function renderEngineCard(app, card, result) {
         fastest && o !== fastest && Math.abs(dKm) >= 100
           ? `<span class="opt-tradeoff ${dKm < 0 ? 'shorter' : 'longer'}">${dKm < 0 ? '↓' : '↑'} ${fmtDistance(Math.abs(dKm))} ${dKm < 0 ? 'shorter' : 'longer'} than fastest</span>`
           : '';
+      // Surface freeway exposure so the user understands WHY a route was
+      // picked — e.g. the shortest camera-free option may still use some highway,
+      // or the "Fastest" route burns 6 km of freeway. Only show when meaningful.
+      const hw = o.highwayKm && o.highwayKm >= 0.5 ? ` · ${o.highwayKm.toFixed(1)} km hwy` : '';
       return `
         <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button" aria-pressed="${i === chosen}">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
           ${clearBadge}
-          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}${bestEffort}${overBudget}</span>
+          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${hw}${delay}${bestEffort}${overBudget}</span>
           ${tradeoff}
         </button>`;
     })

@@ -352,6 +352,22 @@ export class MapView {
     this._waypointTapHandlers.push(handler);
   }
 
+  // Tap an alternative route line → select that option (index carried on the
+  // feature's optIndex property, set by drawEngineRoutes in main.js). When
+  // multiple route lines overlap at the tap point, prefer the one that is NOT
+  // already chosen — that's the alternative the user is trying to pick.
+  onRouteLineClick(handler) {
+    if (this._routeLineWired) return;
+    this._routeLineWired = true;
+    this.map.on('click', 'route-line', (e) => {
+      const fs = (e.features || []).filter((f) => f.properties && f.properties.optIndex != null);
+      if (!fs.length) return;
+      const chosen = window.__gw && window.__gw.state ? window.__gw.state.chosen : -1;
+      const alt = fs.find((f) => f.properties.optIndex !== chosen) || fs[0];
+      handler(alt.properties.optIndex);
+    });
+  }
+
   _wireWaypoint() {
     this._wireWaypointLayer();
     if (this._wpGlobalWired) return;
@@ -495,7 +511,20 @@ export class MapView {
     }
     const b = new maplibregl.LngLatBounds();
     coords.forEach((c) => b.extend(c));
-    this.map.fitBounds(b, { padding: withRoute ? 80 : 50, maxZoom: 15, duration: 800 });
+    let padding = withRoute ? 80 : 50;
+    if (withRoute) {
+      // The route card is a bottom sheet (max-height 52vh): with uniform
+      // padding the route — and the draggable waypoint handle at its midpoint —
+      // can land UNDER the panel, unreachable on phone viewports (390×844).
+      // Fit into the visible area ABOVE the panel instead (Google-Maps pattern).
+      const panel = document.getElementById('panel');
+      if (panel && !panel.hidden && panel.offsetHeight > 0) {
+        const ch = this.map.getContainer().clientHeight || 600;
+        const bottom = Math.min(panel.offsetHeight + 40, Math.round(ch * 0.6));
+        padding = { top: 80, right: 50, bottom, left: 50 };
+      }
+    }
+    this.map.fitBounds(b, { padding, maxZoom: 15, duration: 800 });
   }
 
   flyTo(coords, zoom) {

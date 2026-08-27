@@ -131,6 +131,15 @@ async function init() {
     });
   });
 
+  // Tap an alternative route line on the map to select it (Maps-parity: the
+  // card lists options, but on a small screen the colored lines are the quick
+  // picker). A tap on a non-chosen route line switches to that option.
+  app.map.onRouteLineClick((optIndex) => {
+    if (optIndex == null || optIndex === app.state.chosen) return;
+    if (!app.state.options || !app.state.options[optIndex]) return;
+    selectOption(optIndex);
+  });
+
   // Waypoint drag: live-move the handle, re-route on drop (Workstream C).
   app.map.onWaypointDrag((coords, commit) => {
     if (!app.state.route || !app.state.route.engine) return;
@@ -503,22 +512,25 @@ async function nationalClosures(fromC, toC) {
 }
 
 function pickOptionForMode(options) {
-  // Fallback order matters: a moderate (avoid-cameras) user who has no
-  // Balanced option should get FASTEST — never silently the most extreme
-  // Clearest route. That silent strict-fallback was the "forced detour"
-  // complaint: on PG→Costco no Balanced exists, so moderate users were
-  // handed a +38% time weave through side streets.
-  const modeRank = {
-    strict: ['strict', 'moderate', 'off'],
-    moderate: ['moderate', 'off', 'strict'],
-    off: ['off', 'moderate', 'strict'],
-    no_highways: ['no_highways', 'off', 'moderate'],
-  };
-  const pref = modeRank[app.state.mode] || modeRank.moderate;
-  let chosen = options.findIndex((o) => o.mode === pref[0]);
-  if (chosen === -1) chosen = options.findIndex((o) => o.mode === pref[1]);
-  if (chosen === -1) chosen = 0;
-  return chosen;
+  // Smart default for camera-avoidance users: rank options by what the user
+  // actually wants — FEWEST cameras first, then FEWEST freeway kilometers, then
+  // SHORTEST distance. This is the combined objective: "the shortest route that
+  // also avoids cameras and the highway." A single-axis mode (strict/moderate)
+  // can't express that, so we score across all generated options instead of
+  // blindly trusting one mode's route. Off (fastest) users still get Fastest.
+  if (app.state.mode === 'off' || !app.state.avoid) {
+    const f = options.findIndex((o) => o.mode === 'off');
+    return f === -1 ? 0 : f;
+  }
+  let best = -1, bestScore = Infinity;
+  options.forEach((o, i) => {
+    // Weighted lexicographic score: cameras dominate, then highway km, then distance.
+    // Cameras are discrete counts; highwayKm and distance are meters. Normalize
+    // so cameras (×1) outrank any plausible highway/distance delta.
+    const score = o.cameras * 1e7 + (o.highwayKm || 0) * 1000 + o.distance;
+    if (score < bestScore) { bestScore = score; best = i; }
+  });
+  return best === -1 ? 0 : best;
 }
 
 async function onRoute() {
@@ -704,19 +716,25 @@ async function reRouteViaWaypoint() {
 
 function drawEngineRoutes() {
   const { options, chosen } = app.state;
+  // Distinct colors per option so the user can tell the alternatives apart on
+  // the map and pick by sight (not just by the card). Chosen stays Ghostway-teal.
+  const ALT_COLORS = ['#f4a259', '#9b8cff', '#5b6b80', '#e0c341'];
   const feats = [];
+  let altIdx = 0;
   options.forEach((o, i) => {
     if (i === chosen) return;
+    // optIndex lets a tap on the map line select this alternative.
     feats.push({
       type: 'Feature',
-      properties: { color: '#5b6b80' },
+      properties: { color: ALT_COLORS[altIdx % ALT_COLORS.length], optIndex: i },
       geometry: { type: 'LineString', coordinates: o.coords },
     });
+    altIdx++;
   });
   const sel = options[chosen];
   feats.push({
     type: 'Feature',
-    properties: { color: '#3ad6c5' },
+    properties: { color: '#3ad6c5', optIndex: chosen },
     geometry: { type: 'LineString', coordinates: sel.coords },
   });
   app.map.setRoute(feats);
