@@ -203,6 +203,11 @@ from this queue first when it's non-empty.
       lazy path proven — engine 'ready' only AFTER routing), committed 03e9224,
       PUSHED, deploy 33052069113 success. Re-verified 2026-08-27 (slot-A):
       working tree clean, 03e9224 on origin/main. TASK COMPLETE — DO NOT RE-DO.
+      Re-verified AGAIN 2026-08-27 ~04:10 MDT (slot-A, special-priority re-check):
+      premise stale — changeset long committed (03e9224) + on origin/main, tree
+      clean, nothing to evaluate/commit. Side fix: pushed 3 stranded commits
+      (b8875b7..7ac85eb: gate-snap dest-radius 816bcdc, slot-B search empty-state
+      32b6ebf, ledger 7ac85eb) — gh auth had recovered.
 - [x] ETA AF→Park City route-choice "8 km detour" theory — DISPROVEN 2026-08-26
       (round 36, instrumented). Directed exact-cost Dijkstra over the shipped
       graph (same effFactor+junctionPenalty+nodeDeg as router.js, directed arcs)
@@ -425,10 +430,10 @@ from this queue first when it's non-empty.
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
 block on these — it queues and moves on.
-- [ ] GitHub auth AGAIN (2026-08-27 ~04:00 MDT, slot-A round 57): gh token
-  invalid ("The token in default is invalid") + git credential helper fails
-  ("could not read Username"). Commit 816bcdc (gate-snap dest-radius search)
-  stranded locally — push it next run once auth recovers.
+- [x] GitHub auth AGAIN (2026-08-27 ~04:00 MDT, slot-A round 57): RESOLVED
+  2026-08-27 ~04:10 MDT (slot-A special-priority re-check): token valid again;
+  pushed b8875b7..7ac85eb (gate-snap dest-radius 816bcdc + slot-B search
+  empty-state 32b6ebf + ledger 7ac85eb). origin/main verified at 7ac85eb.
 - [ ] GitHub auth AGAIN (2026-08-27 ~02:30 MDT, slot-A): gh token invalid
   ("The token in default is invalid"). Ledger commit 1a79c06 stranded locally
   (lazy-engine task-complete marking) — push it next run once auth recovers.
