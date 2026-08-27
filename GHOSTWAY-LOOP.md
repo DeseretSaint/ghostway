@@ -208,6 +208,14 @@ from this queue first when it's non-empty.
       clean, nothing to evaluate/commit. Side fix: pushed 3 stranded commits
       (b8875b7..7ac85eb: gate-snap dest-radius 816bcdc, slot-B search empty-state
       32b6ebf, ledger 7ac85eb) — gh auth had recovered.
+      Re-verified #34 2026-08-27 ~07:45 MDT (slot-A special-priority re-check):
+      premise still stale — 03e9224 on origin/main, main.js/config.js/map-view.js
+      clean (no diff). Battery re-verified on HEAD (036ad25): build exit 0,
+      engine-check PASS (modes distinct), snap-dist-check PASS (90.0/334.8 m).
+      Side fix: pushed 7 stranded commits (c615e55..036ad25 incl. slot-B
+      route-casing 036ad25 + recent-destinations f7de0f1) — gh auth valid;
+      now 0 ahead/behind. Only uncommitted file: scripts/tiers-check.mjs
+      (slot-C live work, untouched). TASK COMPLETE — DO NOT RE-DO.
 - [x] ETA AF→Park City route-choice "8 km detour" theory — DISPROVEN 2026-08-26
       (round 36, instrumented). Directed exact-cost Dijkstra over the shipped
       graph (same effFactor+junctionPenalty+nodeDeg as router.js, directed arcs)
