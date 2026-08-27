@@ -43,6 +43,7 @@ const P = {
   warning: '<path d="M12 4L2.8 19.5h18.4z"/><path d="M12 10v4.5"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   road: '<path d="M4 19 8 5"/><path d="M20 19 16 5"/><path d="M12 8v2"/><path d="M12 13v2"/><path d="M12 18v1"/>',
+  leaf: '<path d="M5 19c0-8 6-13 14-13 0 8-6 14-14 14z"/><path d="M5 19c4-4 7-7 11-9"/>',
 };
 
 export function icon(name, { size = 20, cls = '' } = {}) {

@@ -54,14 +54,14 @@ try {
       meta: el.querySelector('.opt-meta')?.textContent?.trim() || '',
       tradeoff: el.querySelector('.opt-tradeoff')?.textContent?.trim() || null,
       tradeoffClass: el.querySelector('.opt-tradeoff')?.className || null,
+      natural: el.querySelector('.opt-natural')?.textContent?.trim() || null,
     }));
-    // Ground truth: engine option distances (meters) from app state.
-    // "fastest" = the mode 'off' option (same definition as ui.js).
     const route = window.__gw?.state?.route;
     const dists = route?.engine ? route.options.map((o) => o.distance) : null;
+    const hw = route?.engine ? route.options.map((o) => o.highwayKm || 0) : null;
     let fastestIdx = route?.engine ? route.options.findIndex((o) => o.mode === 'off') : -1;
     if (fastestIdx < 0) fastestIdx = 0;
-    return { rows, dists, fastestIdx, count: opts.length };
+    return { rows, dists, hw, fastestIdx, count: opts.length };
   });
   console.log(JSON.stringify(res, null, 2));
 
@@ -85,6 +85,20 @@ try {
     if (wantShorter && !/shorter/.test(r.tradeoffClass || '')) { ok = false; console.error(`FAIL: opt ${i} shorter class missing`); }
     console.log(`opt ${i} (${r.label}): "${r.tradeoff}" — direction ${isShorter === wantShorter ? 'OK' : 'WRONG'}`);
   });
+  // "Most natural" endorsement (round 85): an option that is SHORTER than the
+  // fastest AND uses no more freeway must show the leaf pill. Find every such
+  // qualifying option from engine ground truth and assert the pill rendered.
+  if (Array.isArray(res.hw)) {
+    for (let i = 0; i < res.count; i++) {
+      if (i === res.fastestIdx) continue;
+      const shorter = res.dists[i] < res.dists[res.fastestIdx];
+      const lessHwy = res.hw[i] <= res.hw[res.fastestIdx] + 0.5;
+      if (shorter && lessHwy) {
+        if (!res.rows[i]?.natural) { ok = false; console.error(`FAIL: opt ${i} (${res.rows[i]?.label}) qualifies as "Most natural" but pill missing`); }
+        else console.log(`opt ${i} (${res.rows[i]?.label}): "Most natural" pill OK`);
+      }
+    }
+  }
   // Option buttons still work after the extra span: click each, assert it
   // becomes the chosen one (aria-pressed) and the card re-renders intact.
   for (let i = 0; i < res.count; i++) {

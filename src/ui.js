@@ -300,6 +300,17 @@ function renderEngineCard(app, card, result) {
       // Surface freeway exposure so the user understands WHY a route was
       // picked — e.g. the shortest camera-free option may still use some highway,
       // or the "Fastest" route burns 6 km of freeway. Only show when meaningful.
+      // "Most natural" endorsement: a route a local would take -- SHORTER than
+      // the fastest option AND no more freeway exposure (fewer/same highway km).
+      // Driver-preference research (rounds 79/80/84): on short urban trips a
+      // shorter surface arterial beats a freeway detour that only saves ~1-2 min.
+      // The generalized-cost engine now produces these; surface the win so the
+      // user can trust the recommended option (Google eco-leaf analog).
+      const natural =
+        fastest && o !== fastest && o.distance < fastest.distance &&
+        (o.highwayKm || 0) <= (fastest.highwayKm || 0) + 0.5
+          ? `<span class="opt-natural" title="Shorter and uses no more freeway than the fastest route -- the way a local would drive">${icon('leaf', { size: 13 })} Most natural</span>`
+          : '';
       const hw = o.highwayKm && o.highwayKm >= 0.5 ? ` · ${o.highwayKm.toFixed(1)} km hwy` : '';
       return `
         <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button" aria-pressed="${i === chosen}">
@@ -307,6 +318,7 @@ function renderEngineCard(app, card, result) {
           ${clearBadge}
           <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${hw}${delay}${bestEffort}${overBudget}</span>
           ${tradeoff}
+          ${natural}
         </button>`;
     })
     .join('');
