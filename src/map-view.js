@@ -103,12 +103,29 @@ export class MapView {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
     });
+    // Drop shadow under the whole route (depth on light/satellite basemaps).
     this.map.addLayer({
-      id: 'route-glow',
+      id: 'route-shadow',
       type: 'line',
       source: 'route',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#0a2a3a', 'line-width': 12, 'line-opacity': 0.5 },
+      paint: {
+        'line-color': '#0a0f1a',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 9, 11, 16, 16],
+        'line-opacity': 0.32,
+      },
+    });
+    // White casing so the colored route reads on any basemap (Maps parity).
+    this.map.addLayer({
+      id: 'route-casing',
+      type: 'line',
+      source: 'route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#ffffff',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 9, 8, 16, 13],
+        'line-opacity': 0.92,
+      },
     });
     this.map.addLayer({
       id: 'route-line',
