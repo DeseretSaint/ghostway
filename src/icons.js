@@ -21,6 +21,7 @@ const P = {
   shieldCheck: '<path d="M12 3l7 2.8v5.4c0 4.6-3 7.9-7 9.8-4-1.9-7-5.2-7-9.8V5.8z"/><path d="M9 12l2.2 2.2L15.5 9.7"/>',
   rocket: '<path d="M12 15c-2 0-3-1-3-3 0-3.5 1.5-7 3-9 1.5 2 3 5.5 3 9 0 2-1 3-3 3z"/><path d="M9 13l-2.5 2.5M15 13l2.5 2.5M12 15v4"/>',
   glasses: '<circle cx="7.5" cy="13" r="3.5"/><circle cx="16.5" cy="13" r="3.5"/><path d="M11 13h2M4 13l-1-4M20 13l1-4"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   // Turn arrows (nav steps + banner)
   left: '<path d="M14 20v-8a3 3 0 0 0-3-3H5"/><path d="M8 5.5L4.5 9 8 12.5"/>',
   right: '<path d="M10 20v-8a3 3 0 0 1 3-3h6"/><path d="M16 5.5L19.5 9 16 12.5"/>',

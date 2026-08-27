@@ -14,9 +14,58 @@ export function buildPanel(app) {
   const toInput = $('#toInput');
   const box = $('#suggestions');
 
+  // ---- Recent places (Maps-parity quick pick, localStorage-backed) ----
+  const RECENT_KEY = 'gw-recent';
+  const loadRecents = () => {
+    try {
+      const list = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+      return Array.isArray(list)
+        ? list.filter((r) => r && r.name && Array.isArray(r.coords) && r.coords.length === 2)
+        : [];
+    } catch {
+      return [];
+    }
+  };
+  const saveRecent = (place) => {
+    const list = loadRecents().filter(
+      (r) =>
+        !(r.name === place.name && r.coords[0] === place.coords[0] && r.coords[1] === place.coords[1])
+    );
+    list.unshift({ name: place.name, subtitle: place.subtitle || '', coords: place.coords });
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 5)));
+    } catch {}
+  };
+  const showRecents = (which) => {
+    const list = loadRecents();
+    box.innerHTML = '';
+    if (!list.length) {
+      box.hidden = true;
+      return;
+    }
+    box.appendChild(
+      el('div', { class: 'sugg-head' }, [el('span', { class: 'sugg-ic', html: icon('clock', { size: 13 }) }), 'Recent'])
+    );
+    list.forEach((r) => {
+      const row = el('button', { class: 'sugg sugg-recent', type: 'button' }, [
+        el('span', { class: 'sugg-ic', html: icon('clock', { size: 16 }) }),
+        el('span', { class: 'sugg-txt' }, [
+          el('span', { class: 'sugg-name', text: r.name }),
+          r.subtitle ? el('span', { class: 'sugg-sub', text: r.subtitle }) : null,
+        ]),
+      ]);
+      row.addEventListener('click', () =>
+        pick({ name: r.name, subtitle: r.subtitle, coords: r.coords }, which)
+      );
+      box.appendChild(row);
+    });
+    box.hidden = false;
+  };
+
   const pick = (place, which) => {
     box.hidden = true;
     box.innerHTML = '';
+    saveRecent(place);
     const label = place.name + (place.subtitle ? '' : '');
     if (which === 'to') {
       app.state.to = { coords: place.coords, label: place.name + (place.subtitle ? ` (${place.subtitle})` : '') };
@@ -134,7 +183,12 @@ export function buildPanel(app) {
   box.addEventListener('keydown', moveFocus);
 
   [fromInput, toInput].forEach((inp) =>
-    inp.addEventListener('focus', () => (box.dataset.owner = inp.id))
+    inp.addEventListener('focus', () => {
+      box.dataset.owner = inp.id;
+      // Maps-parity: focusing an empty field surfaces recent destinations
+      // instead of a dead panel (typing replaces them with live results).
+      if (!inp.value.trim()) showRecents(inp.id === 'toInput' ? 'to' : 'from');
+    })
   );
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#search')) box.hidden = true;

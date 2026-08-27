@@ -345,6 +345,34 @@ body {
   font-size: 12px;
   color: var(--muted);
 }
+/* Recent-places header + icon rows (Maps-parity quick pick). */
+.sugg-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sugg-recent {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.sugg-ic {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted);
+}
+.sugg-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
 /* Maps-parity "no results" empty state — non-interactive, full contrast. */
 .sugg-empty {
   display: flex;
