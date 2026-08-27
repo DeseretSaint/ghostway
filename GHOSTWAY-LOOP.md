@@ -428,13 +428,13 @@ block on these — it queues and moves on.
       (slot-B, 22:40 MST): token valid again (keyring); pushed stranded commits
       00e1864+658bcb0+3bd579e (d6d3d56..3bd579e), deploy run 33040106165,
       live site HTTP 200.
-- [ ] GitHub auth AGAIN (2026-08-27 ~02:40 MST, slot-B round 50): gh token
-      invalid ("The token in default is invalid"). Stranded LOCAL commits:
-      slot-B round 50 (staged graph-load feedback + non-blocking traffic fix +
-      graphload-status-check.mjs) + slot-A round 51 aa84b53 (walled-vs-budget
-      flag + honest audit summary) + slot-B round 52 b4eef44 (onboarding a11y)
-      + slot-A round 52 8b58dbe (gate-snap for camera-walled destinations)
-      + ledger commits. Next run with a valid token: git push.
+- [ ] GitHub auth AGAIN (2026-08-27 ~02:40 MST, slot-B round 50; re-confirmed
+      03:22 slot-A): gh token invalid ("The token in default is invalid") AND
+      git credential helper fails ("could not read Username"). NOW 13 commits
+      stranded ahead of origin/main (aa84b53 walled-flag, 8b58dbe gate-snap,
+      b4eef44 onboarding a11y, 36439e5 badge disambig, ea3f600 graphload,
+      4ca5e83 byu-gate-check + ledger commits). Next run with a valid token:
+      git push origin main.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -499,6 +499,7 @@ block on these — it queues and moves on.
 | 2026-08-27 03:11 MDT | tests (slot-C) | read-only sweep under FRESH slot-B lock (03:09, round 54 byu-gate-badge-verify, holder preview :4173 up → no build, no :4173, no edits; only untracked scripts/byu-gate-check.mjs since 02:58) — NO code changed, verify only. All invariants HOLD, ZERO drift from 02:58: floor-audit 0 strict-legal edges <31.4 m (273 in 30-40 m bucket); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit PASS — BYU gate-snapped (Clearest mid-route min 40 m, clear to within ~118 m), other 4 honest budget best-effort (25/12/17/4 m), walled/budget split correct. gh token STILL invalid — now 11 commits ahead of origin/main stranded (36439e5 r53 badge + a098d43 ledger added). | floor-audit/engine-check/snap-dist-check/avoidance-audit all PASS | verified — no regressions, nothing new |
 | 2026-08-27 ~03:05 MDT | ops (slot-A, special task re-check) | LAZY-ENGINE SPECIAL TASK: premise stale — changeset already evaluated/committed/pushed in round 48 (03e9224 confirmed on origin/main; working tree 100% clean, 0 uncommitted files, no lock). Nothing to evaluate or commit; ledger already marks it TASK COMPLETE — DO NOT RE-DO. Attempted to push the 11 stranded commits (aa84b53..a098d43): gh token still invalid AND git credential helper fails ("could not read Username") → push still blocked (Needs Keaton). | git status --porcelain empty; git branch -r --contains 03e9224 = origin/main; git push fails on auth | verified — no action needed; push awaits auth fix |
 | 2026-08-27 ~03:15 MDT | ux (slot-B round 54) | verified gate-snap (8b58dbe) in the REAL headless UI + new hermetic guard scripts/byu-gate-check.mjs: injects exact audit endpoints (PG→BYU) via __gw.state, clicks real #goBtn, asserts Clearest badge. BYU Clearest renders "clear to within ~118 m" (37-min gate route — matches audit clearToM=118 exactly); "best effort — camera-walled" badge gone; 0 page errors. FINDING: photon-geocoded "Brigham Young University" dest snaps to a different node (tail >200 m) → still honest camera-walled best-effort; gate-snap is endpoint-sensitive (queued future angle: dest-radius tail search). | byu-gate-check PASS; interact-check PASS (0 page errors); build exit 0 | committed (local) — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
+| 2026-08-27 03:22 MDT | ops (slot-A, special task re-check #3) | LAZY-ENGINE SPECIAL TASK: premise stale AGAIN — changeset landed round 48 (03e9224 confirmed on origin/main via `git branch -r --contains`); working tree 100% clean (git status --porcelain empty), no lock. Nothing to evaluate/commit; ledger already marks it TASK COMPLETE — DO NOT RE-DO (3rd confirmation). Attempted push of 13 stranded commits: gh token still invalid + git credential helper fails → push still blocked (Needs Keaton updated w/ current count). No router.js work started (can't finish a verified unit inside timebox). | git status clean; 03e9224 on origin/main; push fails on auth (13 ahead) | verified — no action needed; push awaits auth fix |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
