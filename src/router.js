@@ -760,6 +760,15 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   // capFactor was declared on MODES but never enforced — this is the fix for
   // the "forced detour" complaint (PG→Costco Clearest was +38% time).
   const strictBudget = fastest.duration * 1.25 + 90;
+  // Distance-aware acceptance (engine-rebuild plan step 2): the budget above is
+  // time-only, which rejects clear routes that add little or no distance but a
+  // few minutes. Drivers accept time-for-distance trades on short urban trips
+  // (Wardman 1985: distance carries independent disutility; Ramming 2002: <50%
+  // of drivers take the fastest route) — a clear route within ~+10% distance
+  // (min 300 m slack) is served under a relaxed time cap, so the natural
+  // shorter-distance arterial beats a marginally-faster camera path.
+  const distSlack = Math.max(300, fastest.distance * 0.10);
+  const strictTimeCap = fastest.duration * 1.5 + 180;
   // Unbounded strict search, budget checked AFTER. The in-search maxCost prune
   // tracks time on the best-score label only and can reject a camera-free route
   // whose TRUE time fits the budget — measured on PG→Costco: the 0-camera route
@@ -767,7 +776,8 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   // served "Clearest" still passed a camera (strictFallback). Same unbounded +
   // post-search-check pattern gate-snap already uses below.
   const strictProbe = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, {});
-  let clearest = strictProbe && strictProbe.duration <= strictBudget ? strictProbe : null;
+  const distOk = strictProbe && (strictProbe.distance - fastest.distance) <= distSlack;
+  let clearest = strictProbe && (strictProbe.duration <= strictBudget || (distOk && strictProbe.duration <= strictTimeCap)) ? strictProbe : null;
   let strictFallback = false;
   let overBudget = false;
   let walled = false;
