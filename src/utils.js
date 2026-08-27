@@ -38,16 +38,36 @@ export function escHtml(s) {
   ));
 }
 
+// Distance units preference (Maps parity): 'km' (default, metric) or 'mi'
+// (imperial). Persisted in localStorage. The whole app reads through
+// fmtDistance/fmtNavDistance so flipping the pref re-skins every distance.
+export function getUnits() {
+  try { return localStorage.getItem('gw-units') === 'mi' ? 'mi' : 'km'; } catch { return 'km'; }
+}
+export function setUnits(u) {
+  try { localStorage.setItem('gw-units', u === 'mi' ? 'mi' : 'km'); } catch {}
+}
+
 export function fmtDistance(m) {
   if (m == null) return '';
+  if (getUnits() === 'mi') {
+    const mi = m / 1609.344;
+    if (mi < 0.1) return `${Math.max(0, Math.round((m * 3.28084) / 50) * 50)} ft`;
+    if (mi < 10) return `${mi.toFixed(1)} mi`;
+    return `${Math.round(mi)} mi`;
+  }
   if (m < 1000) return `${Math.round(m)} m`;
   return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
 }
 
 // Navigation-style distance countdown (rounds like real nav apps):
-// 1.2 mi → 0.5 mi → 800 ft.
+// 1.2 mi → 0.5 mi → 800 ft  (or 1.2 km → 800 m in metric).
 export function fmtNavDistance(m) {
   if (m == null) return '';
+  if (getUnits() === 'km') {
+    if (m < 1000) return `${Math.round(m)} m`;
+    return `${(m / 1000).toFixed(1)} km`;
+  }
   const ft = m * 3.28084;
   if (ft < 1000) return `${Math.max(0, Math.round(ft / 50) * 50)} ft`;
   const mi = ft / 5280;

@@ -7,7 +7,7 @@ import { planRoute } from './routing.js';
 import { planRoutes, loadGraph, regionCovers, graphStatus } from './router.js';
 import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
-import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, fmtArrive, haversine, haptic, pointToSegmentM } from './utils.js';
+import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, fmtArrive, haversine, haptic, pointToSegmentM, getUnits, setUnits } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
 import { icon, stepIconSvg } from './icons.js';
 import { registerSW } from './pwa.js';
@@ -52,6 +52,13 @@ async function init() {
     app.map.setBasemap(savedBase);
     const bb = $('#basemapBtn');
     if (bb) { bb.classList.add('on'); bb.setAttribute('aria-pressed', 'true'); }
+  }
+  // Seed the distance-units button label from the saved preference.
+  const ub0 = $('#unitsBtn');
+  if (ub0) {
+    const u0 = getUnits();
+    ub0.textContent = u0;
+    ub0.setAttribute('aria-pressed', String(u0 === 'mi'));
   }
   window.__gw = app; // test/diagnostic hook
 
@@ -261,6 +268,21 @@ function wireApp() {
     btn.classList.toggle('on', next === 'dark');
     btn.setAttribute('aria-pressed', String(next === 'dark'));
   });
+
+  // Maps-parity distance units (miles / kilometres). Flips the persisted
+  // pref and re-skins every distance in the current route card (the nav
+  // banner picks it up on the next GPS tick via fmtNavDistance).
+  const unitsBtn = $('#unitsBtn');
+  if (unitsBtn) {
+    unitsBtn.addEventListener('click', () => {
+      const next = getUnits() === 'mi' ? 'km' : 'mi';
+      setUnits(next);
+      unitsBtn.textContent = next;
+      unitsBtn.setAttribute('aria-pressed', String(next === 'mi'));
+      haptic();
+      if (app.state && app.state.route) renderRouteCard(app, app.state.route);
+    });
+  }
 
   $('#goBtn').addEventListener('click', onRoute);
   $('#swapBtn').addEventListener('click', swapEndpoints);
