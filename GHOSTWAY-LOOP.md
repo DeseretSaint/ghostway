@@ -78,6 +78,58 @@ free, privacy-first.
 ## Improvement Queue
 Research-only runs (locked or warm-deploy) append ideas here. Edit runs pull
 from this queue first when it's non-empty.
+- [ ] PRIORITY (Keaton field feedback 2026-08-27 ~16:15 MDT, Waze comparison on
+      PG → Deseret Industries 1.8 mi route) — THREE items, in this order:
+
+      (1) ROUTE-CARD MODE STRUCTURE — "Fast / Balanced / Strict" taxonomy with
+      clean collapse. Complaint: with avoidHighways ON the card shows
+      "Fastest / No highways / (Balanced/Clearest crowded out)" — "No highways"
+      is too prominent and competes with the camera-avoidance options; and when
+      the fastest route has 0 cameras the mode options look redundant.
+      Desired: three primary slots — Fastest, Balanced, Clearest — and the
+      no-highways preference should NOT displace them; it should be a modifier
+      (apply hwPenalty INSIDE the Balanced/Clearest generalized-cost searches,
+      or fold it into the Balanced option and drop the separate card) so the
+      card always reads Fast/Balanced/Strict. "Except where they are the same":
+      when two modes produce the same route, collapse to ONE card (the similar()
+      dedupe already does this — VERIFY it collapses Fastest==Clearest to a
+      single card and says "this route is also the fastest/clearest" rather
+      than showing duplicates or an empty slot). Do NOT show a redundant
+      Balanced card when it's the same road as Fastest (already handled) —
+      verify the inverse: when Clearest == Fastest, show a 0-camera badge on
+      the Fastest card instead of a duplicate Clearest card. Repro: PG →
+      Deseret Industries (search "Deseret Industries, Pleasant Grove UT").
+
+      (2) GENERIC CAMERA AVOIDANCE ROBUSTNESS — no more example-fixing. The
+      engine fixes each corridor Keaton reports (PG→Costco etc.) but must
+      generalize: verify avoidance works on UNMEASURED corridors across all
+      areas. Concretely: extend scripts/avoidance-audit.mjs with a RANDOMIZED
+      corridor sampler — pick N random origin/destination pairs from populated
+      OSM nodes (random urban/suburban pairs inside the graph coverage, plus
+      random pairs in dense-camera areas), assert (a) Clearest mid-route
+      min-cam ≥30 m on clearable corridors, (b) options array always contains
+      a camera-aware option when cameras exist near the fastest route, (c)
+      no crashes/timeouts outside the 5 measured corridors. Any sampled
+      failure = new fix, not a special-case. This replaces the fixed 5-corridor
+      audit as the CI gate (keep the 5 as smoke).
+
+      (3) ANDROID AUTO / CARPLAY SUPPORT — currently a PWA; verify what works
+      and spec the path. PWA cannot do Android Auto natively (requires Play
+      Store app + AA library / CarPlay requires Apple approval), but: verify
+      Android Auto "search via Assistant → opens browser" flow and CarPlay's
+      iPhone mirroring of the PWA over CarPlay-compatible head units; research
+      lightweight wrappers (Capacitor + AA/CarPlay templates, or PWABuilder
+      generated TWA) that keep 100% open-source/no-keys. Deliverable this
+      round: a researched options doc (docs/android-auto-carplay.md) with a
+      recommendation; implementation is a follow-up.
+
+      Anchor artifacts: Waze screenshot shows 1.8-mi "No highways"/"Most
+      natural" route vs 2.0-mi Fastest, 1 traffic camera ON the route with no
+      camera-free mode offered — Ghostway's differentiator is that Strict
+      should always exist as a card (or a clean "fastest is also clear" note).
+      src/router.js planRoutes options assembly L795-925; src/ui.js
+      renderEngineCard L258-333 ("Most natural" pill L309-313).
+
 - [x] TEST-MSG BUG (slot-C 2026-08-27 01:32 MDT): RESOLVED 2026-08-27 (slot-A round 51, commit aa84b53 — PUSH BLOCKED, gh token invalid again). router.js now runs one unbounded strict probe when the floor search fails under budget → `walled` flag exposed on the option (true = no ≥30 m path exists anywhere; false = clear path exists, over-budget). avoidance-audit branches the BEST-EFFORT reason on o.walled + headline reworded to "≥30 m on clearable corridors; N walled/budget destination(s) served best-effort". Verified: build exit 0; engine-check PASS (modes distinct); snap-dist-check PASS (90.0/334.8 m); audit exit 0 with CORRECT split — BYU prints "camera-walled", PG→Costco/Lehi→SLC/Orem→Airport/AF→PC print "camera-clear path exists but exceeds detour budget" (matches round-45 measurement exactly). Exit-0 CI gate unchanged. Original defect text: scripts/avoidance-audit.mjs summary is misleading. On `o.strictFallback` it printed "⚠ BEST-EFFORT (destination camera-walled; no ≥30 m path exists)" for ALL 5 corridors (only BYU truly walled) and the PASS headline overstated the guarantee. On `o.strictFallback` it prints "⚠ BEST-EFFORT (destination camera-walled; no ≥30 m path exists)" AND exempts the route from the `midOk` failure check, so the final headline still claims "every Clearest route stays ≥ 30 m from ALPR cameras mid-route" even though the 5 printed Clearest minima are 25/16/12/17/4 m (<30). Two defects: (1) reason text conflates two distinct strictFallback causes — per slot-A round 45 only BYU is truly walled; PG→Costco/Lehi→SLC/AF→PC fire from DETOUR BUDGET (clear path exists, over-budget) — so "no ≥30 m path exists" is false for 4/5. (2) PASS headline overstates the guarantee; best-effort routes are exempt from the floor check so the audit passes while Clearest passes 4 m from a cam (AF→PC). Fix: have router.js expose WHY strictFallback fired (clearest===null vs budget) and reword summary to "≥30 m on clearable corridors; N walled/budget destinations served best-effort". Audit still correctly exit-0 gates CI; reporting-accuracy defect only, NOT a routing regression. No code change 01:32 run (verification only). UPDATE 01:55 slot-C sweep: router.js is now COMMITTED/UNBLOCKED (ow=2 fix 8df172d + nearestNode a6e2994) → the v2 fix (expose clearest===null vs budget flag in router.js + reword summary) CAN now land; escalate to Slots A/B to implement. UPDATE 02:24 slot-A (research-only, fresh slot-B lock): re-ran audit standalone on committed tree — defect reproduced exactly (5/5 print "camera-walled; no ≥30 m path exists", Clearest mid-min 25/16/12/17/4 m, PASS headline). IMPLEMENTATION SPEC (next edit run): (1) router.js — existing overBudget flag does NOT distinguish (walled AND budget cases both land strictFallback+!overBudget whenever the softCam-within-budget search succeeds); when first fallback fires (clearest===null under budget) run ONE unbounded strict probe `astar(graph,s,t,'strict',edgeFactor,edgeDelay,{})` (no maxCost/softCam); set `walled = probe===null` on clearest and expose `o.walled` beside strictFallback/overBudget (L722-725). Cost = one extra A* only on the rare fallback path. (2) avoidance-audit.mjs L122-128 — branch on o.walled: walled → keep current text; else → "camera-clear path exists but exceeds detour budget; served best-effort". (3) headline L143-148 → "≥30 m on clearable corridors; N walled/budget destination(s) served best-effort". Exit-0 gate unchanged.
 - [x] Mid-zoom heatmap clustering (visual noise reduction) — landed 2026-08-26
 - [x] Route-line anti-cut: Douglas-Peucker already in; audit edge cases on highways
@@ -1136,3 +1188,4 @@ multiplier meta-analysis).
 | 2026-08-27 ~16:15 MDT | ux (slot-B) | Driver-preference RESEARCH directive re-run (32nd): CLOSED per ledger — findings 1-36 + addenda 1-12 (all sourced) under "Driver preference research", fully consumed by slot-A's COMPLETE engine rebuild (6 steps 2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route fix cf9869a on origin/main; slot-A re-verified #84 at 16:08). NO re-research per read-state-first: task marked done 09:58, last fresh search 15:24 (addendum 12) — zero new evidence possible in the interval. State verified THIS run: HEAD == origin/main == 7c5cf13 (0/0), no locks, no live procs, tree clean. No open slot-B UX item (waypoint-drag closed 12:00; "Most natural" pill b1abb7b shipped+verified; donation UI blocked on Keaton's addresses). No code changed; no verified change to report. | git rev-list 0/0; no locks; no live procs | verified — directive satisfied, nothing new |
 | 2026-08-27 ~16:12 MDT | tests (slot-C) | verification battery over committed tree (HEAD == origin/main == 7c5cf13, 0 ahead/behind, no lock, no live procs, :4173 free; code frozen since cold-route fix cf9869a = ledger-only commits since 16:10 battery) — NO code changed, verify only. All camera-avoidance invariants HOLD, ZERO drift: build exit 0 (1.02s); floor-audit 0 strict-legal edges <31.4 m; engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams); snap-dist 90.0/334.8 m; avoidance-audit LIVE PROBE PASS — all 5 corridors Clearest >=30 m mid-route (PG->Costco Keaton repro stays fixed, Lehi->SLC 1cam/142m, Orem->Airport 0/96m, AF->PC 1cam/40m), best-effort 0. Repeat green — code identical to 16:10 battery; nothing new to verify until next code commit lands. | build/floor-audit/engine-check/snap-dist/avoidance-audit all PASS | verified — zero drift, green |
 | 2026-08-27 ~16:20 MDT | routing (slot-A) | HIGHEST-PRIORITY directive re-run #85: VERIFIED COMPLETE (no drift) — all 6 rebuild steps (2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d) + lazy-engine 03e9224 + cold-route fix cf9869a confirmed on origin/main (HEAD == origin/main == 3d01b5f post-push, 0 ahead/behind); routing files clean (git diff --stat empty for src/router.js, src/config.js, src/main.js, src/map-view.js, engine/, engine-check, snap-dist-check); no locks, no live procs. Battery NOT re-run by design: code byte-identical to slot-C 16:12 battery (build/floor-audit/engine-check/snap-dist/avoidance-audit all PASS — PG→Costco Keaton repro stays fixed 0 cams/165 m, all 5 corridors ≥30 m, best-effort 0). Secondary lazy-engine task: premise STALE, 82nd confirmation — 03e9224 on origin/main, nothing to evaluate/commit; DO NOT RE-DO (already marked complete). SIDE FIX: gh auth VALID → pushed stranded slot-C ledger commit (7c5cf13..3d01b5f); now 0 ahead/behind. Plan exhausted; no live slot-A queue item — awaiting new field-drive feedback from Keaton. | 8/8 commits on origin/main; rev-list 0/0; routing diff empty; slot-C 16:12 battery on identical code; git push exit 0 | verified — directive complete; plan exhausted |
+| 2026-08-27 ~16:17 MDT | tests (slot-C) | verification battery over committed tree (HEAD == origin/main == 778e2e7, 0 ahead/behind, no lock, no live procs, :4173 free; code frozen since cold-route fix cf9869a = ledger-only commits since 16:12 battery) — NO code changed, verify only. All camera-avoidance invariants HOLD, ZERO drift: engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams); snap-dist 90.0/334.8 m; floor-audit 0 strict-legal edges <31.4 m; avoidance-audit LIVE PROBE PASS — all 5 corridors Clearest >=30 m mid-route (PG->Costco Keaton repro stays fixed 0cams/165m, BYU gate-snapped 40m/~118m, Lehi->SLC 1cam/142m, Orem->Airport 0/96m, AF->PC 1cam/40m), best-effort 0. Repeat green — code identical to 16:12 battery; nothing new to verify until next code commit lands. | engine-check/snap-dist/floor-audit/avoidance-audit all PASS | verified — zero drift, green |
