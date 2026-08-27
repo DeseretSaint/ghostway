@@ -94,6 +94,18 @@ export function buildPanel(app) {
     if (!e.target.closest('#search')) box.hidden = true;
   });
 
+  // Keyboard accessibility: Escape dismisses the topmost overlay. main.js owns
+  // the open/close helpers, so click the canonical close buttons rather than
+  // duplicating that logic (keeps the scrim/animation handling in one place).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    const modal = $('#modal');
+    if (modal && !modal.hidden) { $('#modalClose').click(); return; }
+    const drawer = $('#drawer');
+    if (drawer && !drawer.hidden) { $('#closeDrawer').click(); return; }
+    if (!box.hidden) box.hidden = true;
+  });
+
   // Clear buttons.
   document.querySelectorAll('.clear-btn').forEach((b) =>
     b.addEventListener('click', () => {
