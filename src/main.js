@@ -1556,4 +1556,6 @@ function startOnboarding() {
 
   render();
   wrap.hidden = false;
+  // Move focus into the dialog so keyboard/SR users land on it, not the map.
+  $('#obNext').focus();
 }

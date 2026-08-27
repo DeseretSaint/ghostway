@@ -103,6 +103,8 @@ export function buildPanel(app) {
     if (modal && !modal.hidden) { $('#modalClose').click(); return; }
     const drawer = $('#drawer');
     if (drawer && !drawer.hidden) { $('#closeDrawer').click(); return; }
+    const ob = $('#onboarding');
+    if (ob && !ob.hidden) { $('#obSkip').click(); return; }
     if (!box.hidden) box.hidden = true;
   });
 
@@ -164,8 +166,13 @@ function renderEngineCard(app, card, result) {
           : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
       const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
       // Strict safety floor couldn't find a fully clear path (camera-walled
-      // origin/destination) — be honest that this is best effort.
-      const bestEffort = o.strictFallback ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort</span>` : '';
+      // origin/destination) — be honest that this is best effort. Gate-snapped
+      // routes are clear to within a short, stated distance of the destination.
+      const bestEffort = o.strictFallback
+        ? o.clearToM
+          ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} clear to within ~${fmtDistance(o.clearToM)}</span>`
+          : ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort</span>`
+        : '';
       // Over the detour budget: avoidance costs real extra time — say so.
       const overBudget = o.overBudget ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} costs extra time</span>` : '';
       return `

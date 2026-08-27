@@ -1,4 +1,5 @@
-// E2E guard: Escape key dismisses overlays (modal > drawer > suggestions).
+// E2E guard: Escape key dismisses overlays (modal > drawer > suggestions >
+// first-run onboarding).
 // Keyboard accessibility — mouse users have the × buttons and scrim; keyboard
 // users had no way to dismiss the drawer/modal. Verifies the real close path
 // (the handler clicks the canonical close buttons, so scrim/animation logic
@@ -66,11 +67,48 @@ async function main() {
   await wait(200);
   out.suggAfterEsc = await hidden('#suggestions');
 
+  // (4) Onboarding (first run): fresh localStorage → overlay shows with dialog
+  // semantics + initial focus on #obNext; Escape dismisses via the canonical
+  // Skip path (which sets gw-onboarded).
+  const page2 = await browser.newPage();
+  await page2.setViewport({ width: 390, height: 844 });
+  page2.on('pageerror', (e) => errs.push(e.message));
+  page2.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+  await page2.evaluateOnNewDocument(() => { localStorage.removeItem('gw-onboarded'); });
+  await page2.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  try {
+    await page2.waitForFunction(() => {
+      const ob = document.querySelector('#onboarding');
+      return ob && !ob.hidden;
+    }, { timeout: 10000 });
+  } catch { /* proceed */ }
+  out.obShown = await page2.evaluate(() => {
+    const ob = document.querySelector('#onboarding');
+    return !!ob && !ob.hidden;
+  });
+  out.obDialog = await page2.evaluate(() => {
+    const card = document.querySelector('.ob-card');
+    return !!card && card.getAttribute('role') === 'dialog' &&
+      card.getAttribute('aria-modal') === 'true' && !!card.getAttribute('aria-label');
+  });
+  out.obFocus = await page2.evaluate(() =>
+    !!document.activeElement && document.activeElement.id === 'obNext');
+  await page2.keyboard.press('Escape');
+  await wait(200);
+  out.obAfterEsc = await page2.evaluate(() => {
+    const ob = document.querySelector('#onboarding');
+    return !ob || ob.hidden;
+  });
+  out.obFlagSet = await page2.evaluate(() => localStorage.getItem('gw-onboarded') === '1');
+  try { await Promise.race([page2.close(), wait(3000)]); } catch {}
+
   console.log(JSON.stringify(out, null, 2));
   const pass =
     out.drawerOpened === true && out.drawerAfterEsc === true && out.scrimAfterEsc === true &&
     out.modalOpened === true && out.modalAfterEsc === true &&
     out.suggShown === true && out.suggAfterEsc === true &&
+    out.obShown === true && out.obDialog === true && out.obFocus === true &&
+    out.obAfterEsc === true && out.obFlagSet === true &&
     errs.length === 0;
   if (errs.length) console.error('page errors:', errs);
   console.log(pass ? 'ESCAPE-CHECK PASS' : 'ESCAPE-CHECK FAIL');
