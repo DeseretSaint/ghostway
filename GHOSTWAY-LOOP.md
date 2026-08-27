@@ -428,13 +428,12 @@ block on these — it queues and moves on.
       (slot-B, 22:40 MST): token valid again (keyring); pushed stranded commits
       00e1864+658bcb0+3bd579e (d6d3d56..3bd579e), deploy run 33040106165,
       live site HTTP 200.
-- [ ] GitHub auth AGAIN (2026-08-27 ~02:40 MST, slot-B round 50; re-confirmed
-      03:22 slot-A): gh token invalid ("The token in default is invalid") AND
-      git credential helper fails ("could not read Username"). NOW 13 commits
-      stranded ahead of origin/main (aa84b53 walled-flag, 8b58dbe gate-snap,
-      b4eef44 onboarding a11y, 36439e5 badge disambig, ea3f600 graphload,
-      4ca5e83 byu-gate-check + ledger commits). Next run with a valid token:
-      git push origin main.
+- [x] GitHub auth AGAIN (2026-08-27 ~02:40 MST, slot-B round 50; re-confirmed
+      03:22 slot-A): RESOLVED 2026-08-27 03:43 MDT (slot-A re-check #6): token
+      valid again; pushed ALL 17 stranded commits (28cf2a2..a9703c2) — walled-flag
+      aa84b53, gate-snap 8b58dbe, onboarding-a11y b4eef44, badge-disambig 36439e5,
+      graphload ea3f600, byu-gate-check 4ca5e83, modal-a11y 6608de4 + ledger
+      commits. Deploy run 33059896752 queued on push.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -509,6 +508,9 @@ block on these — it queues and moves on.
 | 2026-08-27 03:37 MDT | ops (slot-A, special task re-check #5) | LAZY-ENGINE SPECIAL TASK: premise stale, 5th confirmation — 03e9224 confirmed on origin/main (git branch -r --contains); lazy-engine already landed+pushed round 48. Working tree still holds slot-B's LIVE UI/UX+test changeset (main.js modal focus/aria, index.html, escape-check.mjs, GHOSTWAY-LOOP.md) — OUT of SLOT-A mandate (routing only; never touch UI/UX/tests) → left untouched, consistent with re-checks #3/#4. No routing files uncommitted. Push of 15 stranded commits retried: still auth-blocked (gh token invalid + credential helper "could not read Username" — Needs Keaton). No routing unit started (timebox). | 03e9224 on origin/main; routing files clean; push fails on auth (15 ahead) | verified — no action needed; push awaits auth fix |
 
 | 2026-08-27 03:15 MDT | ux (slot-B round 55) | modal dialog accessibility: `.modal-card` now `role="dialog" aria-modal="true"`; `openModal()` derives `aria-label` from the modal's heading (every openModal body starts with an `<h3>`), moves focus to `#modalClose` on open, and `closeModal()` returns focus to the element that opened it (graceful no-op → body when the opener closed itself, e.g. the About flow closes the drawer first). New guard assertions in scripts/escape-check.mjs: modal dialog semantics + initial focus + focus-escapes-closed-modal. No routing/engine files touched. | build exit 0; escape-check PASS (modalDialog/modalFocus/modalFocusEscaped all true, 0 page errors); interact-check PASS (0 page errors, full flow routes) | committed 6608de4 — PUSH BLOCKED (gh token invalid; now 14 stranded) |
+
+| 2026-08-27 03:39 MDT | tests (slot-C) | verification sweep over committed tree (16 ahead of origin/main, auth-blocked; NEW commit 6608de4 = slot-B modal dialog a11y, landed 03:38, verified here for the first time) — NO code changed, verify only. All invariants HOLD, ZERO drift: floor-audit 0 strict-legal edges <31.4 m; engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit PASS — BYU gate-snapped (4 budget best-effort: 12/17/4 m + PG→Costco/Lehi→SLC split correct). NEW: standalone run of updated hermetic escape-check.mjs (6608de4) — PASS 15/15 incl. new modal assertions (modalDialog/modalFocus/modalFocusEscaped all true; drawer/sugg/onboarding sections intact, 0 page errors); dist was rebuilt after main.js edit so the guard tested the committed code. gh token STILL invalid (16 commits stranded). | floor-audit/engine-check/snap-dist-check/avoidance-audit/escape-check all PASS | verified — no regressions; new modal-a11y commit confirmed working |
+| 2026-08-27 03:43 MDT | ops (slot-A, special task re-check #6) | LAZY-ENGINE SPECIAL TASK: premise stale, 6th confirmation — 03e9224 on origin/main (git branch -r --contains), landed+pushed round 48; no uncommitted routing files (only slot-C's 2-line ledger append pending). REAL ACTION THIS RUN: gh token VALID AGAIN → pushed ALL 17 stranded commits (28cf2a2..a9703c2): walled-flag aa84b53, gate-snap 8b58dbe, onboarding-a11y b4eef44, badge-disambig 36439e5, graphload ea3f600, byu-gate-check 4ca5e83, modal-a11y 6608de4 + ledger commits. Deploy run 33059896752 queued on push. Needs-Keaton auth item marked RESOLVED. | git push exit 0 (28cf2a2..a9703c2); gh run 33059896752 queued; 03e9224 on origin/main | shipped — backlog cleared, push unblocked |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
