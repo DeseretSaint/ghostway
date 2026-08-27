@@ -4,7 +4,7 @@ import { MapView } from './map-view.js';
 import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
-import { planRoutes, loadGraph, regionCovers, graphStatus } from './router.js';
+import { planRoutes, loadGraph, regionCovers, graphStatus, endpointsConnected } from './router.js';
 import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
 import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, fmtArrive, haversine, haptic, pointToSegmentM, getUnits, setUnits } from './utils.js';
@@ -566,6 +566,12 @@ async function routeWithFallbacks(from, to) {
     // Lazy-load the on-device graph for this region (no-op if already loaded).
     const ok = await ensureLocalEngine(from.coords, to.coords);
     if (ok) {
+      // Disconnected graph components (a known data gap) can't be routed locally.
+      // Detect it up front and fall back to Valhalla cleanly instead of throwing
+      // 'No route found' and relying on the catch.
+      if (!endpointsConnected(from.coords, to.coords)) {
+        console.warn('local graph endpoints in different components — falling back to Valhalla');
+      } else {
       try {
         const t0 = performance.now();
         const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams(), avoidHighways: app.state.avoidHighways });
@@ -583,6 +589,7 @@ async function routeWithFallbacks(from, to) {
         return;
       } catch (e) {
         console.warn('engine route failed, falling back', e);
+      }
       }
     }
     // Engine unavailable or failed → fall through to Valhalla below.

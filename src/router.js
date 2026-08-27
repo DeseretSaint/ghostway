@@ -171,14 +171,48 @@ function parseGraph(raw) {
     arr.push(n);
   }
 
+  // Connected components (undirected) over the adjacency. Used to detect pairs
+  // that sit in different graph components (a known data gap — e.g. 1/50 random
+  // sampled pairs) BEFORE routing, so we fall back to Valhalla cleanly instead of
+  // throwing on an A* miss. One BFS over the arc list; ~tens of ms, one-time.
+  const comp = new Uint32Array(nodeCount);
+  let cid = 0;
+  const stack = new Int32Array(nodeCount);
+  for (let n = 0; n < nodeCount; n++) {
+    if (comp[n]) continue;
+    cid++;
+    let sp = 0;
+    stack[sp++] = n;
+    comp[n] = cid;
+    while (sp > 0) {
+      const u = stack[--sp];
+      for (let a = outStart[u]; a < outStart[u + 1]; a++) {
+        const v = arcTo[a];
+        if (!comp[v]) { comp[v] = cid; stack[sp++] = v; }
+      }
+    }
+  }
+
   return {
     nodeCount, edgeCount, bbox, names,
     nodeLon, nodeLat,
     ea, eB, eLen, eSpd, eCam, eOw, eName,
     outStart, arcTo, arcEdge, arcRev,
     nodeDeg,
+    comp,
     grid, CELL,
   };
+}
+
+// True when the two coordinates snap into the SAME connected graph component
+// (i.e. a local route is physically possible). False ⇒ caller should fall back
+// to Valhalla rather than attempt planRoutes (which would throw 'No route found').
+export function endpointsConnected(from, to) {
+  if (!graph) return false;
+  const s = nearestNode(from[0], from[1]);
+  const t = nearestNode(to[0], to[1]);
+  if (s.node === -1 || t.node === -1) return false;
+  return graph.comp[s.node] === graph.comp[t.node];
 }
 
 // ---- ETA calibration (iteration 8) ----
