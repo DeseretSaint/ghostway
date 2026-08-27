@@ -145,6 +145,8 @@ export function buildPanel(app) {
   // duplicating that logic (keeps the scrim/animation handling in one place).
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    const steps = $('#stepsSheet');
+    if (steps && !steps.hidden) { $('#stepsClose').click(); return; }
     const modal = $('#modal');
     if (modal && !modal.hidden) { $('#modalClose').click(); return; }
     const drawer = $('#drawer');

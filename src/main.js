@@ -211,6 +211,15 @@ function wireApp() {
 
   $('#gpsBtn').addEventListener('click', useMyLocation);
   $('#recenterBtn').addEventListener('click', () => setFollow(true));
+  // Tap the banner (anywhere but its buttons) to open the full turn-by-turn list.
+  $('#navBanner').addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    openSteps();
+  });
+  const stepsClose = $('#stepsClose');
+  if (stepsClose) stepsClose.addEventListener('click', closeSteps);
+  const stepsScrim = $('#stepsScrim');
+  if (stepsScrim) stepsScrim.addEventListener('click', closeSteps);
   // Standard nav behavior: if the user pans/rotates during navigation, pause
   // follow mode and show the recenter button.
   app.map.onUserPan(() => {
@@ -1080,6 +1089,7 @@ function advanceStep(userC) {
     app.state.stepIndex = idx;
     haptic();
     renderNavStep();
+    if (!$('#stepsSheet') || !$('#stepsSheet').hidden) renderStepsList();
     // Announce the new maneuver ahead.
     const s = steps[idx];
     if (s && idx > 0 && !app._voiceAnnounced[idx]) {
@@ -1288,6 +1298,44 @@ function renderNavStep() {
   updateCamChip(traveled);
   updateProgress(traveled);
   updateApproach(traveled);
+}
+
+// Tap-the-banner turn-by-turn directions (Maps parity): a full list of every
+// upcoming maneuver, so the driver can scan the whole route without voice.
+// The banner click handler (wired once in wireApp, ignoring in-banner buttons)
+// opens it; Escape / the close button / the scrim close it.
+function renderStepsList() {
+  const list = $('#stepsList');
+  if (!list) return;
+  const steps = app._navSteps || [];
+  if (!steps.length) { list.innerHTML = ''; return; }
+  const idx = app.state.stepIndex || 0;
+  list.innerHTML = steps.map((s, i) => {
+    const road = s.name ? ` onto <b>${escHtml(s.name)}</b>` : '';
+    const distFmt = i === 0 ? '' : fmtNavDistance(s.startS || 0);
+    return `<div class="steps-row ${i === idx ? 'current' : ''}" role="listitem">
+      <div class="si" aria-hidden="true">${stepIcon(s.modifier)}</div>
+      <div class="st"><div class="sd">${escHtml(s.instruction)}${road}</div>
+      <div class="sroad">${i === 0 ? 'Start' : 'Step ' + i}</div></div>
+      <div class="sdist">${distFmt}</div>
+    </div>`;
+  }).join('');
+}
+function openSteps() {
+  const sheet = $('#stepsSheet');
+  const scrim = $('#stepsScrim');
+  if (!sheet || !app.state.navigating) return;
+  renderStepsList();
+  sheet.hidden = false;
+  if (scrim) scrim.hidden = false;
+  const c = $('#stepsClose');
+  if (c) c.focus();
+}
+function closeSteps() {
+  const sheet = $('#stepsSheet');
+  const scrim = $('#stepsScrim');
+  if (sheet) sheet.hidden = true;
+  if (scrim) scrim.hidden = true;
 }
 
 function lower(s) {
