@@ -260,68 +260,61 @@ function renderEngineCard(app, card, result) {
   const sel = options[chosen];
   const fastest = options.find((o) => o.mode === 'off') || options[0];
 
-  const optHtml = options
-    .map((o, i) => {
-      const cams =
-        o.cameras === 0
-          ? `<span class="opt-cams clear">0 cameras</span>`
-          : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
-      // Mission-visible callout: a fully camera-free route gets a prominent
-      // green shield badge so the privacy win is obvious at a glance (Maps-parity
-      // "eco" style badge, but for surveillance avoidance).
-      const clearBadge =
-        o.cameras === 0
-          ? `<span class="opt-clear-badge">${icon('shieldCheck', { size: 14 })} Camera-free route</span>`
-          : '';
-      const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
-      // Strict safety floor couldn't find a fully clear path — be honest about
-      // WHY. Gate-snapped routes are clear to within a short, stated distance.
-      // walled = no ≥30 m path exists anywhere (camera-walled destination);
-      // otherwise a clear path exists but blew the detour budget.
-      const bestEffort = o.strictFallback
-        ? o.clearToM
-          ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} clear to within ~${fmtDistance(o.clearToM)}</span>`
-          : o.walled
-            ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort — camera-walled</span>`
-            : ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort — clear route too long</span>`
+  // Always render three primary slots — Fastest / Balanced / Clearest — so the
+  // card reads Fast/Balanced/Strict regardless of the avoid-highways toggle.
+  // The "No highways" surface preference is the SAME corridor as a modifier,
+  // not a fourth competitor: demote it to a subordinate chip (Keaton feedback
+  // 2026-08-27 — with avoidHighways ON, "No highways" crowded Balanced/Clearest
+  // out of the card). Router still emits it as a distinct option; this only
+  // changes its presentation. Three primary options are geometry-deduped by the
+  // engine, and a 0-camera Fastest already shows the "Camera-free route" badge,
+  // so the "Clearest == Fastest" collapse needs no extra code here.
+  const optBtn = (o, idx) => {
+    const cams =
+      o.cameras === 0
+        ? `<span class="opt-cams clear">0 cameras</span>`
+        : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
+    const clearBadge =
+      o.cameras === 0
+        ? `<span class="opt-clear-badge">${icon('shieldCheck', { size: 14 })} Camera-free route</span>`
         : '';
-      // Over the detour budget: avoidance costs real extra time — say so.
-      const overBudget = o.overBudget ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} costs extra time</span>` : '';
-      // Distance tradeoff vs the fastest option (driver-preference research,
-      // round 79: distance carries independent disutility — a route that is
-      // SHORTER in distance but a bit slower is genuinely preferred on short
-      // urban trips, so the card must make the distance delta visible, not
-      // just the time delta).
-      const dKm = o.distance - fastest.distance; // meters
-      const tradeoff =
-        fastest && o !== fastest && Math.abs(dKm) >= 100
-          ? `<span class="opt-tradeoff ${dKm < 0 ? 'shorter' : 'longer'}">${dKm < 0 ? '↓' : '↑'} ${fmtDistance(Math.abs(dKm))} ${dKm < 0 ? 'shorter' : 'longer'} than fastest</span>`
-          : '';
-      // Surface freeway exposure so the user understands WHY a route was
-      // picked — e.g. the shortest camera-free option may still use some highway,
-      // or the "Fastest" route burns 6 km of freeway. Only show when meaningful.
-      // "Most natural" endorsement: a route a local would take -- SHORTER than
-      // the fastest option AND no more freeway exposure (fewer/same highway km).
-      // Driver-preference research (rounds 79/80/84): on short urban trips a
-      // shorter surface arterial beats a freeway detour that only saves ~1-2 min.
-      // The generalized-cost engine now produces these; surface the win so the
-      // user can trust the recommended option (Google eco-leaf analog).
-      const natural =
-        fastest && o !== fastest && o.distance < fastest.distance &&
-        (o.highwayKm || 0) <= (fastest.highwayKm || 0) + 0.5
-          ? `<span class="opt-natural" title="Shorter and uses no more freeway than the fastest route -- the way a local would drive">${icon('leaf', { size: 13 })} Most natural</span>`
-          : '';
-      const hw = o.highwayKm && o.highwayKm >= 0.5 ? ` · ${o.highwayKm.toFixed(1)} km hwy` : '';
-      return `
-        <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button" aria-pressed="${i === chosen}">
+    const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
+    const bestEffort = o.strictFallback
+      ? o.clearToM
+        ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} clear to within ~${fmtDistance(o.clearToM)}</span>`
+        : o.walled
+          ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort — camera-walled</span>`
+          : ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort — clear route too long</span>`
+      : '';
+    const overBudget = o.overBudget ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} costs extra time</span>` : '';
+    const dKm = o.distance - fastest.distance;
+    const tradeoff =
+      fastest && o !== fastest && Math.abs(dKm) >= 100
+        ? `<span class="opt-tradeoff ${dKm < 0 ? 'shorter' : 'longer'}">${dKm < 0 ? '↓' : '↑'} ${fmtDistance(Math.abs(dKm))} ${dKm < 0 ? 'shorter' : 'longer'} than fastest</span>`
+        : '';
+    const natural =
+      fastest && o !== fastest && o.distance < fastest.distance &&
+      (o.highwayKm || 0) <= (fastest.highwayKm || 0) + 0.5
+        ? `<span class="opt-natural" title="Shorter and uses no more freeway than the fastest route -- the way a local would drive">${icon('leaf', { size: 13 })} Most natural</span>`
+        : '';
+    const hw = o.highwayKm && o.highwayKm >= 0.5 ? ` · ${o.highwayKm.toFixed(1)} km hwy` : '';
+    return `
+        <button class="route-opt ${idx === chosen ? 'chosen' : ''}" data-opt="${idx}" type="button" aria-pressed="${idx === chosen}">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
           ${clearBadge}
           <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${hw}${delay}${bestEffort}${overBudget}</span>
           ${tradeoff}
           ${natural}
         </button>`;
-    })
-    .join('');
+  };
+
+  const primaryOpts = options.filter((o) => o.mode !== 'no_highways');
+  const hwOpt = options.find((o) => o.mode === 'no_highways');
+  const optHtml = primaryOpts.map((o) => optBtn(o, options.indexOf(o))).join('');
+  // "No highways" = modifier chip beneath the three primary slots.
+  const modifierHtml = hwOpt
+    ? `<button class="route-opt-mod ${options.indexOf(hwOpt) === chosen ? 'chosen' : ''}" data-opt="${options.indexOf(hwOpt)}" type="button" aria-pressed="${options.indexOf(hwOpt) === chosen}">${icon('road', { size: 13 })} Without highways · ${fmtDuration(hwOpt.duration)} · ${fmtDistance(hwOpt.distance)} · ${hwOpt.cameras === 0 ? '0 cameras' : hwOpt.cameras + ' camera' + (hwOpt.cameras === 1 ? '' : 's')}</button>`
+    : '';
 
   const detourVsFastest =
     sel.mode !== 'off' && fastest
@@ -355,7 +348,7 @@ function renderEngineCard(app, card, result) {
         : `${icon('shield', { size: 15 })} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
     }</div>
     ${detourVsFastest}
-    <div class="route-options">${optHtml}</div>
+    <div class="route-options">${optHtml}</div>${modifierHtml ? `\n    <div class="route-modifiers">${modifierHtml}</div>` : ''}
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : ''}
   `;
@@ -363,7 +356,7 @@ function renderEngineCard(app, card, result) {
 
   const edit = $('#editRouteBtn');
   if (edit) edit.addEventListener('click', () => expandSearch(app));
-  card.querySelectorAll('.route-opt').forEach((b) =>
+  card.querySelectorAll('.route-opt, .route-opt-mod').forEach((b) =>
     b.addEventListener('click', () => app.selectOption(Number(b.dataset.opt)))
   );
   const sn = $('#startNavBtn');

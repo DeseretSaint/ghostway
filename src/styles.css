@@ -1027,6 +1027,38 @@ details summary {
   border-color: var(--accent);
   background: rgba(58, 214, 197, 0.1);
 }
+/* "No highways" surface preference is presented as a subordinate modifier
+   chip beneath the three primary slots (Fastest/Balanced/Clearest) rather
+   than a competing primary option. */
+.route-modifiers {
+  margin: -2px 0 8px;
+}
+.route-opt-mod {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 38px;
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: 7px 12px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--muted);
+  font-size: 12px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.route-opt-mod:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+.route-opt-mod.chosen {
+  color: var(--ink);
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(58, 214, 197, 0.1);
+}
 .opt-label {
   font-weight: 700;
 }
