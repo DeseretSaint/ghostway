@@ -176,7 +176,7 @@ function parseGraph(raw) {
 // signalized road classes and charge junction delays. Benchmark target:
 // PG → Costco Lehi within ±10% of Valhalla's 10 min (see
 // scripts/eta-benchmark.mjs). spd is the posted km/h on the edge.
-export const effFactor = (spd) => (spd >= 95 ? 1.0 : spd >= 60 ? 0.86 : spd >= 45 ? 0.82 : 0.78);
+export const effFactor = (spd) => (spd >= 95 ? 0.95 : spd >= 60 ? 0.86 : spd >= 45 ? 0.82 : 0.78);
 export const junctionPenalty = (spd) => (spd >= 95 ? 0 : spd >= 60 ? 7 : spd >= 40 ? 5 : 3.5);
 
 export function inGraphRegion(lon, lat) {
