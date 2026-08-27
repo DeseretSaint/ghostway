@@ -29,7 +29,7 @@ free, privacy-first.
 - [ ] Privacy/security: no leaks, no third-party calls w/o consent, data handling
 - [ ] Data freshness: camera snapshot, traffic, WZDx — CI refresh robustness
 - [ ] Coverage: graph region expansion, national fallback (Valhalla) resilience
-- [ ] Accessibility: touch targets, font sizes, dark contrast, reduced motion
+- [x] Accessibility: touch targets (r37/38), ARIA (r40), keyboard Escape (r43), focus-visible (CSS), dark contrast (r40 audit PASS), reduced motion (styles.css:1037 global rule — CLOSED r47). Camera legend added (r47).
 
 ## Angles already landed (do NOT re-do; pivot to a new sub-angle)
 - iterations 1-19: graph engine, 3 modes, Valhalla fallback, traffic, follow
@@ -78,6 +78,7 @@ free, privacy-first.
 ## Improvement Queue
 Research-only runs (locked or warm-deploy) append ideas here. Edit runs pull
 from this queue first when it's non-empty.
+- [ ] TEST-MSG BUG (slot-C 2026-08-27 01:32 MDT): scripts/avoidance-audit.mjs summary is misleading. On `o.strictFallback` it prints "⚠ BEST-EFFORT (destination camera-walled; no ≥30 m path exists)" AND exempts the route from the `midOk` failure check, so the final headline still claims "every Clearest route stays ≥ 30 m from ALPR cameras mid-route" even though the 5 printed Clearest minima are 25/16/12/17/4 m (<30). Two defects: (1) reason text conflates two distinct strictFallback causes — per slot-A round 45 only BYU is truly walled; PG→Costco/Lehi→SLC/AF→PC fire from DETOUR BUDGET (clear path exists, over-budget) — so "no ≥30 m path exists" is false for 4/5. (2) PASS headline overstates the guarantee; best-effort routes are exempt from the floor check so the audit passes while Clearest passes 4 m from a cam (AF→PC). Fix: have router.js expose WHY strictFallback fired (clearest===null vs budget) and reword summary to "≥30 m on clearable corridors; N walled/budget destinations served best-effort". Audit still correctly exit-0 gates CI; reporting-accuracy defect only, NOT a routing regression. No code change this run (verification only).
 - [x] Mid-zoom heatmap clustering (visual noise reduction) — landed 2026-08-26
 - [x] Route-line anti-cut: Douglas-Peucker already in; audit edge cases on highways
       — RESOLVED 2026-08-26 (round 31): new scripts/geometry-audit.mjs proves the
@@ -245,6 +246,18 @@ from this queue first when it's non-empty.
           arcTo.length === outStart[nodeCount] (was 14 short). BLOCKED this
           run: router.js has another session's live uncommitted nearestNode fix
           (see ops note below) — land ow=2 AFTER that changeset settles.
+- [ ] QA IMPROVEMENT OPPORTUNITY 2026-08-27 00:15 MDT (12-h QA pass): slot-C's
+      2026-08-26 23:04 sweep FINDING was never filed as a queue item — filing it
+      now so a fleet slot picks it up. 14 tracked puppeteer suites are
+      NON-HERMETIC (raw goto :4173, no lib-preview): alert-check, camchip-check,
+      camera-modal-check, compact-check, engine-e2e, follow-check, heatmap-check,
+      https-check, nav-playback, onboard-check, report-check, search-bias-check,
+      tiers-check, waypoint-check. They PASS only while some holder's external
+      `vite preview` happens to be up; standalone they false-FAIL
+      ERR_CONNECTION_REFUSED (verified this QA pass: 0 of 14 import lib-preview).
+      FIX: port all 14 to scripts/lib-preview.mjs (round-23 pattern: spawn +
+      poll-until-up + kill-tree). Same entry: fix engine-e2e "options shown: 0"
+      race — wait for #route-card before counting options.
 - [ ] Graph integrity (2026-08-26 slot-A research-only, CLEAN): full read-only
       audit of shipped wasatch-graph.bin (527,282 nodes / 552,448 edges) —
       0 self-loops, 0 zero-len, 0 zero-spd, 0 bad node refs, 0 nodes outside
@@ -318,7 +331,8 @@ from this queue first when it's non-empty.
       Recommend CLOSING this axis as low-priority; revisit only if a field drive
       shows an illegal maneuver in a real route. No code changed (router.js still
       in grace window anyway). Script: /tmp/gw-turns-impact.mjs (reproducible).
-- [x] ROUTING AXIS decoy: community-report → routing IS already implemented
+- [ ] ROUTING AXIS (slot-A round 46, 2026-08-27 01:20 MDT, research-only, DE-PRIORITIZED): camera-avoidance **brand weighting** feasibility — queued sub-angle ("brand weighting; community reports feed routing"). Measured brand distribution on the shipped fallback snapshot public/cameras/cameras.geojson (637 cams): Flock Safety 440 (69%), Motorola Solutions 136 (21%), Genetec 26 (4%), everything else ≤3 each, 26 (4.1%) untagged. CONCLUSION: the fleet is overwhelmingly Flock/Motorola ALPR — both read plates at speed — so the uniform ≥30 m strict floor ALREADY neutralizes the threat class regardless of brand. Brand weighting (extra margin for rare high-res Genetec ~4%) would change ~0 corridors. RECOMMEND CLOSING as low-priority (same verdict as turn restrictions). Caveat: measured on the 637-cam fallback, not the live 135k DeFlock MVT set; fallback is representative of shipped threat mix. No code changed (router.js still blocked by live nearestNode changeset + holder preview :4173 PID 14547, mtimes ~1h43m < 24h grace window).
+- [ ] ROUTING AXIS decoy: community-report → routing IS already implemented
       (src/router.js planRoutes communityCams → merged eCam, R=100 m, same
       weighting as builder). Verified present in working tree. No further work.
 - [ ] Ops (found 2026-08-26 22:03 MST, round 38): src/router.js holds a SECOND
@@ -391,6 +405,10 @@ block on these — it queues and moves on.
 || 2026-08-26 | routing (slot-A round 44) | research-only: MEASURED real impact of OSM turn restrictions — standalone Dijkstra (node + (node,inEdge) states, exact effFactor+junctionPenalty) over shipped graph with full decoded turn table on 6 corridors. Result: current engine commits ZERO forbidden turns on every corridor AND enforcement changes ZERO routes (0m/0min). Self-test proves table+enforce are correct (enforce avoids a known banned turn that non-enforce takes) → not a false zero. DE-PRIORITIZED the turn-restriction axis: technically real but no measured product impact; revisit only if a field drive shows an illegal maneuver. router.js untouched (still in grace window) | /tmp/gw-turns-impact.mjs: 978 forbid+424 allow over 1343 via nodes; PG→BYU 9 / AF→PC 7 / PG→Costco 5 / SLCgrid 5 restricted via-nodes ON route, 0 violations on all; SELFTEST reAvoids=true rnTakes=true | research-only (axis de-prioritized) |
 || 2026-08-26 | UX (slot-B round 45) | "Start navigation" CTA was unreachable on small phones — `#startNavBtn` sat below the panel's 52vh scroll fold (hit-test landed on the map canvas, not the button). Root-caused via real puppeteer geometry probe (btn top 850 > panel bottom 834; scrollHeight 566 > clientHeight 437). FIX: `position: sticky; bottom: 0` + upward shadow so the primary CTA pins to the scroll port on overflow instead of hiding. CSS-only, no protected files touched. | puppeteer probe: btn now 773–821 (fully inside panel 395–834), `elementFromPoint` hit = `primary-btn` (BUTTON); interact-check PASS (startNavHit=startNavBtn, 0 page errors); build exit 0 | committed 5d1bcc7, PUSHED, live site HTTP 200, deploy run 33041971145 in_progress |
 | 2026-08-26 | routing (slot-A round 45) | research-only: generalized the BYU camera-walled tail measurement to ALL 5 corridors (/tmp/gw-walled-tails.mjs, proven round-40 decoder). FINDING: only BYU is truly reachability-walled (gate North Canyon Rd, tail 118 m/4 edges, min cam 17 m — round-40 numbers reproduced exactly). PG→Costco, Lehi→SLC, AF→PC dest nodes ARE in the clear network (496,997 nodes) → their strictFallback fires from the DETOUR BUDGET (router.js L674), not walling. Slot-C's "1→4 walled" warning = badge message conflation of two distinct cases. FIX SPEC v2 pinned in queue: (a) walled → gate-snap + "clear to within ~N m"; (b) over-budget → distinct honest message; router needs a flag distinguishing clearest===null vs budget-exhausted. router.js still blocked (nearestNode changeset live, holder preview :4173) → no code changed | /tmp/gw-walled-tails.mjs: 5/5 corridors measured; BYU walled (tail 118 m, min cam 17 m), 4/5 dests floor-reachable; router.js L674-690 budget logic read | research-only (fix spec v2 pinned) |
+
+|| 2026-08-27 | routing (slot-A round 46) | research-only: camera-avoidance BRAND WEIGHTING feasibility — measured shipped fallback cam mix (637): Flock 69% / Motorola 21% / Genetec 4% / other ≤3% / untagged 4%. Uniform ≥30 m floor already covers the ALPR threat class; brand weighting affects ~0 corridors → DE-PRIORITIZED (close, like turn restrictions). router.js blocked (nearestNode in-flight, holder preview :4173 PID 14547, ~1h43m in grace window) → no code changed | public/cameras/cameras.geojson brand tally: Flock 440, Motorola 136, Genetec 26, untagged 26 | research-only (axis de-prioritized) |
+| 2026-08-27 | tests (slot-C, 01:32 MDT) | verification sweep over CURRENT working tree (in-flight nearestNode fix + 16-file lazy-engine set, all uncommitted, grace window) — NO code changed, verify only. Core invariants PASS: floor-audit 0 strict-legal edges <31.4 m; engine-check modes distinct (Fastest 10km/10min/2cams, Clearest 10km/11min/1cam); avoidance-audit Clearest ≥30 m mid-route *claimed*. FOUND test-message defect (filed): avoidance-audit PASSES while printing Clearest mid-route minima 25/16/12/17/4 m (<30) on 5 best-effort corridors + headline falsely claims "every Clearest stays ≥30 m"; reason text conflates walled vs budget (only BYU truly walled). No routing regression. | floor-audit PASS; engine-check PASS; avoidance-audit exit 0 but summary misleading (bug filed) | verified — invariants hold; test-summary defect flagged |
+||| 2026-08-27 | accessibility/visual (UX, slot-B round 47) | on-map **camera legend**: new `#legendBtn` map-chip (ⓘ) toggles `#legendPanel` explaining the camera dots — Flock `#ff4d6d` (reads plates at speed), other ALPR `#ffaa40`, density gradient swatch. CSS-only panel + ui.js toggle (aria-expanded wired); no protected files (config/main/map-view/router) touched. New scripts/legend-check.mjs E2E guard. ALSO: confirmed `prefers-reduced-motion` is already fully handled (styles.css:1037 global `*{animation:none!important;transition:none!important}` + drawer rule) — prior slot-B "reduced-motion" lock work already complete; marking that axis item closed. | legend-check PASS: btn+panel exist, hidden initially, opens (aria-expanded=true) with 2 dots + 1 swatch + 3 rows, closes on 2nd click, 0 console errors; build exit 0 | committed 090026e, PUSHED, live site HTTP 200, deploy run 33050498868 in_progress |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
