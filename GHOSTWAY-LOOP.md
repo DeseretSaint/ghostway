@@ -104,6 +104,21 @@ from this queue first when it's non-empty.
       route to the gate node and message "clear to within ~120 m of
       destination — final approach passes a camera" instead of generic
       "best effort". Technique is generic for any camera-walled destination.
+      UPDATE (round 45, slot-A research, /tmp/gw-walled-tails.mjs): generalized
+      the BYU measurement to ALL 5 corridors. FINDING: only BYU is truly
+      reachability-walled (t unreachable under floor; gate North Canyon Rd
+      -111.65612,40.25350, tail 118 m/4 edges, min cam 17 m — round-40 numbers
+      reproduced exactly). PG→Costco, Lehi→SLC, AF→PC dest nodes ARE reachable
+      in the clear network (496,997 nodes) → their strictFallback fires from the
+      DETOUR BUDGET (router.js L674 fastest*1.25+90 s), NOT from walling. So
+      slot-C's "1→4 camera-walled" warning is a message conflation: the badge
+      covers two distinct cases. FIX SPEC v2: (a) unreachable-under-floor →
+      gate-snap + "clear to within ~N m" (original spec, BYU only today);
+      (b) reachable-but-over-budget → distinct honest message ("camera-clear
+      route exists, +X min over fastest") or budget review; router already
+      computes both paths — strictFallback just doesn't distinguish WHY it
+      fired (add a flag: clearest===null vs budget). NEXT: implement (a)+(b)
+      when router.js unblocks (nearestNode changeset still live).
 - [x] Test infra: ux-shots/shot/ux-audit/pwa-check still use fixed sleeps
       (2.5-2.6s) for vite preview startup — same flaky class interact-check
       had (ERR_CONNECTION_REFUSED on npx cold-start); port the poll-until-up loop
@@ -112,9 +127,15 @@ from this queue first when it's non-empty.
       flow (waited for hidden #goBtn → 30s timeout; now suggestion-pick +
       auto-route, in-page click w/ retry for stale handles) and ux-shots/shot
       teardown hang (no process.exit → watchdog exit 2 after "done").
-- [ ] Test infra: engine-e2e startNavBtn hit-test returned maplibregl-canvas
-      (banner still showed + click worked) — investigate whether the collapsed
-      panel overlaps the button center after strict re-route
+- [x] UX (slot-B round 45): engine-e2e `startNavBtn` hit-test returned
+      `maplibregl-canvas` — RESOLVED as a REAL UI bug, not a test artifact. On a
+      390×844 phone the route card overflows the 52vh panel (scrollHeight 566 >
+      clientHeight 437, scrollTop 0) and `#startNavBtn` (top 850) sat BELOW the
+      panel fold (bottom 834) → primary CTA unreachable without scrolling. FIX:
+      `position: sticky; bottom: 0` + upward shadow so the button pins to the
+      scroll port. Verified with a real puppeteer geometry probe: button now
+      fully inside panel (773–821) and `elementFromPoint` hits `primary-btn`.
+      Committed 5d1bcc7, pushed, live 200.
 - [x] PRIORITY camera-avoidance: RESOLVED 2026-08-26 (round 25) — FALSE ALARM.
       The "10 strict-legal edges at 4.3-25.1 m" came from a stride bug in the
       /tmp audit script (read edge endpoints at offA+e instead of offA+e*4 →
@@ -267,13 +288,36 @@ from this queue first when it's non-empty.
       distinct via nodes**. no_u_turn encodes as (v,fe,fe). FORMAT DECISION:
       per-node CSR wastes 2 MB (527k-node start array); use via-keyed compact:
       turnViaCount u32 + turnViaNodes[920] u32 + turnStart[921] u32 + entries
-      (in u32, out u32, mode u8) = **~20 KB total** on GWR2. parseGraph builds
+      entries (in u32, out u32, mode u8) = **~20 KB total** on GWR2. parseGraph builds
       Map<node,[start,end)> at load (920 entries, trivial). astar: on relaxing
       arc into v, if v has allow-entries for inEdge → only those outEdges pass;
       else forbid-pairs rejected. Still BLOCKED on router.js (nearestNode
-      changeset live, holder preview :4173 up) — landing run = build-graph.mjs
+      changeset live, holder preview :4173) — landing run = build-graph.mjs
       table writer + parseGraph reader + astar check + floor-audit/engine-check
       /avoidance-audit/smoke/engine-e2e.
+- [ ] ROUTING AXIS (slot-A round 44, 2026-08-26 ~23:00, research-only,
+      IMPACT MEASURED — DE-PRIORITIZED): ran a standalone Dijkstra (node + (node,inEdge)
+      states, exact time cost = effFactor+junctionPenalty, mirror of router.js)
+      over the shipped graph with the FULL decoded turn table. **Finding: on all 6
+      test corridors (PG→BYU, AF→Park City, Lehi→SLC, PG→Costco/Lehi, SLC 1km
+      grid, Provo grid) the CURRENT unrestricted engine routes commit ZERO
+      forbidden turns, and enforcing turn restrictions changes ZERO routes
+      (0 m / 0 min).** Several corridors DO pass through restricted junctions
+      (PG→BYU 9, AF→PC 7, PG→Costco 5, SLC-grid 5 restricted via-nodes on route)
+      — so the engine routes *through* restricted corners but never makes the
+      specific prohibited maneuver; the time-optimal path simply doesn't pick a
+      banned U-turn/left. **Self-test confirms the table + enforce pipeline are
+      correct (not a false zero):** a known forbid[v,inE,outE] entry — enforce
+      AVOIDS the banned turn (reAvoids=true) while non-enforce TAKES it
+      (rnTakes=true). Table measured here: 978 forbid + 424 allow over 1343 via
+      nodes (vs round-43 990/425/920 — minor edge-match variance from coord
+      rounding; both confirm a populated, large table). CONCLUSION: turn
+      restriction ingestion is technically real but has NO measured impact on the
+      product's actual corridors (incl. dense urban grids) — NOT worth the
+      build-graph version bump + router.js (parseGraph+astar) complexity for now.
+      Recommend CLOSING this axis as low-priority; revisit only if a field drive
+      shows an illegal maneuver in a real route. No code changed (router.js still
+      in grace window anyway). Script: /tmp/gw-turns-impact.mjs (reproducible).
 - [x] ROUTING AXIS decoy: community-report → routing IS already implemented
       (src/router.js planRoutes communityCams → merged eCam, R=100 m, same
       weighting as builder). Verified present in working tree. No further work.
@@ -342,6 +386,11 @@ block on these — it queues and moves on.
 | 2026-08-26 | routing (slot-A round 42) | research-only: scouted a NEW routing axis — OSM turn-restriction ingestion. Engine honors ZERO turn restrictions today (A* only does degree-based junctionPenalty), so it can plan illegal U-turns/lefts. Decoded /tmp/utah-fresh.osm.pbf + shipped graph (audit's proven decoder). router.js BLOCKED by live nearestNode changeset + holder preview :4173 → no code changed | 2179 restriction relations in-region (2167 actionable); 1937 (89%) have `via` node in graph; 1222 (56%) at real junction (deg≥3) — types: no_u_turn 707, no_left_turn 660, only_straight_on 418, no_right_turn 199, only_right_turn 118…; plan pinned in queue | research-only (queued axis + landing plan) |
 | 2026-08-26 | accessibility (UX, slot-B round 43) | keyboard accessibility: Escape now dismisses overlays — priority modal > drawer > suggestions. Handler in ui.js (main.js is in the protected 16-file lazy-engine set) clicks the CANONICAL close buttons (#modalClose/#closeDrawer) so main.js scrim/animation logic stays single-sourced. New scripts/escape-check.mjs E2E guard: opens real drawer + "why?" modal + suggestions, presses Escape, asserts hidden + scrim hidden, 0 page errors, close-race watchdog (first draft hung on browser.close() under swiftshader — same known class, fixed with the race pattern). Did NOT touch router.js/main.js/map-view.js/config.js or the 14 uncommitted script changesets. | build exit 0; escape-check PASS exit 0 (drawer/modal/sugg all close, scrim hidden); interact-check PASS exit 0 (no regression from ui.js edit); pushed dabf6e1..789566b, deploy run 33041083840, live site HTTP 200 | shipped |
 || 2026-08-26 | routing (slot-A round 43) | research-only: prototyped the build-time turn TABLE (/tmp/gw-turntable.mjs) — full relation→graph-edge resolution incl. only_* allow-lists + no_u_turn=(v,fe,fe). 1889/2179 rels matched (87%) → 990 forbid + 425 allow entries, 920 via nodes. Format decision: via-keyed compact table ~20 KB (per-node CSR = 2 MB waste). Landing spec pinned in queue. router.js still BLOCKED (nearestNode changeset live, holder preview :4173) → no code changed | /tmp/gw-turntable.mjs run: matched 1889, forbid 990, allow 425, via nodes 920, table 20 KB | research-only (landing spec pinned) |
+| 2026-08-26 | tests (slot-C, 23:04 MST) | verification sweep: build exit 0; floor-audit PASS (0 strict-legal edges <31.4 m, 630 bbox cams); engine-e2e + compact-check needed an externally-running preview (raw goto :4173, NO self-start) → ERR_CONNECTION_REFUSED standalone, but PASS with a preview up (engine-e2e: engine ready, strict re-route w/ best-effort badge, nav banner, 0 errors; compact-check: ⭐ slim/persist). FINDING: engine-e2e/compact-check + the other 21 suites from round-23's grep -L lib-preview list are NON-HERMETIC — they only passed in prior sweeps because a holder preview was up; round 23 only ported pwa/shot/ux-audit/ux-shots/interact to lib-preview. NOT a code bug (app healthy) — a test-infra gap. engine-e2e "options shown: 0" is a test-timing race (doesn't wait for #route-card before counting; strict options + nav banner render fine after). Did NOT edit the 16-file protected changeset. | build exit 0; floor-audit PASS; engine-e2e PASS-with-preview (0 errors); compact-check ⭐; no app regressions | verified — app healthy; suites non-hermetic (flag for lib-preview port) |
+| 2026-08-26 | tests (slot-C, 23:11 MST) | read-only sweep under FRESH slot-B lock (62s old, "reduced-motion", PID 12076 already dead — left lock untouched, too young to reap; no build/preview to avoid dist/port conflicts) | live site HTTP 200 in 2.6s, correct title; floor-audit PASS (0 strict-legal edges <31.4 m, min bucket 30-40 m); engine-check PASS (Fastest 10km/10min/2cams, Clearest 10km/11min/1cam, distinct modes) | verified — floor + routing healthy; NOTE: if slot-B lock still present + PID dead next run, reap per >stale rule |
+|| 2026-08-26 | routing (slot-A round 44) | research-only: MEASURED real impact of OSM turn restrictions — standalone Dijkstra (node + (node,inEdge) states, exact effFactor+junctionPenalty) over shipped graph with full decoded turn table on 6 corridors. Result: current engine commits ZERO forbidden turns on every corridor AND enforcement changes ZERO routes (0m/0min). Self-test proves table+enforce are correct (enforce avoids a known banned turn that non-enforce takes) → not a false zero. DE-PRIORITIZED the turn-restriction axis: technically real but no measured product impact; revisit only if a field drive shows an illegal maneuver. router.js untouched (still in grace window) | /tmp/gw-turns-impact.mjs: 978 forbid+424 allow over 1343 via nodes; PG→BYU 9 / AF→PC 7 / PG→Costco 5 / SLCgrid 5 restricted via-nodes ON route, 0 violations on all; SELFTEST reAvoids=true rnTakes=true | research-only (axis de-prioritized) |
+|| 2026-08-26 | UX (slot-B round 45) | "Start navigation" CTA was unreachable on small phones — `#startNavBtn` sat below the panel's 52vh scroll fold (hit-test landed on the map canvas, not the button). Root-caused via real puppeteer geometry probe (btn top 850 > panel bottom 834; scrollHeight 566 > clientHeight 437). FIX: `position: sticky; bottom: 0` + upward shadow so the primary CTA pins to the scroll port on overflow instead of hiding. CSS-only, no protected files touched. | puppeteer probe: btn now 773–821 (fully inside panel 395–834), `elementFromPoint` hit = `primary-btn` (BUTTON); interact-check PASS (startNavHit=startNavBtn, 0 page errors); build exit 0 | committed 5d1bcc7, PUSHED, live site HTTP 200, deploy run 33041971145 in_progress |
+| 2026-08-26 | routing (slot-A round 45) | research-only: generalized the BYU camera-walled tail measurement to ALL 5 corridors (/tmp/gw-walled-tails.mjs, proven round-40 decoder). FINDING: only BYU is truly reachability-walled (gate North Canyon Rd, tail 118 m/4 edges, min cam 17 m — round-40 numbers reproduced exactly). PG→Costco, Lehi→SLC, AF→PC dest nodes ARE in the clear network (496,997 nodes) → their strictFallback fires from the DETOUR BUDGET (router.js L674), not walling. Slot-C's "1→4 walled" warning = badge message conflation of two distinct cases. FIX SPEC v2 pinned in queue: (a) walled → gate-snap + "clear to within ~N m"; (b) over-budget → distinct honest message; router needs a flag distinguishing clearest===null vs budget-exhausted. router.js still blocked (nearestNode changeset live, holder preview :4173) → no code changed | /tmp/gw-walled-tails.mjs: 5/5 corridors measured; BYU walled (tail 118 m, min cam 17 m), 4/5 dests floor-reachable; router.js L674-690 budget logic read | research-only (fix spec v2 pinned) |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
