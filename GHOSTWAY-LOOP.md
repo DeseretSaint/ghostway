@@ -139,6 +139,8 @@ from this queue first when it's non-empty.
       exit 0; engine-check/smoke/engine-e2e/interact-check/report-check/
       xss-check all PASS, zero console errors.
 - [ ] ETA accuracy (found round 33): AF→Park City own-engine +8 min vs Valhalla is a ROUTE-CHOICE gap, not speed model — engine picks a 96.3 km path (42.8+44.6 km @113 unnamed freeway legs) vs Valhalla's 87.9 km. Investigate which corridor (I-80 via Parley's vs US-189/US-40) each takes and why A* prefers the longer one (likely junction-penalty/edgeFactor asymmetry or a missing shortcut edge).
+- [ ] ETA (round 35 NEXT RUN — MEASURED 2026-08-26, RESEARCH-ONLY): standalone Dijkstra over shipped GWR1 graph (replicating router.js cost exactly: effFactor+junctionPenalty) disproves the "belt longer in graph" theory. DISTANCE: belt corridor AF→I15×I215→I215×I80→PC = 87.70 km vs straight AF→I15×I80→PC = 88.48 km (belt 0.78 km SHORTER). TIME: belt 74.7 min vs straight 69.5 min → engine correctly prefers straight on time. BUT engine's REAL chosen path = 96.3 km, ~8 km longer than graph's time-optimal straight corridor (86.5 km). CONCLUSION: true bug = engine adds ~8 km detour at the I-15/I-80 downtown interchange (over-aggressive junctionPenalty / edgeFactor asymmetry on the merge), NOT belt-vs-straight. FIX NEXT: instrument planRoutes AF→PC to dump chosen node seq + per-leg cost; compare engine 96.3 km path to graph 86.5 km corridor to localize the penalty. Requires importing src/router.js → BLOCKED until the 16-file lazy-engine changeset (config.js/main.js/map-view.js) is committed/abandoned (don't touch in grace window).
+- [x] ETA route-choice "ROOT CAUSE FOUND" (2026-08-26 research) — DISPROVEN 2026-08-26 (round 35): the "I-215 south leg missing from OSM" theory is FALSE. Verified via Overpass + shipped-graph decode (scripts reuse): the I-15/I-215 junction is at **40.6355°N** (not ~40.618), all 3 connecting ramps ARE in OSM (ways 31534919/31534974/1042842430), the belt is fully in the graph (969 edges, 2 components = both carriageways, normal) and DIRECTED-reachable from I-15@40.63 = 912/971 nodes (the 59 unreachable are a minor NW-corner stub near 40.835). I-80 reachable 1051/1054. A forced hop (I-15@40.62 → I-80@-111.80) PROVES the engine DOES route onto the belt (11.5 km "(unnamed)" = belt carriageway + 8.6 km I-80, 20.3 km). So the belt is present, connected, and usable. CORRECTED root cause: AF→Park City gap is a genuine **A* route-choice/cost** issue — engine takes 43.1 km unnamed (I-15 straight through the I-15/I-80 downtown interchange) + 44.6 km I-80 = 96.3 km, while Valhalla uses I-15→Belt→I-80 = 87.9 km (belt saves ~8 km). A* is NOT selecting the belt even though it's reachable and shorter in Valhalla. Likely a junction-penalty / edgeFactor asymmetry (belt has spd 113 like I-15, so the cost difference is purely path-length — belt may be longer in *graph* geometry than I-15-through-downtown, OR a turn penalty at the I-15→belt hop discourages it). NEXT RUN: instrument planRoutes AF→PC to dump chosen node sequence + belt-node hits; compare graph-distance of I-15-straight vs I-15→belt→I-80 paths to see whether A* is correctly minimizing a longer-than-real belt path (graph fidelity) or wrongly preferring I-15 (cost bug). Do NOT queue an OSM edit — no OSM fix needed.
 - [ ] Privacy audit 2026-08-26 (CLEAN, no action): enumerated every runtime
       third-party call — openfreemap tiles, DeFlock MVT camera tiles, photon
       geocoding, brouter/osrm/valhalla routing, UDOT arcgis traffic, OSM notes
@@ -159,6 +161,35 @@ from this queue first when it's non-empty.
       owner commits or abandons. If still uncommitted + stale (>24 h, mtimes
       unchanged), a future run may verify (build + suites) and land it as its
       own round, crediting it as the lazy-engine/neutral-view round.
+- [x] ETA AF→Park City route-choice "8 km detour" theory — DISPROVEN 2026-08-26
+      (round 36, instrumented). Directed exact-cost Dijkstra over the shipped
+      graph (same effFactor+junctionPenalty+nodeDeg as router.js, directed arcs)
+      returns 96.27 km / 62.7 min = BYTE-IDENTICAL to the engine's A* path
+      (1051 arcs). A* is PROVABLY OPTIMAL — no search bug, no over-aggressive
+      junction penalty, no interchange detour. Engine path = I-15 (Veterans Mem
+      40.9 km) straight through downtown → I-80 (Eisenhower 37.9 km). The gap vs
+      Valhalla (87.9 km) is a COST-MODEL/GRAPH-FIDELITY gap: under the engine's
+      costing the straight corridor (68.1 min) beats the belt (77.9 min), so the
+      engine correctly minimizes its own time model; Valhalla's model finds the
+      belt faster. NOT a router defect — it's ETA calibration on this corridor.
+      Belt facts measured: "Belt Route" freeway IS in the graph (969 edges,
+      89.7 km @ spd 113, south segment 40.62-40.65 bidirectional 14.4+14.3 km),
+      connected, T reachable from mid-belt in 37.4 min. Prior "belt corridor"
+      numbers were polluted by nearestNode snapping J1/J2 to surface streets
+      (Lombardy Dr / Wasatch Blvd), not the freeway. NEXT (if pursued): nudge
+      freeway effFactor or belt-class speed so the belt wins where Valhalla says
+      it should — but PG→Costco/BYU/Orem are exact, so low priority.
+- [ ] BUG (found round 36, REAL but tiny impact): parseGraph() in src/router.js
+      mis-handles ow=2 (oneway=-1) edges. arcCount allocates 1 arc for ow=2
+      (`eOw===0?2:1`), but the fill loop ALWAYS writes a→b then also writes b→a
+      when ow!==1 → ow=2 edges write 2 arcs into 1 slot, corrupting adjacency.
+      Proof: arcTo.length=1023556 < outStart[N]=1023570 (14 slots short) = the
+      14 ow=2 edges. All 14 are tiny residential stubs (3-48 m: 1500 East SLC,
+      Fort Herriman Pkwy, Shadow Run Ln) — none on any freeway/arterial corridor,
+      so routing impact is negligible today, but it's latent adjacency corruption
+      that grows with every new oneway=-1 way. FIX: in the fill loop, if ow===2
+      write ONLY the b→a arc (skip a→b). Then re-run floor-audit + engine-check
+      + smoke + engine-e2e (graph parse changed) before shipping.
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -175,6 +206,10 @@ block on these — it queues and moves on.
 - [x] GitHub auth AGAIN (2026-08-27 ~02:00 MST): RESOLVED 2026-08-27 (round 34):
       token valid again (keyring); pushed 198c1ad..eaf28f1 (round-33 ETA derate
       + ledger), deploy run 33032280575 success, live site HTTP 200 in 0.78s.
+- [ ] GitHub auth AGAIN (2026-08-26 ~21:45 MST, round 36): gh token invalid
+      ("The token in default is invalid"). The round-36 ledger commit (see
+      Latest round table) is stranded locally — push it in the next ops round
+      once the token recovers.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -194,6 +229,7 @@ block on these — it queues and moves on.
 | 2026-08-27 | ops (round 32) | unblocked round-31: gh auth valid again (keyring) → pushed stranded commits c94bf49+f078910 (d8f4173..f078910); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes now ~1 h old — still in <24 h grace window) | push exit 0; deploy run 33031062944 success; curl live site → HTTP 200 in 0.58s, correct title | shipped |
 | 2026-08-27 | ETA accuracy (round 33) | freeway effFactor 1.00→0.95: root-caused Orem→Airport −10 min gap (67.8 km I-15 at full posted 113 km/h vs Valhalla ~103 avg). Now −8 min there, Lehi→SLC +1 (33 vs 32), PG→Costco/BYU unchanged (10/20 exact). Queued AF→Park City +8 = route-choice (engine 96.3 km vs Valhalla 87.9 km path) | eta-benchmark measured before/after; engine-check/smoke/engine-e2e PASS, 0 console errors; build exit 0 | committed 034caa4 — PUSH BLOCKED (gh token invalid again; see Needs Keaton) |
 | 2026-08-27 | ops (round 34) | unblocked round-33: gh auth valid again (keyring) → pushed stranded commits 034caa4+eaf28f1 (198c1ad..eaf28f1); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes ~86 min — still in <24 h grace window) | push exit 0; deploy run 33032280575 success; curl live site → HTTP 200 in 0.78s, correct title | shipped |
+| 2026-08-26 | ETA research (round 36) | instrumented AF→Park City: directed exact-cost Dijkstra == engine A* path byte-for-byte (96.27 km/62.7 min, 1051 arcs) → A* provably optimal, "8 km detour" theory disproven; gap = cost-model vs Valhalla. Found REAL latent bug: parseGraph ow=2 adjacency corruption (14 slots short, all tiny stubs). Both written to ledger; no code changed this run | route-instrument/probe2/3/5 outputs; arcTo.length 1023556 < outStart[N] 1023570 = 14 ow=2 edges located | research-only (queued fix) |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
