@@ -1,0 +1,53 @@
+name: refresh-graph
+
+on:
+  schedule:
+    - cron: '20 14 2 * *' # 2nd of month, 14:20 UTC — day after camera-refresh
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install osmium-tool
+        run: sudo apt-get update && sudo apt-get install -y osmium-tool
+      - name: Fetch fresh DeFlock camera snapshot
+        run: node scripts/fetch-cameras.mjs
+      - name: Download Utah OSM extract (Geofabrik)
+        run: curl -sL --retry 3 --max-time 600 -o /tmp/utah-latest.osm.pbf https://download.geofabrik.de/north-america/us/utah-latest.osm.pbf
+      - name: Extract Wasatch roads window
+        run: |
+          # Same pipeline as engine/prepare-roads.mjs header. osmium extract
+          # keeps complete ways touching the bbox, and build-graph.mjs clips
+          # everything to the graph BBOX anyway.
+          osmium tags-filter /tmp/utah-latest.osm.pbf \
+            "w/highway=motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,living_street,road" \
+            -o /tmp/wasatch-roads.osm.pbf
+          osmium extract -b -112.12,39.95,-111.33,40.86 /tmp/wasatch-roads.osm.pbf -o /tmp/wasatch.osm.pbf
+          mkdir -p engine/data
+          osmium export /tmp/wasatch.osm.pbf -f geojson --overwrite -o engine/data/wasatch-roads.geojson
+      - name: Rebuild graph
+        run: node engine/build-graph.mjs
+      - name: Gate — strict-floor audit (0 violations required)
+        run: node scripts/floor-audit.mjs
+      - name: Gate — engine routing sanity
+        run: node scripts/engine-check.mjs
+      - name: Commit if changed
+        run: |
+          git config user.name "ghostway-ci"
+          git config user.email "ghostway-ci@users.noreply.github.com"
+          git add public/graph/wasatch-graph.bin.gz public/cameras/cameras.geojson
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "chore: monthly graph rebuild + camera snapshot refresh (CI)"
+            git push
+          fi

@@ -106,12 +106,16 @@ from this queue first when it's non-empty.
       distance 30-40 m bucket. Rebuild `node engine/build-graph.mjs` produced a
       BYTE-IDENTICAL graph (cmp clean) — the Aug 15 .gz already honored the
       floor. No graph change shipped; the permanent guard is the deliverable.
-- [ ] Data freshness: camera-refresh.yml (monthly) only refreshes the shipped
-      public/cameras/cameras.geojson fallback — it does NOT refresh
-      engine/data/cameras-usa.geojson (gitignored) nor rebuild the graph, so the
-      graph's cam bytes can silently go stale between manual rebuilds. Mitigation
-      now exists: run scripts/floor-audit.mjs after any rebuild (CI hook idea:
-      refetch snapshot + rebuild + floor-audit + commit .gz monthly).
+- [x] Data freshness: camera-refresh.yml (monthly) only refreshed the shipped
+      public/cameras/cameras.geojson fallback — RESOLVED 2026-08-26 (round 29):
+      new .github/workflows/graph-refresh.yml (2nd of month, day after camera
+      refresh): fetch cameras → Geofabrik utah pbf → osmium filter/extract/
+      export → build-graph → GATES (floor-audit 0 violations + engine-check
+      PASS) → commit graph .gz + cameras.geojson. Pipeline proven locally:
+      fresh Aug 25 pbf + fresh DeFlock (135,696 cams) → rebuild 1.8s →
+      floor-audit PASS (0 <31.4 m), engine-check PASS, avoidance-audit PASS,
+      smoke + engine-e2e PASS. camera-refresh.yml kept as-is (lightweight
+      fallback refresh on the 1st).
 - [x] Ops: stale-lock handling verified 2026-08-26 (round 25): found 49-min-old
       lock from a crashed research run; confirmed holder dead (no live procs,
       its queue findings uncommitted in working tree), deleted it, proceeded.
@@ -157,10 +161,10 @@ block on these — it queues and moves on.
 - [ ] Donation setup: BTC/Lightning + Monero addresses needed to fill
       src/config.js placeholders (decided: crypto-primary, Ko-fi optional).
 - [ ] Real-drive ETA ground truth: Keaton's actual PG→Costco drive time.
-- [x] GitHub auth — RESOLVED 2026-08-26 (round 28, 18:56 MST): token valid
-      again (gh auth status: DeseretSaint, scopes repo/workflow). Pushed the
-      stranded round-26 commit (4a40564..a949827), deploy run 33028465289
-      succeeded, live site HTTP 200. Remote is current with local HEAD.
+- [ ] GitHub auth — token INVALID AGAIN as of 2026-08-26 19:20 MST (was fixed
+      round 28 at 18:56). Round-29 commit (local HEAD, "data-freshness (round
+      29)") is STRANDED locally (safe, not lost). Next run with valid auth:
+      `git push origin main` + watch deploy + curl live site 200.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -174,6 +178,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | camera-avoidance (round 25) | resolved queued "PRIORITY floor violation" as FALSE ALARM (audit stride bug: offA+e vs offA+e*4); promoted corrected audit to scripts/floor-audit.mjs as permanent floor-regression guard; rebuilt graph to confirm determinism | floor-audit PASS on shipped .gz AND fresh rebuild (0 violations, min bucket 30-40 m); rebuild byte-identical (cmp); red test: mutated graph → FAIL exit 1; engine-check/avoidance-audit/smoke PASS; build exit 0 | shipped |
 | 2026-08-26 | coverage/speed (round 26) | finished crashed run's multi-region refactor: region-aware loadGraph/regionCovers/ensureLocalEngine (lazy per-region graph load), fixed stray-return that killed Valhalla fallback, restored boot preload (13 suites depend on it), dropped dead mapCenter config, fixed prepare-roads header, committed ux-lock deletion | build exit 0; engine-check/smoke/engine-e2e/interact-check/report-check/xss-check all PASS, 0 console errors | shipped |
 | 2026-08-26 | ops (round 28) | unblocked shipping: gh auth valid again → pushed stranded round-26 commit (4a40564..a949827); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (another session's in-flight work, mtimes 18:38-18:42) | push exit 0; deploy run 33028465289 success; curl https://deseretsaint.github.io/ghostway/ → HTTP 200 in 1.78s, correct title | shipped |
+| 2026-08-26 | data-freshness (round 29) | monthly graph-rebuild CI (graph-refresh.yml, 2nd of month, gated on floor-audit + engine-check) + shipped graph rebuilt from fresh Aug 25 OSM + Aug 26 DeFlock (was Aug 15) | pipeline proven locally: rebuild 1.8s/552,448 edges; floor-audit PASS (0 <31.4 m); engine-check/avoidance-audit/smoke/engine-e2e PASS, 0 console errors | committed, push STRANDED (gh token invalid again — Needs Keaton) |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
