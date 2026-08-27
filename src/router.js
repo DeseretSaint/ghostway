@@ -680,8 +680,13 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   let clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { maxCost: strictBudget });
   let strictFallback = false;
   let overBudget = false;
+  let walled = false;
   if (!clearest) {
     // Camera-walled or budget-exhausted: soften the floor, still in budget.
+    // One unbounded strict probe tells us WHICH: if a hard-floor path exists
+    // at any cost, the destination is reachable-clear (budget case); if not,
+    // it is truly camera-walled (no ≥floor path exists anywhere).
+    walled = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, {}) === null;
     clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true, maxCost: strictBudget });
     strictFallback = true;
   }
@@ -694,6 +699,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   }
   if (clearest) clearest.strictFallback = strictFallback;
   if (clearest) clearest.overBudget = overBudget;
+  if (clearest) clearest.walled = walled;
   if (clearest) {
     // Offer Clearest whenever it's a plausible alternative — even when camera
     // counts tie Fastest (dense corridors: the surface-street option may pass
@@ -722,6 +728,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     if (o.mode === 'strict') {
       o.strictFallback = !!o.route.strictFallback;
       o.overBudget = !!o.route.overBudget;
+      o.walled = !!o.route.walled;
     }
   }
 

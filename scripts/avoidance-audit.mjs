@@ -120,11 +120,16 @@ for (const c of corridors) {
     }
     const midOk = minMid === Infinity || minMid >= STRICT_FLOOR_M;
     if (o.strictFallback) {
-      // Hard floor found no route: destination is camera-walled. Best effort.
+      // Hard floor found no route within budget. Two distinct causes (router
+      // exposes which): truly camera-walled (no ≥floor path exists anywhere)
+      // vs budget-exhausted (a clear path exists but costs too much time).
       bestEffort++;
+      const reason = o.walled
+        ? `destination camera-walled; no ≥${STRICT_FLOOR_M} m path exists`
+        : `camera-clear path exists but exceeds detour budget`;
       console.log(
         `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ${minMid.toFixed(0)} m  ` +
-        `⚠ BEST-EFFORT (destination camera-walled; no ≥${STRICT_FLOOR_M} m path exists)`
+        `⚠ BEST-EFFORT (${reason})`
       );
     } else if (!midOk) {
       failures++;
@@ -143,7 +148,7 @@ for (const c of corridors) {
 console.log(
   failures
     ? `\nAVOIDANCE AUDIT FAIL ❌ — ${failures} strict route(s) pass within ${STRICT_FLOOR_M} m of an ALPR camera mid-route`
-    : `\nAVOIDANCE AUDIT PASS ✅ — every Clearest route stays ≥ ${STRICT_FLOOR_M} m from ALPR cameras mid-route` +
-      (bestEffort ? ` (${bestEffort} camera-walled destination(s) served best-effort)` : '')
+    : `\nAVOIDANCE AUDIT PASS ✅ — ≥ ${STRICT_FLOOR_M} m from ALPR cameras mid-route on clearable corridors` +
+      (bestEffort ? `; ${bestEffort} walled/budget destination(s) served best-effort` : '')
 );
 process.exit(failures ? 1 : 0);
