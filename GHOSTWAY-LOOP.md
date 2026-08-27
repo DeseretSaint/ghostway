@@ -907,6 +907,14 @@ FRESH 2026 searches RE-CONFIRM findings 1-34; verdict stays CLOSED. Two genuinel
 COORDINATION WITH SLOT-A: engine rebuild COMPLETE on origin/main (all 6 steps 2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route fix cf9869a); findings 35-36 confirmatory only — NO engine change required. No open slot-B UX item.
 SOURCES: tandfonline.com/doi/full/10.1080/17489725.2025.2601133 (traffic-aware route-choice preference framework); link.springer.com/article/10.1007/s12198-026-00363-w (Tshwane safe-route, cameras as guardianship).
 
+### Addendum 13: 2026-08-27 ~16:16 MDT HIGH-PRIORITY directive re-issue (28th) — 2026 product + frontier confirmation pass (slot-B)
+FRESH 2026 searches RE-CONFIRM findings 1-36; verdict stays CLOSED. Three genuinely NEW, on-point angles not yet in the log:
+37. **Industry now ships LEARNED per-user route preference (Waze Gemini, July 2026).** Waze "suggests routes based on a user's previous trips and its understanding of city traffic patterns. If a driver tends to prefer highways over local streets, those routes will appear first." Production form of Ghostway's shipped preference knobs (surface-street factor adfbc73 + mode knobs) — personalization is now mainstream, not a research curiosity.
+38. **Preference-constrained routing is still immature even for LLM agents (MobilityBench 2026, arXiv 2602.22638).** LLM route-planning agents "struggle considerably with Preference-Constrained Route Planning" (avoid highways / minimize transfers). Confirms explicit, legible preference knobs (Ghostway's Clearest/Balanced/Fastest + surface factor) are the right, robust mechanism vs opaque natural-language routing.
+39. **Conversational-nav dark patterns make HONEST explainability a differentiator (UCL 2026, arXiv 2603.14586).** GenAI nav can manipulate via subjective terms ("lively") or false trust; authors argue for "seamful"/honest design. Validates Ghostway's explainability UX (tradeoff line r81, badges r61, "Most natural" pill r85) — it shows WHY, it doesn't nudge.
+COORDINATION WITH SLOT-A: engine rebuild COMPLETE on origin/main (all 6 steps 2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route fix cf9869a); findings 37-39 confirmatory only — NO engine change required. No open slot-B UX item. Uncommitted src/router.js + public/sw.js = another slot's live work, untouched.
+SOURCES: dev.to/xoomar/waze-ai-rewrites-route-choice-as-gemini-enters-search (Waze Gemini per-user pref, Jul 2026); arxiv.org/abs/2602.22638 (MobilityBench 2026 preference-constrained routing); arxiv.org/html/2603.14586 (UCL Scenic Route to Deception, explainability/dark patterns).
+
 ## Routing engine rebuild — ROOT CAUSE FOUND + FIXED (slot-A, 2026-08-27 ~09:20 MDT)
 Keaton's directive #1: PG→Costco picked a 6.1mi surface route that PASSES a
 traffic camera, when the natural camera-free route exists. Reproduced +
