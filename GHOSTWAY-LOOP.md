@@ -91,6 +91,19 @@ from this queue first when it's non-empty.
       under swiftshader — hit twice this round) — LANDED 2026-08-26 (round 22)
 - [ ] Camera-walled destinations: BYU has no ≥30 m approach road; consider
       "clear within N m of endpoint" messaging or parking-gate snapping
+      — MEASURED 2026-08-26 (slot-A research, /tmp/gw-byu-approach.mjs):
+      exposed tail is only **118 m of driving** (4 edges, North Canyon Rd,
+      ALL floor-violating; min camera distance 17 m = inside ALPR read range).
+      Clear network from PG = 496,997/527,282 nodes (94.3%); it ends at a gate
+      node on North Canyon Rd (-111.65612,40.25350) just **117 m straight-line
+      from the BYU dest**, itself 51 m from nearest cam (clear). Dest itself
+      sits 70 m from a Genetec ALPR. FIX SPEC (router.js blocked until the
+      live nearestNode changeset lands): when strictFallback fires, compute
+      tail = forward legal-only BFS from s (clear set) + reverse min-distance
+      Dijkstra from t to first clear node; if tail ≤ ~200 m, snap the strict
+      route to the gate node and message "clear to within ~120 m of
+      destination — final approach passes a camera" instead of generic
+      "best effort". Technique is generic for any camera-walled destination.
 - [x] Test infra: ux-shots/shot/ux-audit/pwa-check still use fixed sleeps
       (2.5-2.6s) for vite preview startup — same flaky class interact-check
       had (ERR_CONNECTION_REFUSED on npx cold-start); port the poll-until-up loop
@@ -179,6 +192,15 @@ from this queue first when it's non-empty.
       (Lombardy Dr / Wasatch Blvd), not the freeway. NEXT (if pursued): nudge
       freeway effFactor or belt-class speed so the belt wins where Valhalla says
       it should — but PG→Costco/BYU/Orem are exact, so low priority.
+- [x] ETA AF→Park City route-choice — FINAL/CLOSED (slot-A round 41): with
+      PROPER FREEWAY-node snapping of the belt interchanges (fixing the round-35
+      surface-street pollution), the belt freeway-corridor = **99.52 km / 68.5
+      min** vs straight **96.27 km / 62.7 min** = belt is 3.25 km LONGER under
+      the engine's own cost model. So A* correctly prefers straight; the 89.7 km
+      "belt" figure was belt-freeway length ALONE minus the AF→belt-entry +
+      belt-exit→PC connecting legs (~9.8 km). Gap vs Valhalla is PURE GRAPH
+      FIDELITY (Valhalla's OSM extract has more direct belt ramps), NOT a
+      router/cost-model defect. No code change warranted. Item closed.
 - [ ] BUG (found round 36, REAL but tiny impact): parseGraph() in src/router.js
       mis-handles ow=2 (oneway=-1) edges. arcCount allocates 1 arc for ow=2
       (`eOw===0?2:1`), but the fill loop ALWAYS writes a→b then also writes b→a
@@ -190,6 +212,42 @@ from this queue first when it's non-empty.
       that grows with every new oneway=-1 way. FIX: in the fill loop, if ow===2
       write ONLY the b→a arc (skip a→b). Then re-run floor-audit + engine-check
       + smoke + engine-e2e (graph parse changed) before shipping.
+      UPDATE (round 38, slot-A research-only): FIX SPEC PINNED + CORRECTED — the
+      fill loop alone is NOT enough; TWO sites need the ow===2 guard:
+      (1) outStart count loop L129 `outStart[ea[i]+1]++` must become
+          `if (eOw[i] !== 2) outStart[ea[i]+1]++;` (ow=2 must not allocate an
+          a→b slot), and (2) fill loop L139-140: write the a→b arc only when
+          `eOw[i] !== 2` (keep the existing `eOw[i] !== 1` b→a write). The
+          arcCount formula L126 (`eOw===0?2:1`) is already correct for ow=2.
+          Fill-loop-only fix leaves offset holes (outStart sums arcCount+14,
+          cursor leaves gaps + tail writes still overflow). Sanity after fix:
+          arcTo.length === outStart[nodeCount] (was 14 short). BLOCKED this
+          run: router.js has another session's live uncommitted nearestNode fix
+          (see ops note below) — land ow=2 AFTER that changeset settles.
+- [ ] Graph integrity (2026-08-26 slot-A research-only, CLEAN): full read-only
+      audit of shipped wasatch-graph.bin (527,282 nodes / 552,448 edges) —
+      0 self-loops, 0 zero-len, 0 zero-spd, 0 bad node refs, 0 nodes outside
+      bbox, names dict decodes exactly (0 bytes left). The 40,812 eName≥nameCount
+      are ALL the 65535 unnamed-sentinel (realBad=0, not corruption). 1 dup
+      node-pair (edges 503739/503751, 3 m stub, parallel OSM ways — harmless).
+      5 isolated nodes (bbox corners/stubs: 40.85356/-111.90607, 39.95597/
+      -112.11967, 40.27556/-111.69042, 40.39894/-111.90620, 40.74374/-111.84227)
+      — snap-to-isolated would dead-end a route, but 5/527k = negligible.
+      ow=2 delta re-confirmed: arcCount=1,023,556 vs outStart[N]=1,023,570
+      (exactly the 14 ow=2 edges). ONLY known defect remains the queued ow=2
+      fix (spec re-verified against CURRENT working-tree router.js: L126 count
+      loop, L128-131 outStart, L137-145 fill — line numbers unchanged by the
+      in-flight nearestNode edit; fix spec still valid as pinned).
+- [ ] Ops (found 2026-08-26 22:03 MST, round 38): src/router.js holds a SECOND
+      uncommitted changeset (distinct from the 16-file lazy-engine set): a
+      nearestNode() fix — returned `dist` was sqrt(score) with the low-degree
+      penalty folded in (corrupts planRoutes' >1200 m snap guard); now returns
+      true metric distance via bestDist. mtime 21:53, paired with NEW
+      scripts/snap-dist-check.mjs (21:53) and a live `vite preview :4173`
+      started 21:58 (holder presumably mid-verify). DO NOT edit/commit/revert
+      router.js until the owner lands it; same grace rule as the 16-file set
+      (>24 h stale + mtime unchanged → future slot-A run may verify+land it,
+      then apply the ow=2 fix on top).
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -206,10 +264,10 @@ block on these — it queues and moves on.
 - [x] GitHub auth AGAIN (2026-08-27 ~02:00 MST): RESOLVED 2026-08-27 (round 34):
       token valid again (keyring); pushed 198c1ad..eaf28f1 (round-33 ETA derate
       + ledger), deploy run 33032280575 success, live site HTTP 200 in 0.78s.
-- [ ] GitHub auth AGAIN (2026-08-26 ~21:45 MST, round 36): gh token invalid
-      ("The token in default is invalid"). The round-36 ledger commit (see
-      Latest round table) is stranded locally — push it in the next ops round
-      once the token recovers.
+- [x] GitHub auth AGAIN (2026-08-26 ~21:45 MST, round 36): RESOLVED 2026-08-27
+      (slot-B, 22:40 MST): token valid again (keyring); pushed stranded commits
+      00e1864+658bcb0+3bd579e (d6d3d56..3bd579e), deploy run 33040106165,
+      live site HTTP 200.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -230,6 +288,15 @@ block on these — it queues and moves on.
 | 2026-08-27 | ETA accuracy (round 33) | freeway effFactor 1.00→0.95: root-caused Orem→Airport −10 min gap (67.8 km I-15 at full posted 113 km/h vs Valhalla ~103 avg). Now −8 min there, Lehi→SLC +1 (33 vs 32), PG→Costco/BYU unchanged (10/20 exact). Queued AF→Park City +8 = route-choice (engine 96.3 km vs Valhalla 87.9 km path) | eta-benchmark measured before/after; engine-check/smoke/engine-e2e PASS, 0 console errors; build exit 0 | committed 034caa4 — PUSH BLOCKED (gh token invalid again; see Needs Keaton) |
 | 2026-08-27 | ops (round 34) | unblocked round-33: gh auth valid again (keyring) → pushed stranded commits 034caa4+eaf28f1 (198c1ad..eaf28f1); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes ~86 min — still in <24 h grace window) | push exit 0; deploy run 33032280575 success; curl live site → HTTP 200 in 0.78s, correct title | shipped |
 | 2026-08-26 | ETA research (round 36) | instrumented AF→Park City: directed exact-cost Dijkstra == engine A* path byte-for-byte (96.27 km/62.7 min, 1051 arcs) → A* provably optimal, "8 km detour" theory disproven; gap = cost-model vs Valhalla. Found REAL latent bug: parseGraph ow=2 adjacency corruption (14 slots short, all tiny stubs). Both written to ledger; no code changed this run | route-instrument/probe2/3/5 outputs; arcTo.length 1023556 < outStart[N] 1023570 = 14 ow=2 edges located | research-only (queued fix) |
+| 2026-08-26 | accessibility (UX, slot-B round 37) | touch targets below Apple HIG/WCAG 2.5.5 min: .clear-btn and .modal-close were 40×40 → bumped to 44×44 (nudged modal-close inset 12→10px to keep 44 in frame). Added scripts/touch-target-check.mjs E2E guard. Did NOT touch the 16-file lazy-engine changeset (still uncommitted, mtimes unchanged ~3h) | build exit 0; interact-check INTERACTION PASS; touch-target-check PASS — clear 44×44, modal-close 44×44, 0 page errors | committed 658bcb0, PUSHED 2026-08-27 (d6d3d56..3bd579e) |
+| 2026-08-26 | accessibility (UX, slot-B round 38) | touch-target continuation: .chip-toggle (Avoid highways) 32→44h, .mode-btn (Strict/Moderate/Off) 36→44h, .nav-voice (voice + density) 36×32→44×44. Extended scripts/touch-target-check.mjs to also assert .chip-toggle + .mode-btn ≥44 (reveal #avoid-toggle). No overlap with slot-A read-only router.js audit or the 16-file changeset (CSS-only). | build exit 0; touch-target-check PASS — clear 44×44, modal-close 44×44, chip-toggle 123.7×44, mode-btn 59×44, 0 page errors | committed 3bd579e, PUSHED 2026-08-27 (d6d3d56..3bd579e) |
+| 2026-08-26 | tests (slot-C, 22:13 MST) | full regression sweep over CURRENT working tree (incl. uncommitted nearestNode fix + slot-B touch targets): no code changed, verification only | build exit 0; engine-check PASS; floor-audit PASS (0 strict-legal edges <31.4 m, min bucket 30-40 m); engine-e2e PASS (strict options + best-effort badge + nav banner, 0 console errors); smoke PASS (avoidance detour factor 2.0); interact-check PASS | verified — no regressions, no new bugs |
+| 2026-08-26 | routing (slot-A round 39) | research-only: full shipped-graph integrity audit (read-only, /tmp scripts — router.js BLOCKED by live nearestNode changeset, mtime 21:53 + holder preview running). Graph CLEAN: 0 self-loops/zero-len/zero-spd/bad refs/out-of-bbox; 40,812 "bad" name idx = all 65535 unnamed-sentinel; 1 harmless dup pair; 5 isolated nodes (negligible). ow=2 fix spec re-verified valid against current working-tree line numbers | /tmp/gw-graph-audit{,2}.mjs outputs; arcCount delta = exactly 14 ow=2 edges | research-only (queued findings) |
+| 2026-08-26 | accessibility (UX, slot-B round 40) | ARIA fixes only (index.html + ui.js, not in the 16-file lazy-engine set): added aria-label to icon-only #swapBtn ("Swap start and destination") + #clearRouteBtn ("Clear route"); role="status" live-region on #status + #engineStatus; aria-label="Menu" on #drawer; showStatus() now sets text AFTER unhide so SRs announce. Ran a contrast audit across the palette: ALL text/UI-pair contrast ratios PASS 4.5:1 (or 3:1 for non-text UI lines) — no change needed there. Did NOT touch router.js/main.js/map-view.js/config.js (protected). | build exit 0; interact-check INTERACTION PASS (full flow clickable + routes); all 5 attrs confirmed in dist/index.html (3×role=status, 2×aria-label) | committed 3bd579e, PUSHED 2026-08-27 (d6d3d56..3bd579e) |
+| 2026-08-27 | ops+ux (slot-B, 22:40 MST) | unblocked shipping: gh auth valid again → committed slot-B rounds 38+40 (3bd579e) + pushed ALL stranded commits 00e1864+658bcb0+3bd579e (d6d3d56..3bd579e). Did NOT touch the 16-file lazy-engine changeset or router.js nearestNode fix (both still uncommitted, mtimes unchanged, holders' preview servers still up) | push exit 0; deploy run 33040106165 queued; curl live site → HTTP 200 in 0.19s | shipped |
+| 2026-08-26 | camera-avoidance (slot-A round 40) | research-only: BYU camera-walled tail measured — exposed stretch is only 118 m / 4 edges (min cam dist 17 m), clear network covers 94.3% of nodes and ends 117 m from dest; parking-gate snap + honest "clear to within ~120 m" messaging spec pinned in queue. router.js still blocked (nearestNode changeset live, holder preview up) | /tmp/gw-byu-approach.mjs: gate node, tail length, 8 gate candidates, dest cam distance all measured | research-only (queued fix spec) |
+|| 2026-08-26 | tests (slot-C, 22:31 MST) | targeted sweep over changes since 22:13 sweep (src/ui.js + index.html = slot-B round-40 ARIA edits): no code changed, verification only | build exit 0; avoidance-audit PASS (all Clearest ≥30 m mid-route, 4 camera-walled dests best-effort); floor-audit PASS (0 strict-legal edges <31.4 m); xss-check PASS (ui.js escaping intact post-edit); interact-check PASS (0 page errors) | verified — no regressions |
+|| 2026-08-26 | routing (slot-A round 41) | research-only: closed the AF→Park City ETA item. Prior round-35 "belt 89.7 km < straight 96.3" contradiction traced to nearestNode snapping belt interchanges to SURFACE streets (spd<95). Re-measured with freeway-node (spd≥95) snapping: belt corridor = 99.52 km / 68.5 min vs straight 96.27 km / 62.7 min → belt is 3.25 km LONGER under the engine's own cost model, so A* correctly prefers straight. The 89.7 km was belt-freeway length alone minus ~9.8 km of AF→belt-entry + belt-exit→PC connecting legs. Gap vs Valhalla = pure graph fidelity (Valhalla OSM extract has more direct belt ramps), NOT a router/cost-model defect. router.js still blocked (live nearestNode changeset, holder preview up) → no code changed | /tmp/gw-belt-cost.mjs: belt entry fw-node 452651 / exit 221683; belt 99.52 km 68.5 min, straight 96.27 km 62.7 min; conclusion = A* optimal, item CLOSED | research-only (item closed, no code) |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
