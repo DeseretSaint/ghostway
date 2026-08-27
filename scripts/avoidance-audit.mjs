@@ -119,7 +119,7 @@ for (const c of corridors) {
       continue;
     }
     const midOk = minMid === Infinity || minMid >= STRICT_FLOOR_M;
-    if (o.strictFallback) {
+    if (o.strictFallback && !o.clearToM) {
       // Hard floor found no route within budget. Two distinct causes (router
       // exposes which): truly camera-walled (no ≥floor path exists anywhere)
       // vs budget-exhausted (a clear path exists but costs too much time).
@@ -138,9 +138,14 @@ for (const c of corridors) {
         `@ ${minMidAt[0].toFixed(5)},${minMidAt[1].toFixed(5)}  ❌ FAIL (< ${STRICT_FLOOR_M} m)`
       );
     } else {
+      // PASS — includes gate-snapped routes: the SERVED route is hard-floor
+      // clear; only the stated final approach (clearToM) passes a camera.
+      const gateNote = o.clearToM
+        ? `  ⚠ gate-snapped: clear to within ~${Math.round(o.clearToM)} m of destination`
+        : '';
       console.log(
         `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ` +
-        `${minMid === Infinity ? '∞' : minMid.toFixed(0) + ' m'}  (abs min ${minAll.toFixed(0)} m)  PASS`
+        `${minMid === Infinity ? '∞' : minMid.toFixed(0) + ' m'}  (abs min ${minAll.toFixed(0)} m)  PASS${gateNote}`
       );
     }
   }

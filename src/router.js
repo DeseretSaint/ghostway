@@ -568,6 +568,69 @@ function maneuverText(t) {
   }[t] || 'Continue';
 }
 
+// Camera-walled destinations: find the "gate" where the clear network ends on
+// the approach to the destination, and the driving distance of the exposed
+// tail beyond it. (1) Forward BFS from the origin over floor-legal edges (the
+// first road may sit beside a camera — mirrors astar's start exemption) marks
+// the clear set. (2) Reverse Dijkstra from the destination over ALL edges,
+// popping in increasing u→t distance; the first clear node popped is the gate
+// with the SHORTEST exposed tail. Returns { node, tailM } or null.
+function clearTail(g, sNode, tNode, floor) {
+  const N = g.nodeCount;
+  const clear = new Uint8Array(N);
+  const stack = [sNode];
+  clear[sNode] = 1;
+  while (stack.length) {
+    const u = stack.pop();
+    for (let p = g.outStart[u]; p < g.outStart[u + 1]; p++) {
+      const v = g.arcTo[p];
+      if (clear[v]) continue;
+      if (u !== sNode && g.eCam[g.arcEdge[p]] > floor) continue;
+      clear[v] = 1;
+      stack.push(v);
+    }
+  }
+  if (clear[tNode]) return null; // not actually walled
+
+  // Reverse adjacency (one O(E) pass) so we can relax u→t distances from t.
+  const arcCount = g.arcTo.length;
+  const inDeg = new Uint32Array(N);
+  for (let p = 0; p < arcCount; p++) inDeg[g.arcTo[p]]++;
+  const revStart = new Uint32Array(N + 1);
+  for (let n = 0; n < N; n++) revStart[n + 1] = revStart[n] + inDeg[n];
+  const revFrom = new Int32Array(arcCount);
+  const revEdge = new Int32Array(arcCount);
+  const cur = revStart.slice(0, N);
+  for (let u = 0; u < N; u++) {
+    for (let p = g.outStart[u]; p < g.outStart[u + 1]; p++) {
+      const q = cur[g.arcTo[p]]++;
+      revFrom[q] = u;
+      revEdge[q] = g.arcEdge[p];
+    }
+  }
+
+  const dist = new Float64Array(N).fill(Infinity);
+  const closed = new Uint8Array(N);
+  const heap = new Heap();
+  dist[tNode] = 0;
+  heap.push(0, tNode);
+  const MAX_TAIL = 500; // never gate-snap across an exposed tail this long
+  while (heap.size) {
+    const u = heap.pop();
+    if (closed[u]) continue;
+    closed[u] = 1;
+    if (dist[u] > MAX_TAIL) break; // later pops only get farther
+    if (clear[u]) return { node: u, tailM: dist[u] };
+    for (let q = revStart[u]; q < revStart[u + 1]; q++) {
+      const v = revFrom[q];
+      if (closed[v]) continue;
+      const nd = dist[u] + g.eLen[revEdge[q]];
+      if (nd < dist[v]) { dist[v] = nd; heap.push(nd, v); }
+    }
+  }
+  return null;
+}
+
 // ---- Public planning API: returns up to 3 options ----
 export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [], avoidHighways = false } = {}) {
   const g = await loadGraph();
@@ -681,13 +744,40 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   let strictFallback = false;
   let overBudget = false;
   let walled = false;
+  let clearToM = 0;
   if (!clearest) {
     // Camera-walled or budget-exhausted: soften the floor, still in budget.
     // One unbounded strict probe tells us WHICH: if a hard-floor path exists
     // at any cost, the destination is reachable-clear (budget case); if not,
     // it is truly camera-walled (no ≥floor path exists anywhere).
     walled = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, {}) === null;
-    clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true, maxCost: strictBudget });
+    if (walled) {
+      // Gate-snap: the clear network ends a short drive from the destination
+      // (measured: BYU tail = 118 m / 4 edges). Route hard-floor-clear to the
+      // gate instead of serving the whole exposed tail best-effort — the
+      // mid-route ≥floor guarantee holds on the served route, and only the
+      // honest final approach passes a camera. The gate route must detour
+      // around the cameras guarding the approach, so it gets a relaxed budget
+      // (2x fastest + 5 min) rather than the clear-to-destination budget; it
+      // is only ever offered for a walled destination, where the alternative
+      // is a best-effort route that breaks the safety floor.
+      const tail = clearTail(graph, s.node, t.node, HARD_CAM_EXPOSURE);
+      if (tail && tail.tailM <= 200 && tail.node !== s.node) {
+        const gateBudget = fastest.duration * 2 + 300;
+        // Unbounded search, budget checked after: the in-search maxCost prune
+        // tracks time on the best-score label only and can reject a route
+        // whose true time fits the budget (observed on this very corridor).
+        const gateRoute = astar(graph, s.node, tail.node, 'strict', edgeFactor, edgeDelay, {});
+        if (gateRoute && gateRoute.duration <= gateBudget) {
+          clearest = gateRoute;
+          clearToM = tail.tailM;
+          overBudget = gateRoute.duration > strictBudget;
+        }
+      }
+    }
+    if (!clearest) {
+      clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true, maxCost: strictBudget });
+    }
     strictFallback = true;
   }
   if (!clearest) {
@@ -700,6 +790,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   if (clearest) clearest.strictFallback = strictFallback;
   if (clearest) clearest.overBudget = overBudget;
   if (clearest) clearest.walled = walled;
+  if (clearest) clearest.clearToM = clearToM;
   if (clearest) {
     // Offer Clearest whenever it's a plausible alternative — even when camera
     // counts tie Fastest (dense corridors: the surface-street option may pass
@@ -729,6 +820,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
       o.strictFallback = !!o.route.strictFallback;
       o.overBudget = !!o.route.overBudget;
       o.walled = !!o.route.walled;
+      o.clearToM = o.route.clearToM || 0;
     }
   }
 
