@@ -24,7 +24,7 @@ try {
 
   async function pick(inputSel, query) {
     await p.type(inputSel, query);
-    try { await p.waitForSelector('#suggestions .sugg', { timeout: 6000 }); await p.click('#suggestions .sugg'); }
+    try { await p.waitForFunction(() => !document.querySelector('#suggestions .sugg-loading') && !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'), { timeout: 12000 }); await p.click('#suggestions .sugg:not(.sugg-recent)'); }
     catch { await p.focus(inputSel); await p.keyboard.press('Enter'); }
     await wait(500);
   }
