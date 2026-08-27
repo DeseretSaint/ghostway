@@ -264,7 +264,10 @@ function applyModeUI() {
   pill.classList.toggle('off', mode === 'off');
   pill.querySelector('.label').textContent =
     mode === 'strict' ? 'Strict avoidance' : mode === 'moderate' ? 'Avoid cameras' : 'Fastest route';
-  document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+  document.querySelectorAll('.mode-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+    b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false');
+  });
   const hwBtn = $('#avoidHwBtn');
   if (hwBtn) {
     hwBtn.classList.toggle('on', !!app.state.avoidHighways);
@@ -1257,8 +1260,8 @@ function renderNavStep() {
     </div>
     <div class="nav-side">
       <div class="nav-side-row">
-        <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" title="Voice guidance">${icon(voiceOn ? 'volume' : 'volumeOff', { size: 16 })}</button>
-        <button id="densityBtn" class="nav-voice" aria-label="Toggle banner density" title="Compact / full banner">${icon(compact ? 'densityFull' : 'densityCompact', { size: 16 })}</button>
+        <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" aria-pressed="${voiceOn}" title="Voice guidance">${icon(voiceOn ? 'volume' : 'volumeOff', { size: 16 })}</button>
+        <button id="densityBtn" class="nav-voice" aria-label="Toggle banner density" aria-pressed="${!!compact}" title="Compact / full banner">${icon(compact ? 'densityFull' : 'densityCompact', { size: 16 })}</button>
       </div>
       ${limitMph ? `<div class="speed-limit"><span class="sl-num">${limitMph}</span><span class="sl-lbl">MAX</span></div>` : ''}
       <div id="speedChip" class="speed-chip" hidden></div>
@@ -1272,11 +1275,13 @@ function renderNavStep() {
   $('#voiceBtn').addEventListener('click', () => {
     const on = toggleVoice();
     $('#voiceBtn').classList.toggle('on', on);
+    $('#voiceBtn').setAttribute('aria-pressed', on ? 'true' : 'false');
     if (on) speak('Voice guidance on.');
   });
   $('#densityBtn').addEventListener('click', () => {
     app.state.compactBanner = !app.state.compactBanner;
     localStorage.setItem('gw-compact', app.state.compactBanner ? '1' : '0');
+    $('#densityBtn').setAttribute('aria-pressed', app.state.compactBanner ? 'true' : 'false');
     renderNavStep();
   });
   // Initialize the camera chip + progress bar from the real progress, not a hardcoded 0.

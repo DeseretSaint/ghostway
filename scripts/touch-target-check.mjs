@@ -52,12 +52,17 @@ const chips = await page.evaluate(async () => {
     const cs = getComputedStyle(el);
     return { w: r.width, h: r.height, display: cs.display, hidden: el.hidden };
   };
-  return { chipToggle: pick('.chip-toggle'), modeBtn: pick('.mode-btn'), navVoice: pick('.nav-voice') };
+  // Confirm the camera-avoidance mode buttons carry a machine-readable
+  // selected state (Maps-parity a11y).
+  const modeBtns = [...document.querySelectorAll('.mode-btn')];
+  const pressed = modeBtns.map(b => b.getAttribute('aria-pressed'));
+  const exactlyOnePressed = pressed.filter(p => p === 'true').length === 1;
+  return { chipToggle: pick('.chip-toggle'), modeBtn: pick('.mode-btn'), navVoice: pick('.nav-voice'), ariaOk: exactlyOnePressed };
 });
 
 console.log(JSON.stringify({ clear, modal, chips, errors }, null, 1));
 const g = (o) => o && o.w >= 44 && o.h >= 44 && o.display !== 'none' && !o.hidden;
-const ok = g(clear) && g(modal) && g(chips.chipToggle) && g(chips.modeBtn) && errors.length === 0;
+const ok = g(clear) && g(modal) && g(chips.chipToggle) && g(chips.modeBtn) && chips.ariaOk && errors.length === 0;
 console.log(ok ? 'TOUCH-TARGET PASS ✅' : 'TOUCH-TARGET FAIL ❌');
 await Promise.race([browser.close(), new Promise(r => setTimeout(r, 3000))]);
 kill();
