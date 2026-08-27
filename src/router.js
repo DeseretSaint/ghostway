@@ -259,11 +259,16 @@ export const HARD_CAM_EXPOSURE = 160;
 // surface arterial then beats a freeway detour that only saves a minute or
 // two (the natural-route preference from the driver-preference research).
 const DIST_W = 0.06;
+// Congestion multiplier: congested driving time is valued ~1.3-1.5x free-flow
+// time (Wardman & Ibáñez 1999; Abrantes & Wardman 2011 meta-analysis; ledger
+// round-80 research). Applied to the SEARCH score only — reported duration/
+// delay and the detour-budget tracker stay pure driving time.
+const CONG_W = 1.4;
 
 export const MODES = {
-  off: { camWeight: 0, capFactor: Infinity, hardCam: 0, distW: 0, label: 'Fastest' },
-  moderate: { camWeight: 6, capFactor: 1.25, hardCam: 0, distW: DIST_W, label: 'Balanced' },
-  strict: { camWeight: 60, capFactor: Infinity, hardCam: HARD_CAM_EXPOSURE, distW: DIST_W, label: 'Clearest' },
+  off: { camWeight: 0, capFactor: Infinity, hardCam: 0, distW: 0, congW: 1, label: 'Fastest' },
+  moderate: { camWeight: 6, capFactor: 1.25, hardCam: 0, distW: DIST_W, congW: CONG_W, label: 'Balanced' },
+  strict: { camWeight: 60, capFactor: Infinity, hardCam: HARD_CAM_EXPOSURE, distW: DIST_W, congW: CONG_W, label: 'Clearest' },
 };
 
 // ---- Binary min-heap on Float64 keys ----
@@ -352,17 +357,28 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
       const len = g.eLen[e];
       const spd = g.eSpd[e];
       // Effective speed: posted speed derated for signals/urban friction.
-      let timeSec = len / ((spd * effFactor(spd)) / 3.6);
-      timeSec /= edgeFactor[e]; // live traffic slows the edge
+      const freeFlow = len / ((spd * effFactor(spd)) / 3.6);
+      const slowed = freeFlow / edgeFactor[e]; // live traffic slows the edge
+      // Congestion-weighted time: delayed seconds count ~1.4× in the SEARCH
+      // score (Wardman congestion multiplier — congested time hurts more than
+      // free-flow time). Search score only: the budget tracker tScore and the
+      // reported metrics below stay pure driving time.
+      let timeSec = slowed;
+      const searchTime = cfg.congW === 1 ? slowed : freeFlow + (slowed - freeFlow) * cfg.congW;
+      let scoreTime = searchTime;
       // Junction delay: entering an intersection (degree ≥ 3) costs signal/turn time.
-      if (g.nodeDeg[v] >= 3) timeSec += junctionPenalty(spd);
+      if (g.nodeDeg[v] >= 3) {
+        const jp = junctionPenalty(spd);
+        timeSec += jp;
+        scoreTime += jp;
+      }
       const camCost = cfg.camWeight * (g.eCam[e] / 255) * (len / 100); // exposure scales with length under camera
       // Generalized cost: distance disutility (search score only; the budget
       // tracker tScore and reported metrics stay pure driving time).
       const distCost = cfg.distW * len;
       // Avoid-highways penalty: search-only multiplier (metrics stay honest).
       const pen = penalty ? penalty[e] : 1;
-      const ng = gScore[u] + (timeSec + camCost) * pen + distCost;
+      const ng = gScore[u] + (scoreTime + camCost) * pen + distCost;
       if (ng < gScore[v]) {
         // Detour budget: prune paths whose real driving time exceeds it.
         if (tScore) {
