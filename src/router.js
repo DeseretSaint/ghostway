@@ -760,17 +760,23 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   // capFactor was declared on MODES but never enforced — this is the fix for
   // the "forced detour" complaint (PG→Costco Clearest was +38% time).
   const strictBudget = fastest.duration * 1.25 + 90;
-  let clearest = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, { maxCost: strictBudget });
+  // Unbounded strict search, budget checked AFTER. The in-search maxCost prune
+  // tracks time on the best-score label only and can reject a camera-free route
+  // whose TRUE time fits the budget — measured on PG→Costco: the 0-camera route
+  // is 846 s, the budget is 863 s, yet the budgeted search returned null and the
+  // served "Clearest" still passed a camera (strictFallback). Same unbounded +
+  // post-search-check pattern gate-snap already uses below.
+  const strictProbe = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, {});
+  let clearest = strictProbe && strictProbe.duration <= strictBudget ? strictProbe : null;
   let strictFallback = false;
   let overBudget = false;
   let walled = false;
   let clearToM = 0;
   if (!clearest) {
-    // Camera-walled or budget-exhausted: soften the floor, still in budget.
-    // One unbounded strict probe tells us WHICH: if a hard-floor path exists
-    // at any cost, the destination is reachable-clear (budget case); if not,
-    // it is truly camera-walled (no ≥floor path exists anywhere).
-    walled = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, {}) === null;
+    // Camera-walled or budget-exhausted. The unbounded probe already tells us
+    // which: null = truly walled (no ≥floor path anywhere); an over-budget hit
+    // = a clear path exists but costs too much time.
+    walled = strictProbe === null;
     if (walled) {
       // Gate-snap: the clear network ends a short drive from the destination
       // (measured: BYU tail = 118 m / 4 edges). Route hard-floor-clear to the
