@@ -1061,9 +1061,62 @@ details summary {
   border-color: var(--line-strong);
 }
 .map-chip.off { opacity: 0.45; }
-/* During navigation the banner occupies the top — drop the chip below it. */
-#navBanner:not([hidden]) ~ #camLayerBtn {
+/* During navigation the banner occupies the top — drop the chips below it. */
+#navBanner:not([hidden]) ~ #camLayerBtn,
+#navBanner:not([hidden]) ~ #legendBtn {
   top: calc(max(64px, env(safe-area-inset-top) + 58px) + 96px);
+}
+#legendBtn { top: calc(max(70px, env(safe-area-inset-top) + 64px) + 52px); }
+
+/* On-map camera legend (toggled by #legendBtn) */
+.legend-panel {
+  position: absolute;
+  left: 10px;
+  top: calc(max(70px, env(safe-area-inset-top) + 64px) + 104px);
+  z-index: 5;
+  width: 232px;
+  max-width: calc(100vw - 20px);
+  padding: 12px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.legend-panel[hidden] { display: none; }
+.legend-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 5px 0;
+}
+.legend-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid rgba(255,255,255,0.5);
+}
+.legend-swatch {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  flex: none;
+  background: linear-gradient(135deg, #3ad6c5, #ffaa40 55%, #ff4d6d);
+}
+.legend-note {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  opacity: 0.8;
 }
 
 /* Legend (About modal) */

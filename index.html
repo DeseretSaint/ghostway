@@ -51,6 +51,16 @@
         <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.4-2h6.2L16.5 7h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="13" r="3.4"/></svg>
       </button>
 
+      <button id="legendBtn" class="map-chip" title="What the camera dots mean" aria-label="Toggle camera legend" aria-expanded="false">ⓘ</button>
+
+      <div id="legendPanel" class="legend-panel" role="note" aria-label="Camera legend" hidden>
+        <div class="legend-title">Camera types</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ff4d6d"></span>Flock Safety ALPR — reads plates at speed</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ffaa40"></span>Other ALPR cameras</div>
+        <div class="legend-row"><span class="legend-swatch"></span>Camera density (more = redder)</div>
+        <div class="legend-note">Ghostway routes you around these. Tap a dot for details.</div>
+      </div>
+
       <!-- Search / control panel -->
       <section id="panel" class="panel">
         <div id="search">

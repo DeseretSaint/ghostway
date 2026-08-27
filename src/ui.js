@@ -117,6 +117,17 @@ export function buildPanel(app) {
       else app.state.to = null;
     })
   );
+
+  // Camera legend toggle (on-map, explains the camera dots).
+  const legendBtn = $('#legendBtn');
+  const legendPanel = $('#legendPanel');
+  if (legendBtn && legendPanel) {
+    legendBtn.addEventListener('click', () => {
+      const open = legendPanel.hidden;
+      legendPanel.hidden = !open;
+      legendBtn.setAttribute('aria-expanded', String(open));
+    });
+  }
 }
 
 // ---- Route card: engine options (Clearest/Balanced/Fastest) or legacy single ----
