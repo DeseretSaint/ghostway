@@ -791,4 +791,27 @@ SOURCES: eprints.whiterose.ac.uk/2340 (Wardman 1985); dspace.mit.edu/1721.1/4979
 trid.trb.org/1421056 (turns+signals 2016); discovery.ucl.ac.uk/16229 (angularity);
 doi 10.1016/j.jtrangeo.2015.08.013 (orbital vs center); journals.plos.org/plosone 0134322
 (Wardrop empirical test); PMC8395743 (familiarity review); arxiv 2404.15589 (Beijing taxi);
-valhalla docs costing_options (use_highways factors); Google Maps routing explainers (iblead et al.).
+valhalla docs costing_options (use_highways factors); Google Maps routing explainers (iblead et al).
+
+## Slot-C verification (2026-08-27 ~09:17 MDT)
+Verification battery under slot-B round-79 FRESH lock (research-only: no build/preview/edits; working tree clean HEAD 94fc303, 0 live procs). All camera-avoidance invariants HOLD, ZERO drift from 09:13/09:19: floor-audit 0 strict-legal edges <31.4 m (273 in 30-40 m bucket, 132,158 ALPR indexed); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit LIVE PROBE PASS — BYU gate-snapped (Clearest mid-route min 40 m, clear to within ~118 m), 4 budget best-effort correctly labeled (PG→Costco 25m/Fastest+Balanced 7m, Lehi→SLC 12m, Orem→Airport 17m, AF→PC 4m), walled/budget split correct. Reproduced Keaton's reported PG→Costco camera-over-favor repro (Fastest/Balanced 7 m, Clearest 25 m = budget-rejected clear path) — stable, no regression. Slot-A owns the engine rebuild per directive; round-79 research supplies the generalized-cost design.
+
+### Addendum: congestion & reliability (slot-B round 80, 2026-08-27 ~09:25 MDT)
+Fills the congestion gap in Keaton's question list (Wardman et al.).
+7. Congested time hurts MORE than free-flow time — the "congestion multiplier". Wardman & Ibáñez
+   (1999, first precise SP estimates, UK motorists' route choice): congested driving time is valued
+   1.28–1.46× free-flow time (commuting/other/business). Fosgerau et al. + Copenhagen GPS route-
+   choice study (TRR 2412-03, 2014): value of congestion and value of reliability are BOTH
+   significant in OBSERVED route choice, and both are HIGHER in peak periods (time pressure).
+   Abrantes & Wardman (2011) meta-analysis + Wardman 2026 worldwide multiplier review confirm
+   congested-time multipliers ~1.3–1.5 as the stable finding across 40 years of evidence.
+8. Reliability (predictability) is valued independently of mean time: drivers pay time to avoid
+   UNPREDICTABLE routes (Carrion & Levinson review; TRR 2412-03). A route that is usually fast but
+   occasionally very slow is dispreferred to a steady one.
+IMPLICATION FOR SLOT-A: in the generalized cost, weight time spent in congestion ~1.4× free-flow
+time (live-traffic edges already exist — UDOT incidents layer), and prefer routes whose time is
+stable over routes that gamble. This REINFORCES the surface-arterial preference for the Costco
+case: the freeway bet adds ramp overhead + congestion variance; the direct arterial is steady.
+SOURCES: doi 10.1016/j.tra.2011.06.011 (congestion multiplier); doi 10.3141/2412-03 (Copenhagen
+GPS value of congestion + reliability); eprints.whiterose.ac.uk/239301 (Wardman worldwide time-
+multiplier meta-analysis).
