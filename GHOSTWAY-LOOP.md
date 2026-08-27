@@ -238,6 +238,45 @@ from this queue first when it's non-empty.
       fix (spec re-verified against CURRENT working-tree router.js: L126 count
       loop, L128-131 outStart, L137-145 fill — line numbers unchanged by the
       in-flight nearestNode edit; fix spec still valid as pinned).
+- [ ] ROUTING AXIS (slot-A, research 2026-08-26 ~22:36): **OSM turn-restriction
+      ingestion** — the engine currently honors NO turn restrictions (A* only
+      applies a degree-based junctionPenalty, never checks turn legality), so it
+      can plan illegal U-turns / lefts against OSM `type=restriction` relations.
+      Measured from /tmp/utah-fresh.osm.pbf (bbox): **2179 restriction relations
+      in-region; 2167 actionable turn-types** (exclude 10 untyped + 2
+      `no_right_turn_on_red` = signal timing, not routing). Of these, **1937
+      (89%) have their `via` node present in the shipped graph**, and **1222
+      (56% of all / 63% of matched) sit at a real graph junction (deg≥3)** where
+      a turn restriction actually changes routing — degree histogram
+      {3:404, 4:638, 5:89, 6:85, 7:6} plus 712 at deg-2 connectors and 3 deg-1.
+      Dominant types: no_u_turn 707, no_left_turn 660, only_straight_on 418,
+      no_right_turn 199, only_right_turn 118, only_left_turn 45, no_straight_on
+      18, only_u_turn 2. PLAN (lands only after router.js unblocks): (1) build
+      time adds a turn-table to GWR1 — per `via` node, list of forbidden
+      (fromEdge→toEdge) pairs from the restriction relations (and `only_*` ⇒
+      allow-list); bump magic/graph version; (2) astar enforces it using the
+      existing prevFrom[]/arcEdge[] (when relaxing arc p→v, reject if the turn
+      from prevEdge[u]→e is forbidden at v); (3) floor-audit + engine-check +
+      avoidance-audit + smoke + engine-e2e before ship. Reuse /tmp/gw-turns3.mjs
+      (proven decoder) as the regression counter. Community-report baking is
+      ALREADY shipped (planRoutes bakes communityCams into eCam) — not a new axis.
+      UPDATE (slot-A round 43, /tmp/gw-turntable.mjs — working prototype of the
+      build-time table): 2179 rels → 12 non-actionable, 14 `except` (skip v1),
+      196 way-via (skip v1), 45 via-not-in-graph, 36 from/to-way miss →
+      **1889 matched (87%)** = 990 forbid + 425 allow entries over **920
+      distinct via nodes**. no_u_turn encodes as (v,fe,fe). FORMAT DECISION:
+      per-node CSR wastes 2 MB (527k-node start array); use via-keyed compact:
+      turnViaCount u32 + turnViaNodes[920] u32 + turnStart[921] u32 + entries
+      (in u32, out u32, mode u8) = **~20 KB total** on GWR2. parseGraph builds
+      Map<node,[start,end)> at load (920 entries, trivial). astar: on relaxing
+      arc into v, if v has allow-entries for inEdge → only those outEdges pass;
+      else forbid-pairs rejected. Still BLOCKED on router.js (nearestNode
+      changeset live, holder preview :4173 up) — landing run = build-graph.mjs
+      table writer + parseGraph reader + astar check + floor-audit/engine-check
+      /avoidance-audit/smoke/engine-e2e.
+- [x] ROUTING AXIS decoy: community-report → routing IS already implemented
+      (src/router.js planRoutes communityCams → merged eCam, R=100 m, same
+      weighting as builder). Verified present in working tree. No further work.
 - [ ] Ops (found 2026-08-26 22:03 MST, round 38): src/router.js holds a SECOND
       uncommitted changeset (distinct from the 16-file lazy-engine set): a
       nearestNode() fix — returned `dist` was sqrt(score) with the low-degree
@@ -297,6 +336,11 @@ block on these — it queues and moves on.
 | 2026-08-26 | camera-avoidance (slot-A round 40) | research-only: BYU camera-walled tail measured — exposed stretch is only 118 m / 4 edges (min cam dist 17 m), clear network covers 94.3% of nodes and ends 117 m from dest; parking-gate snap + honest "clear to within ~120 m" messaging spec pinned in queue. router.js still blocked (nearestNode changeset live, holder preview up) | /tmp/gw-byu-approach.mjs: gate node, tail length, 8 gate candidates, dest cam distance all measured | research-only (queued fix spec) |
 || 2026-08-26 | tests (slot-C, 22:31 MST) | targeted sweep over changes since 22:13 sweep (src/ui.js + index.html = slot-B round-40 ARIA edits): no code changed, verification only | build exit 0; avoidance-audit PASS (all Clearest ≥30 m mid-route, 4 camera-walled dests best-effort); floor-audit PASS (0 strict-legal edges <31.4 m); xss-check PASS (ui.js escaping intact post-edit); interact-check PASS (0 page errors) | verified — no regressions |
 || 2026-08-26 | routing (slot-A round 41) | research-only: closed the AF→Park City ETA item. Prior round-35 "belt 89.7 km < straight 96.3" contradiction traced to nearestNode snapping belt interchanges to SURFACE streets (spd<95). Re-measured with freeway-node (spd≥95) snapping: belt corridor = 99.52 km / 68.5 min vs straight 96.27 km / 62.7 min → belt is 3.25 km LONGER under the engine's own cost model, so A* correctly prefers straight. The 89.7 km was belt-freeway length alone minus ~9.8 km of AF→belt-entry + belt-exit→PC connecting legs. Gap vs Valhalla = pure graph fidelity (Valhalla OSM extract has more direct belt ramps), NOT a router/cost-model defect. router.js still blocked (live nearestNode changeset, holder preview up) → no code changed | /tmp/gw-belt-cost.mjs: belt entry fw-node 452651 / exit 221683; belt 99.52 km 68.5 min, straight 96.27 km 62.7 min; conclusion = A* optimal, item CLOSED | research-only (item closed, no code) |
+|| 2026-08-26 | tests (slot-C, 22:42 MST) | verification sweep over CURRENT working tree (live nearestNode fix in router.js + 16-file lazy-engine set + slot-B ARIA/touch edits, all uncommitted) — NO code changed, verify only | build exit 0; floor-audit PASS (0 strict-legal edges <31.4 m, 630 bbox cams); engine-check PASS (Fastest 10min/2cams, Clearest 11min/1cam); avoidance-audit PASS (live routing probe: Orem→Airport ≥30 m mid-route; PG→Costco/BYU/Lehi→SLC/AF→PC honestly best-effort camera-walled); xss-check PASS (hostile report + street names inert, 0 errors) | verified — no regressions from uncommitted changesets |
+|| 2026-08-26 | camera-avoidance (slot-C FINDING) | WARNING for Keaton: camera-walled destinations grew 1→4 of 5 tested corridors (added PG→Costco, Lehi→SLC, AF→PC beyond BYU). Likely DeFlock growth (127k→132k ALPR) + nearestNode fix snapping dests to true-metric nodes. NOT a code bug: floor-audit still 0 geometric violations + badge honest best-effort. But the ≥30 m mid-route GUARANTEE now only fully holds on Orem→Airport among tested corridors. Recommend generalizing the queued BYU gate-snap/best-effort-tail spec to all camera-walled dests | noted for Keaton (no code change in verify slot) |
+|| 2026-08-26 | tests (slot-C, 22:51 MST) | verification sweep over CURRENT working tree (live nearestNode fix + snap-dist-check.mjs in router.js + 16-file lazy-engine set + slot-B ARIA/touch edits, all uncommitted) — NO code changed, verify only. Confirmed the nearestNode true-distance fix is correct & active. | build exit 0; snap-dist-check PASS (onRoad=90.0m offRoad=334.8m — fix live, off-road no longer false-near); engine-check PASS (Fastest 10km/11min/1cam, Clearest 10km/11min/1cam); floor-audit PASS (0 strict-legal edges <31.4 m); avoidance-audit PASS (Clearest ≥30 m mid-route; 4 camera-walled dests honest best-effort); xss-check PASS (hostile report + street names inert, 0 errors) | verified — no regressions from uncommitted changesets |
+| 2026-08-26 | routing (slot-A round 42) | research-only: scouted a NEW routing axis — OSM turn-restriction ingestion. Engine honors ZERO turn restrictions today (A* only does degree-based junctionPenalty), so it can plan illegal U-turns/lefts. Decoded /tmp/utah-fresh.osm.pbf + shipped graph (audit's proven decoder). router.js BLOCKED by live nearestNode changeset + holder preview :4173 → no code changed | 2179 restriction relations in-region (2167 actionable); 1937 (89%) have `via` node in graph; 1222 (56%) at real junction (deg≥3) — types: no_u_turn 707, no_left_turn 660, only_straight_on 418, no_right_turn 199, only_right_turn 118…; plan pinned in queue | research-only (queued axis + landing plan) |
+|| 2026-08-26 | routing (slot-A round 43) | research-only: prototyped the build-time turn TABLE (/tmp/gw-turntable.mjs) — full relation→graph-edge resolution incl. only_* allow-lists + no_u_turn=(v,fe,fe). 1889/2179 rels matched (87%) → 990 forbid + 425 allow entries, 920 via nodes. Format decision: via-keyed compact table ~20 KB (per-node CSR = 2 MB waste). Landing spec pinned in queue. router.js still BLOCKED (nearestNode changeset live, holder preview :4173) → no code changed | /tmp/gw-turntable.mjs run: matched 1889, forbid 990, allow 425, via nodes 920, table 20 KB | research-only (landing spec pinned) |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
