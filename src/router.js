@@ -250,10 +250,20 @@ export function nearestNode(lon, lat) {
 // exposure (safe direction); non-ALPR cameras weigh 0.5 and alone stay under
 // the floor, which is intended (they don't read plates).
 export const HARD_CAM_EXPOSURE = 160;
-const MODES = {
-  off: { camWeight: 0, capFactor: Infinity, hardCam: 0, label: 'Fastest' },
-  moderate: { camWeight: 6, capFactor: 1.25, hardCam: 0, label: 'Balanced' },
-  strict: { camWeight: 60, capFactor: Infinity, hardCam: HARD_CAM_EXPOSURE, label: 'Clearest' },
+// Generalized cost (engine-rebuild plan step 1): drivers do NOT minimize
+// time — distance carries independent disutility (fuel/wear/perceived effort,
+// Wardman 1985) and <50% of drivers take the fastest route (Ramming 2002).
+// distW is seconds of disutility per meter of distance, added to the SEARCH
+// score only; reported duration/distance metrics stay honest pure-time.
+// Tuned so a route must save ~1 min of time per extra km to win — the direct
+// surface arterial then beats a freeway detour that only saves a minute or
+// two (the natural-route preference from the driver-preference research).
+const DIST_W = 0.06;
+
+export const MODES = {
+  off: { camWeight: 0, capFactor: Infinity, hardCam: 0, distW: 0, label: 'Fastest' },
+  moderate: { camWeight: 6, capFactor: 1.25, hardCam: 0, distW: DIST_W, label: 'Balanced' },
+  strict: { camWeight: 60, capFactor: Infinity, hardCam: HARD_CAM_EXPOSURE, distW: DIST_W, label: 'Clearest' },
 };
 
 // ---- Binary min-heap on Float64 keys ----
@@ -347,9 +357,12 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
       // Junction delay: entering an intersection (degree ≥ 3) costs signal/turn time.
       if (g.nodeDeg[v] >= 3) timeSec += junctionPenalty(spd);
       const camCost = cfg.camWeight * (g.eCam[e] / 255) * (len / 100); // exposure scales with length under camera
+      // Generalized cost: distance disutility (search score only; the budget
+      // tracker tScore and reported metrics stay pure driving time).
+      const distCost = cfg.distW * len;
       // Avoid-highways penalty: search-only multiplier (metrics stay honest).
       const pen = penalty ? penalty[e] : 1;
-      const ng = gScore[u] + (timeSec + camCost) * pen;
+      const ng = gScore[u] + (timeSec + camCost) * pen + distCost;
       if (ng < gScore[v]) {
         // Detour budget: prune paths whose real driving time exceeds it.
         if (tScore) {
