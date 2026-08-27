@@ -901,7 +901,19 @@ details summary {
   transition: transform 0.15s ease;
 }
 .steps-wrap[open] summary::before { transform: rotate(90deg); }
-#startNavBtn { margin-top: 8px; }
+/* Primary CTA must never hide below the panel's scroll fold: on a 390×844
+   phone with 3 route options the card overflows the 52vh scroll area and the
+   button used to sit below the fold (hit-test landed on the map canvas).
+   Pin it to the bottom of the scroll port; the upward shadow keeps scrolled
+   content from visually colliding with it. */
+#startNavBtn {
+  margin-top: 8px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  width: 100%;
+  box-shadow: 0 -12px 14px -10px rgba(8, 12, 20, 0.95);
+}
 .rc-edit {
   display: inline-flex;
   align-items: center;
