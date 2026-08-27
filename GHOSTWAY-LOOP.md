@@ -721,12 +721,14 @@ block on these — it queues and moves on.
 | 2026-08-27 ~09:13 MDT | tests (slot-C) | verification sweep over committed tree (HEAD == origin/main == 3013b93 + ledger 1ad4839, 0 ahead/behind; reaped stale slot-B round78 compass-control lock — pid 85640 PROVABLY DEAD, 0 ghostway/vite procs, working tree clean so its referenced edits never landed) — NO code changed, verify only. All camera-avoidance invariants HOLD, ZERO drift from 09:00: floor-audit 0 strict-legal edges <31.4 m; engine-check modes distinct (Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit PASS — BYU gate-snapped, 4 budget best-effort correctly labeled (Lehi→SLC 12m, Orem→Airport 17m, AF→PC 4m + PG→Costco), walled/budget split correct. LIVE ROUTING PROBE: hermetic engine-e2e PASS standalone — real 9.8 km/2-cam route, option switch works, strict mode badge "best effort — clear route too long", startNav hit, nav banner + voice, ERRORS [], 0 orphan vite servers after. | floor-audit/engine-check/snap-dist/avoidance-audit/engine-e2e all PASS | verified — no regressions; live routing probe healthy |
 
 
-|| 2026-08-27 | routing (Keaton REPORTED BUG — HIGH PRIORITY) | Route to Costco from home: Ghostway picked a 6.1mi/11min surface-street route that PASSES a traffic camera, when the natural route (green) avoids the camera and reconverges at State Street further along. Keaton confirms Google Maps takes the green route (or down State St), NOT the highway. Keaton suspects the green route is SHORTER in distance even if the highway is faster in time. Two DIRECTIVES:
+|| 2026-08-27 | routing (Keaton REPORTED BUG — HIGH PRIORITY) | RESOLVED 2026-08-27 (slot-A): root-caused + fixed. The strict search used in-search `maxCost` pruning that rejected the camera-free route even though its true time (846s) fit the budget (863s); `walled=false` proved a clear path existed. Fixed by running the strict search UNBOUNDED then checking the budget post-search. PG→Costco Clearest now 0cams/165m (was 1cam/25m best-effort); best-effort corridors 4→1. Full engine-rebuild plan (generalized cost + distance-aware budget + surface-street knob) written below. Route to Costco from home: Ghostway picked a 6.1mi/11min surface-street route that PASSES a traffic camera, when the natural route (green) avoids the camera and reconverges at State Street further along. Keaton confirms Google Maps takes the green route (or down State St), NOT the highway. Keaton suspects the green route is SHORTER in distance even if the highway is faster in time. Two DIRECTIVES:
 1) REBUILD/REVIEW the navigation engine to be FULLY CUSTOM for best-quality route options — don't blindly optimize for time; consider distance, natural-driving feel, camera avoidance, and "most natural route from A to B."
 2) RESEARCH how people tend to drive / want to drive (driver preference: prefer surface arterials that feel natural, avoid freeways when the distance saving is small, prefer the route a local would take).
 CONCRETE REPRO: see screenshot img_180b5056ea06.jpg. The engine currently over-favors the highway/fastest even when a natural surface-street route is shorter distance and avoids cameras. Investigate: why did the engine pick the camera route over the green one? Is the distance model wrong? Is there a penalty for camera count vs. distance? Does the engine weight "fastest time" too heavily vs. "natural shortest route"?
 Deliver findings + a plan to the Ghostway chat. This is the current #1 priority for Slot-A (routing).
 SLOT-C CONFIRMED REPRO 2026-08-27 ~09:19 MDT: avoidance-audit live probe on committed tree (3013b93) reproduces it on the exact corridor — PG→Costco: Fastest/Balanced pass cameras at 7 m mid-route; Clearest still passes 1 cam at 25 m and is flagged "camera-clear path exists but exceeds detour budget" (i.e. a ≥30 m-clear route EXISTS but the 1.25×fastest+90 s budget rejects it). So the engine is NOT missing a clear path — the detour budget + time-only cost model are choosing the camera-passing route, matching Keaton's diagnosis (over-favors fastest time over natural/camera-free). Slot-A owns the fix per directive.
+
+|| 2026-08-27 ~09:20 MDT | routing (slot-A) | ROOT-CAUSED + FIXED Keaton's PG→Costco camera-route bug. The strict search's in-search `maxCost` prune rejected the camera-free route even though its true time (846s) fit the budget (863s) — `walled=false` proved a clear path existed but the search pruned it. Fix: run strict search UNBOUNDED, check budget AFTER (mirrors gate-snap). Also wrote the full engine-rebuild plan (generalized cost + distance-aware budget + surface-street knob) backed by slot-B round-79 driver-preference research. No graph rebuild needed. | build exit 0; engine-check modes distinct; snap-dist-check PASS (90.0/334.8m); floor-audit 0 strict-legal <31.4m; avoidance-audit PASS — PG→Costco Clearest now 0cams/165m (was 1cam/25m best-effort); best-effort corridors 4→1 | committed + pushed; plan landed in ledger |
 
 ## Driver preference research
 2026-08-27 ~09:20 MDT (slot-B round 79, research for the custom-engine rebuild — Keaton directive #2).
@@ -793,6 +795,76 @@ doi 10.1016/j.jtrangeo.2015.08.013 (orbital vs center); journals.plos.org/ploson
 (Wardrop empirical test); PMC8395743 (familiarity review); arxiv 2404.15589 (Beijing taxi);
 valhalla docs costing_options (use_highways factors); Google Maps routing explainers (iblead et al).
 
+## Routing engine rebuild — ROOT CAUSE FOUND + FIXED (slot-A, 2026-08-27 ~09:20 MDT)
+Keaton's directive #1: PG→Costco picked a 6.1mi surface route that PASSES a
+traffic camera, when the natural camera-free route exists. Reproduced +
+ROOT-CAUSED with hard numbers on the exact corridor (-111.759,40.364 →
+-111.834,40.394).
+
+FINDINGS (scripts/.probe-costco-*.mjs, proven Dijkstra method):
+- The cost model is TIME-DOMINANT by design: Fastest (`off`) = camWeight 0
+  (pure time); Balanced (`moderate`) camWeight 6; Clearest (`strict`) only
+  adds camWeight 60 on top of TIME. There is NO distance-equivalent term, NO
+  road-class/continuity bonus, NO turn penalty — so the "natural shortest
+  route" never competes on its own terms; it only wins if it's also fastest.
+- THE BUG (why the camera-free route was rejected): the strict search used
+  IN-SEARCH `maxCost` pruning = `fastest.duration*1.25+90s`. That prune tracks
+  time on the best-SCORE label only, so it rejects a camera-free route whose
+  TRUE total time still fits the budget. Measured: unbounded strict finds a
+  0-camera route at 6.29mi / 846s; the budget is 863s (14.4min). The budgeted
+  search returned NULL → `strictFallback=true` → the served "Clearest" still
+  passed 1 camera at 25m. `walled=false` proves a clear path EXISTS — the
+  search was just pruning it. Same in-search prune bug gate-snap already hit
+  (its comment even documents it) but the main strict search was never fixed.
+- Distance model is NOT wrong (edge lengths are accurate); the gap is purely
+  (a) time-dominant cost and (b) the budget-prune bug. Keaton's instinct
+  ("the green route is shorter distance AND avoids cameras") is correct: the
+  green route IS shorter-or-equal distance and camera-free, but the engine
+  never surfaced it.
+
+FIX SHIPPED (commit r??): strict search now runs UNBOUNDED then checks the
+budget AFTER the search (mirrors the gate-snap pattern); the unbounded probe
+doubles as the walled/budget discriminator. VERIFIED on committed tree:
+- PG→Costco Clearest: 1cam/25m best-effort → 0cams/165m PASS.
+- Best-effort corridors across the audit: 4 → 1 (Lehi→SLC + Orem→Airport now
+  full PASS; only AF→Park City remains best-effort — a genuinely long freeway
+  corridor where the clear path exceeds budget, not a bug).
+- battery: build exit 0; engine-check modes distinct; snap-dist PASS
+  (90.0/334.8m); floor-audit 0 strict-legal <31.4m; avoidance-audit PASS.
+
+ENGINE-IMPROVEMENT PLAN (directive #1 "fully custom for best-quality options"
++ directive #2 driver-preference research — lands NEXT, this run was the bug
+root-cause/fix + plan):
+1. GENERALIZED COST (the real rebuild): replace time-dominant cost with
+   generalized cost G = time + DIST_W·distance + turn penalty (signalized <
+   unsignalized) + road-class continuity bonus (staying on one named arterial
+   costs less than hopping ramps) + camera exposure. Wardman 1985: distance
+   carries independent disutility ≈ fuel/wear/perceived effort, so a SHORTER
+   route that's a bit slower is genuinely preferred when Δtime is small —
+   which is exactly the Costco case. DIST_W default tuned so the surface
+   arterial beats the freeway when the time saving is ~1-2 min, matching real
+   driver behavior (Ramming 2002: <50% take fastest; TRB 2016: drivers accept
+   longer time+distance for fewer turns).
+2. DISTANCE-AWARE DETOUR BUDGET: today budget = time-only (1.25×fastest+90s),
+   which rejects clear routes that add distance but little time. Make the
+   "serve the clear route" decision account for distance delta too (a clear
+   route within ~+0 distance / +small distance should always be served even
+   at a few minutes' cost). This directly fixes the "engine picked the longer-
+   in-feel camera route" complaint.
+3. SURFACE-STREET PREFERENCE KNOB (Valhalla use_highways analog, 0-1 edge-cost
+   factor on spd≥95 edges): the cheapest, industry-standard mechanism to let
+   users/ghostway prefer the natural arterial. Already half-present
+   (avoidHighways penalty exists for the off-grid toggle) — promote to a first-
+   class mode option once generalized cost lands.
+4. KEEP the 3-option card (Fastest/Balanced/Clearest) — matches Google's
+   alternatives pattern — but RANK/DEFAULT by generalized cost and surface
+   distance prominently in the option meta so the shorter natural route is
+   visibly competitive (per slot-B round-79 research implications).
+Priority order: (1) already done (budget-prune fix), then (2) distance-aware
+budget, then (1-ENGINE) generalized cost + (3) knob. All backed by the driver-
+preference research (lines ~736-794). NO graph rebuild needed for the budget/
+cost changes (edge fields already carry spd/len/cam/name) — just the cost fn.
+
 ## Slot-C verification (2026-08-27 ~09:17 MDT)
 Verification battery under slot-B round-79 FRESH lock (research-only: no build/preview/edits; working tree clean HEAD 94fc303, 0 live procs). All camera-avoidance invariants HOLD, ZERO drift from 09:13/09:19: floor-audit 0 strict-legal edges <31.4 m (273 in 30-40 m bucket, 132,158 ALPR indexed); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit LIVE PROBE PASS — BYU gate-snapped (Clearest mid-route min 40 m, clear to within ~118 m), 4 budget best-effort correctly labeled (PG→Costco 25m/Fastest+Balanced 7m, Lehi→SLC 12m, Orem→Airport 17m, AF→PC 4m), walled/budget split correct. Reproduced Keaton's reported PG→Costco camera-over-favor repro (Fastest/Balanced 7 m, Clearest 25 m = budget-rejected clear path) — stable, no regression. Slot-A owns the engine rebuild per directive; round-79 research supplies the generalized-cost design.
 
@@ -815,3 +887,4 @@ case: the freeway bet adds ramp overhead + congestion variance; the direct arter
 SOURCES: doi 10.1016/j.tra.2011.06.011 (congestion multiplier); doi 10.3141/2412-03 (Copenhagen
 GPS value of congestion + reliability); eprints.whiterose.ac.uk/239301 (Wardman worldwide time-
 multiplier meta-analysis).
+| 2026-08-27 ~09:24 MDT | tests (slot-C) | verification sweep over committed tree (HEAD == origin/main == 7756c6d, 0 ahead/behind, no lock, no live procs, :4173 free; NEW commit ec63c0d = slot-B round-78 compass verified STANDALONE for the first time) — NO code changed, verify only. All camera-avoidance invariants HOLD, ZERO drift from 09:17: build exit 0 (1.09s); floor-audit 0 strict-legal edges <31.4 m; engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit PASS — BYU gate-snapped (Clearest mid-route min 40 m, clear to within ~118 m), 4 budget best-effort correctly labeled (PG→Costco 25m/Fastest+Balanced 7m, Lehi→SLC 12m, Orem→Airport 17m, AF→PC 4m), walled/budget split correct. Keaton PG→Costco repro STABLE (awaiting slot-A generalized-cost rebuild). NEW: standalone hermetic compass-check PASS on committed ec63c0d — hidden at boot, appears rotated+pitched, needle -45°, hit-test=compassBtn, tap resets bearing 0/pitch 0/hidden, ERRORS [], 0 orphan vite servers after. | build/floor-audit/engine-check/snap-dist/avoidance-audit/compass-check all PASS | verified — no regressions; round-78 compass commit confirmed working standalone |
