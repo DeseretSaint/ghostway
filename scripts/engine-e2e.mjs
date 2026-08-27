@@ -50,12 +50,23 @@ async function hit(sel) {
   }, sel);
 }
 
-// Robust pick: wait for a suggestion, else press Enter (commits typed text).
+// Robust pick: wait for REAL photon results (loading row gone + a non-recent
+// row present), else press Enter (commits typed text). Round-71 recent-
+// destinations rows also carry .sugg and render instantly on field focus, so
+// a bare '.sugg' wait can click a RECENT row before photon results arrive —
+// the second pick then re-selects the first pick (from==to → degenerate
+// "0 min · 0 m" options, false PASS). Same flake fixed in tiers/waypoint-
+// check (2026-08-27 07:40).
 async function pickSuggestion(inputSel, query) {
   await p.type(inputSel, query);
   try {
-    await p.waitForSelector('#suggestions .sugg', { timeout: 6000 });
-    await p.click('#suggestions .sugg');
+    await p.waitForFunction(
+      () =>
+        !document.querySelector('#suggestions .sugg-loading') &&
+        !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'),
+      { timeout: 12000 }
+    );
+    await p.click('#suggestions .sugg:not(.sugg-recent)');
   } catch {
     await p.focus(inputSel);
     await p.keyboard.press('Enter');
@@ -78,6 +89,15 @@ await p.waitForFunction(
 );
 const cardText = await p.evaluate(() => document.querySelector('#route-card')?.innerText?.replace(/\s+/g, ' ')?.slice(0, 400) || 'none');
 console.log('card:', cardText);
+
+// Guard: a degenerate from==to route renders "0 min · 0 m" options — that is
+// a test-flow failure (wrong endpoint picked), never a real PG→Lehi route.
+if (/0 min · 0 m/.test(cardText)) {
+  console.error('FAIL: degenerate 0-distance route — endpoint pick went wrong (from==to?)');
+  pv.kill();
+  try { await Promise.race([b.close(), wait(5000)]); } catch {}
+  process.exit(1);
+}
 
 // The PG → Lehi route is inside the Wasatch coverage box, so routing should
 // have triggered the lazy graph load. Assert the engine reached 'ready'.
