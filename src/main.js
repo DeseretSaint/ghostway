@@ -240,6 +240,26 @@ function wireApp() {
   $('#recenterBtn').addEventListener('click', () => setFollow(true));
   $('#zoomInBtn').addEventListener('click', () => app.map.zoomIn());
   $('#zoomOutBtn').addEventListener('click', () => app.map.zoomOut());
+  // Compass (Maps parity): round-77's custom zoom control replaced the native
+  // NavigationControl, which also carried the compass — leaving a rotated or
+  // pitched map (two-finger twist, follow mode) with NO way back to north-up.
+  // The button appears only when the camera is off-north/off-flat; its needle
+  // always points true north; tapping resets north-up + flat (and pauses
+  // follow mode so the next GPS tick doesn't instantly re-rotate).
+  const compassBtn = $('#compassBtn');
+  const compassIc = compassBtn.querySelector('.ic');
+  const updateCompass = () => {
+    const bearing = app.map.getBearing();
+    const pitch = app.map.getPitch();
+    compassBtn.hidden = Math.abs(bearing) < 2 && pitch < 2;
+    compassIc.style.transform = `rotate(${-bearing}deg)`;
+  };
+  compassBtn.addEventListener('click', () => {
+    if (app._followActive) setFollow(false);
+    app.map.resetNorth();
+  });
+  app.map.onCameraChange(updateCompass);
+  updateCompass();
   // Tap the banner (anywhere but its buttons) to open the full turn-by-turn list.
   $('#navBanner').addEventListener('click', (e) => {
     if (e.target.closest('button')) return;

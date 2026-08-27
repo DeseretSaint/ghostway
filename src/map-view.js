@@ -219,6 +219,18 @@ export class MapView {
   zoomIn() { this.map.zoomIn(); }
   zoomOut() { this.map.zoomOut(); }
 
+  // Compass support (Maps parity): the UI draws a live north needle from the
+  // camera orientation; tapping it resets to north-up + flat.
+  getBearing() { return this.map.getBearing(); }
+  getPitch() { return this.map.getPitch(); }
+  resetNorth() {
+    this.map.easeTo({ bearing: 0, pitch: 0, duration: 450 });
+  }
+  onCameraChange(handler) {
+    this.map.on('rotate', handler);
+    this.map.on('pitch', handler);
+  }
+
   // Switch the base style. map.setStyle() wipes ALL custom sources/layers, so
   // on the resulting 'style.load' we rebuild them and replay last-known data.
   setBasemap(key) {
