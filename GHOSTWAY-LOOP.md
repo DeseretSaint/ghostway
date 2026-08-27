@@ -139,6 +139,17 @@ from this queue first when it's non-empty.
       fine); camera-refresh.yml next fires Sep 1 13:40 UTC. Still only
       refreshes public/cameras/cameras.geojson, not graph cam bytes (see
       existing queue item re: monthly rebuild CI hook).
+- [ ] Ops (found 2026-08-26 18:45 MST): working tree holds an UNCOMMITTED
+      coherent changeset not authored by this loop: boot preloadEngine()
+      removed → fully lazy ensureLocalEngine() on all 3 route paths; neutral
+      CONFIG.mapCenter (CONUS z4) default view in map-view.js; 13 suites
+      ported from waiting __ghostwayEngine==='ready' to __gw boot wait
+      (engine-e2e now asserts engine-ready AFTER routing); drawer credits
+      WZDx. File mtimes 18:38-18:42, stable on re-check = another session's
+      in-flight refactor. DO NOT commit/revert/edit these 16 files until the
+      owner commits or abandons. If still uncommitted + stale (>24 h, mtimes
+      unchanged), a future run may verify (build + suites) and land it as its
+      own round, crediting it as the lazy-engine/neutral-view round.
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -146,12 +157,10 @@ block on these — it queues and moves on.
 - [ ] Donation setup: BTC/Lightning + Monero addresses needed to fill
       src/config.js placeholders (decided: crypto-primary, Ko-fi optional).
 - [ ] Real-drive ETA ground truth: Keaton's actual PG→Costco drive time.
-- [ ] GitHub auth expired (found 2026-08-26 round 26): `gh auth status` →
-      "token in default is invalid"; SSH to github.com → Permission denied
-      (no registered key). Round-26 commit is LOCAL ONLY (unpushed). Fix:
-      `gh auth login -h github.com` (or add an SSH deploy key). NEXT RUN:
-      retry `git push origin main` first thing; if it lands, watch deploy +
-      curl the site, then mark this resolved.
+- [x] GitHub auth — RESOLVED 2026-08-26 (round 28, 18:56 MST): token valid
+      again (gh auth status: DeseretSaint, scopes repo/workflow). Pushed the
+      stranded round-26 commit (4a40564..a949827), deploy run 33028465289
+      succeeded, live site HTTP 200. Remote is current with local HEAD.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -164,6 +173,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | security (round 24) | XSS hardening: escHtml() + escaped 10 innerHTML injection points (street names, camera brand/operator/mount, report brand/note/noteId); new scripts/xss-check.mjs E2E with real dot-click | xss-check red-green: payload executes w/o escape (fired:true) → inert with fix; smoke/interact/report/camchip/compact/engine-check/engine-e2e PASS, 0 console errors | shipped |
 | 2026-08-26 | camera-avoidance (round 25) | resolved queued "PRIORITY floor violation" as FALSE ALARM (audit stride bug: offA+e vs offA+e*4); promoted corrected audit to scripts/floor-audit.mjs as permanent floor-regression guard; rebuilt graph to confirm determinism | floor-audit PASS on shipped .gz AND fresh rebuild (0 violations, min bucket 30-40 m); rebuild byte-identical (cmp); red test: mutated graph → FAIL exit 1; engine-check/avoidance-audit/smoke PASS; build exit 0 | shipped |
 | 2026-08-26 | coverage/speed (round 26) | finished crashed run's multi-region refactor: region-aware loadGraph/regionCovers/ensureLocalEngine (lazy per-region graph load), fixed stray-return that killed Valhalla fallback, restored boot preload (13 suites depend on it), dropped dead mapCenter config, fixed prepare-roads header, committed ux-lock deletion | build exit 0; engine-check/smoke/engine-e2e/interact-check/report-check/xss-check all PASS, 0 console errors | shipped |
+| 2026-08-26 | ops (round 28) | unblocked shipping: gh auth valid again → pushed stranded round-26 commit (4a40564..a949827); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (another session's in-flight work, mtimes 18:38-18:42) | push exit 0; deploy run 33028465289 success; curl https://deseretsaint.github.io/ghostway/ → HTTP 200 in 1.78s, correct title | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
