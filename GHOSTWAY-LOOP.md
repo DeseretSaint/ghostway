@@ -398,17 +398,37 @@ from this queue first when it's non-empty.
       best-effort — gate-snap is endpoint-sensitive (tail >200 m from that
       node). Not a regression (badge is honest), but a future UX angle: gate-
       snap could search a small dest-radius for the shortest clear tail.
-- [ ] UX/routing (slot-B round 54 finding): gate-snap is endpoint-sensitive —
+- [x] UX/routing (slot-B round 54 finding): gate-snap is endpoint-sensitive —
       photon-geocoded "Brigham Young University" dest snaps to a node whose
       exposed tail >200 m, so the UI route still shows camera-walled best-effort
       while the audit coords get the gate-snap badge. Future angle: clearTail()
       could search a small dest-radius (e.g. nearest 3-5 snap candidates) for
       the shortest clear tail. Touches router.js — slot-A territory; filed here
       for visibility.
+      — RESOLVED 2026-08-27 (slot-A round 57, commit 816bcdc — PUSH BLOCKED, gh
+      token invalid again): dest-radius search LANDED — nearestCandidates()
+      exposes the snap-candidate list (nearestNode = its first entry, byte-
+      identical behaviour); clearTail split into buildClearIndex (once per
+      origin) + clearTailTo (per dest node); gate-snap probes primary snap +
+      up to 4 siblings ≤400 m, takes shortest qualifying tail, badge distance
+      honestly includes candidate→dest offset. MEASURED on the motivating case:
+      photon's BYU centroid is GENUINELY deep inside the wall — every snap
+      candidate within 420 m has an exposed tail of 370-600+ m (all feeding
+      gate 228440, a different/longer approach than the audit's North Canyon
+      gate), so it CORRECTLY stays honest best-effort camera-walled (no
+      conservative radius can gate-snap it; the badge is truthful). Mechanism
+      verified non-regressing: audit-coord BYU still gate-snapped at 118 m,
+      full battery PASS. Remaining honest gap: photon centroid lands ~400 m
+      SE of the North Canyon approach; a future angle could widen the radius
+      or offer "route to nearest clear gate" as an explicit option.
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
 block on these — it queues and moves on.
+- [ ] GitHub auth AGAIN (2026-08-27 ~04:00 MDT, slot-A round 57): gh token
+  invalid ("The token in default is invalid") + git credential helper fails
+  ("could not read Username"). Commit 816bcdc (gate-snap dest-radius search)
+  stranded locally — push it next run once auth recovers.
 - [ ] GitHub auth AGAIN (2026-08-27 ~02:30 MDT, slot-A): gh token invalid
   ("The token in default is invalid"). Ledger commit 1a79c06 stranded locally
   (lazy-engine task-complete marking) — push it next run once auth recovers.
@@ -517,9 +537,12 @@ block on these — it queues and moves on.
 | 2026-08-27 03:52 MDT | tests (slot-C) | verification sweep over committed tree (origin/main == HEAD == b8875b7, backlog cleared by slot-A re-check #6; NEW commit b8875b7 = slot-B modal focus trap, verified here for the first time) — NO code changed, verify only. All invariants HOLD, ZERO drift: floor-audit 0 strict-legal edges <31.4 m; engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit PASS — BYU gate-snapped (Clearest mid-route min 40 m, clear to within ~118 m), 4 budget best-effort (25/12/17/4 m), walled/budget split correct. NEW: standalone hermetic escape-check.mjs PASS incl. all 3 focus-trap asserts (modalTabTrapped/2 + modalShiftTabTrapped true, modalDialog/modalFocus/modalFocusEscaped true, 0 page errors) — confirms b8875b7 focus trap works on committed code. Deploy 33060291186 (b8875b7) completed success. gh auth healthy (0 ahead/behind). | floor-audit/engine-check/snap-dist-check/avoidance-audit/escape-check all PASS; deploy success | verified — no regressions; focus-trap commit confirmed working + deployed |
 
 | 2026-08-27 03:55 MDT | ux (slot-B round 57) | Maps-parity search "No results" empty state: `src/ui.js` render() previously HID the suggestions panel silently when a query matched nothing (photon returns [] or errors) — zero feedback. Now shows a non-interactive `.sugg-empty` row ("No results" + "Nothing matches \"q\". Try a different name or address.") with `role="status"`; no suggestion buttons render. Added `.sugg-empty` CSS (matches .sugg padding/line, full-contrast). New hermetic scripts/search-empty-check.mjs (lib-preview, types nonsense query, asserts empty row + no sugg buttons + role=status). UI-only; no routing/engine files touched (uncommitted src/router.js = slot-A in-flight, left alone). | build exit 0; search-empty-check PASS (name="No results", suggBtns=0, hint text present, role=status, 0 page errors); interact-check PASS (full flow routes, normal results path intact, 0 page errors) | committed (local) — push status TBD |
+| 2026-08-27 03:59 MDT | tests (slot-C) | verification sweep over committed tree (HEAD=32b6ebf; slot-A in-flight router.js stashed during build, restored after — left untouched) — NO code changed, verify only. All camera-avoidance invariants HOLD: floor-audit 0 strict-legal edges <31.4 m (273 in 30-40 m bucket); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit LIVE PROBE PASS — BYU gate-snapped (Clearest mid-route min 40 m, clear to within ~118 m), 4 budget best-effort (25/12/17/4 m), walled/budget split correct. FLAG: uncommitted slot-A router.js (60 ins/26 del, since pre-03:55) remains UNVERIFIED — run the battery before commit/push. | floor-audit/engine-check/snap-dist-check/avoidance-audit all PASS; build exit 0 |
 
  ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
   Present + fresh (<10 min) = another run is editing → research-only mode.
 - Warm deploy (gh run not completed) = no pushes → research-only mode.
 - Research-only runs append to "## Improvement Queue" above, never edit code.
+
+| 2026-08-27 ~04:00 MDT | routing (slot-A round 57) | GATE-SNAP DEST-RADIUS SEARCH (resolves slot-B round-54 finding): nearestCandidates() exposes the snap-candidate list (nearestNode = first entry, byte-identical behaviour); clearTail split into buildClearIndex (once per origin) + clearTailTo (per dest node); gate-snap probes primary snap + up to 4 sibling candidates ≤400 m, takes shortest qualifying tail; badge distance honestly includes candidate→dest offset. MEASURED on the motivating case: photon's BYU centroid is genuinely deep inside the wall — every candidate within 420 m has an exposed tail 370-600+ m (all feeding gate 228440), so it correctly stays honest best-effort camera-walled; audit-coord BYU unchanged (gate-snapped 118 m). Lazy-engine special task: 7th confirmation — already complete (03e9224 on origin/main, tree was clean, 0 ahead/behind at run start); not re-done. | build exit 0; engine-check PASS (modes distinct); snap-dist-check PASS (90.0/334.8 m); floor-audit PASS (0 strict-legal <31.4 m); avoidance-audit PASS (BYU 40 m mid-route + gate note, 4 budget best-effort); byu-gate-check PASS (badge "clear to within ~118 m", 0 page errors); /tmp/gw-dest-radius-probe.mjs + diag prove the photon case is genuinely walled | committed 816bcdc — PUSH BLOCKED (gh token invalid again; see Needs Keaton) |
