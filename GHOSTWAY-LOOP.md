@@ -172,9 +172,9 @@ block on these — it queues and moves on.
 - [x] GitHub auth AGAIN (2026-08-26 ~19:40 MST): RESOLVED 2026-08-27 (round 32):
       token valid again (keyring); pushed d8f4173..f078910, deploy run
       33031062944 success, live site HTTP 200 in 0.58s, correct title.
-- [ ] GitHub auth AGAIN (2026-08-27 ~02:00 MST): gh token invalid again
-      ("The token in default is invalid"). Round-33 commit 034caa4 (ETA freeway
-      derate) is stranded locally. Next ops run: push once token works.
+- [x] GitHub auth AGAIN (2026-08-27 ~02:00 MST): RESOLVED 2026-08-27 (round 34):
+      token valid again (keyring); pushed 198c1ad..eaf28f1 (round-33 ETA derate
+      + ledger), deploy run 33032280575 success, live site HTTP 200 in 0.78s.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -193,6 +193,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | route-geometry (round 31) | closed queued "route-line anti-cut" item: new scripts/geometry-audit.mjs — permanent guard proving the drawn line never leaves road geometry (DP invariant: every raw route point ≤3 m from simplified polyline, endpoints kept) across 5 corridors × modes incl. I-15 + canyon curves | audit PASS: 9/9 routes, worst deviation 2.99 m ≤ 3 m tol, 18-43% points kept; red test PASS (tol=100 m cut → 67.5 m flagged); build exit 0; engine-check PASS | committed c94bf49 — PUSH BLOCKED (gh token invalid again; see Needs Keaton) |
 | 2026-08-27 | ops (round 32) | unblocked round-31: gh auth valid again (keyring) → pushed stranded commits c94bf49+f078910 (d8f4173..f078910); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes now ~1 h old — still in <24 h grace window) | push exit 0; deploy run 33031062944 success; curl live site → HTTP 200 in 0.58s, correct title | shipped |
 | 2026-08-27 | ETA accuracy (round 33) | freeway effFactor 1.00→0.95: root-caused Orem→Airport −10 min gap (67.8 km I-15 at full posted 113 km/h vs Valhalla ~103 avg). Now −8 min there, Lehi→SLC +1 (33 vs 32), PG→Costco/BYU unchanged (10/20 exact). Queued AF→Park City +8 = route-choice (engine 96.3 km vs Valhalla 87.9 km path) | eta-benchmark measured before/after; engine-check/smoke/engine-e2e PASS, 0 console errors; build exit 0 | committed 034caa4 — PUSH BLOCKED (gh token invalid again; see Needs Keaton) |
+| 2026-08-27 | ops (round 34) | unblocked round-33: gh auth valid again (keyring) → pushed stranded commits 034caa4+eaf28f1 (198c1ad..eaf28f1); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes ~86 min — still in <24 h grace window) | push exit 0; deploy run 33032280575 success; curl live site → HTTP 200 in 0.78s, correct title | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
