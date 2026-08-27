@@ -378,6 +378,19 @@ from this queue first when it's non-empty.
       dead, router.js mtime stable 12s, no ghostway procs) — slot-A's gate-snap
       changeset (router.js/avoidance-audit.mjs/ledger) left uncommitted + untouched.
 
+- [x] UX (slot-B round 53): best-effort badge disambiguation — RESOLVED 2026-08-27
+      (commit 36439e5 — PUSH BLOCKED, gh token invalid). ui.js renderEngineCard now
+      branches the strictFallback badge on o.walled (flag landed aa84b53): walled →
+      "best effort — camera-walled"; else → "best effort — clear route too long"
+      (clearToM gate-snap branch unchanged, takes priority). Verified in real
+      headless UI: PG→Costco (known budget case) renders "best effort — clear route
+      too long · costs extra time" on the Clearest card; interact-check PASS, build
+      exit 0, 0 page errors.
+- [ ] UX NEXT (slot-B): BYU corridor badge — once slot-A's in-flight gate-snap
+      (router.js clearTail, uncommitted, mtime live) lands, verify the Clearest card
+      shows "clear to within ~120 m" for BYU (clearToM branch). Probe: PG→BYU route,
+      assert .opt-warn text. Do NOT touch router.js until slot-A commits.
+
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
 block on these — it queues and moves on.
@@ -467,6 +480,7 @@ block on these — it queues and moves on.
 || 2026-08-27 02:46 MDT | tests (slot-C) | verification sweep over UNCOMMITTED tree (in-flight gate-snap clearTail in router.js — actively rewritten 3× during sweep, mtime 02:44:25, holder un-locked; slot-B round-52 onboarding-a11y b4eef44 also landed mid-run). Removed stale crashed lock (PID 90978 dead, no live procs). Core invariants HOLD on committed code: floor-audit 0 strict-legal edges <31.4 m (273 in 30-40 m bucket); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); avoidance-audit exit 0 with correct walled/budget split (BYU walled, 4 budget); build exit 0. FINDING: intermediate gate-snap version does NOT fire on BYU — probe shows Clearest walled=true but clearToM=0, served route still passes cam at 16 m mid-route (expected clearToM≈118). Filed VERIFY NEXT queue item w/ probe script + expected values. Did NOT touch router.js (live edit in progress). | floor-audit/engine-check/avoidance-audit PASS; build exit 0; /tmp/gw-gate-probe.mjs: clearToM=0 on BYU | verified — invariants hold; gate-snap not yet effective (re-verify when stable) |
 || 2026-08-27 ~02:45 MDT | accessibility (UX, slot-B round 52) | onboarding a11y (landed the pinned round-51 spec): .ob-card role=dialog+aria-modal+aria-label; startOnboarding focuses #obNext; Escape dismisses onboarding via canonical #obSkip; escape-check.mjs gains a first-run section (fresh localStorage, phone viewport). Reaped stale slot-A lock first (pid dead, mtime stable); slot-A's uncommitted gate-snap changeset untouched. | build exit 0; escape-check PASS 12/12 (obShown/obDialog/obFocus/obAfterEsc/obFlagSet all true, 0 errors); interact-check PASS | committed b4eef44 — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
 | 2026-08-27 ~02:50 MDT | routing (slot-A round 52) | GATE-SNAP for camera-walled destinations (resolves the long-queued BYU item + slot-C's 02:46 finding that the intermediate version didn't fire): router.js clearTail() = forward BFS from origin over floor-legal edges (clear set, first-edge exempt) + reverse Dijkstra from destination (shortest exposed tail); when walled and tail ≤200 m, serve the hard-floor-clear route to the gate instead of a floor-breaking best-effort route. ROOT CAUSE of the intermediate no-fire: the in-search maxCost prune tracks time on the best-score label only and rejected the 37-min gate route under the 26.7-min budget — fixed with unbounded search + post-search budget check (relaxed 2x+5min, gate routes only ever offered for walled destinations). clearToM flag exposed; ui.js badge "clear to within ~118 m" (hunk rode slot-B's b4eef44); avoidance-audit gate-snapped routes PASS the floor check with a gate note. | build exit 0; engine-check PASS (modes distinct); snap-dist-check PASS (90.0/334.8 m); floor-audit PASS (0 strict-legal <31.4 m); avoidance-audit PASS — BYU Clearest mid-route min 40 m (was 16 m), gate-snapped clear to within ~118 m (gate node 436862 North Canyon Rd — exact round-40/45 numbers); other 4 corridors unchanged; best-effort 5→4 | committed 8b58dbe — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
+| 2026-08-27 02:58 MDT | tests (slot-C) | INDEPENDENT gate-snap verification on COMMITTED tree (8b58dbe) — closes the 02:46 VERIFY NEXT item. /tmp/gw-gate-probe.mjs re-run: BYU Clearest walled=true, clearToM=118 (was 0 on the intermediate build). Full battery: floor-audit 0 strict-legal edges <31.4 m; engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit PASS — BYU Clearest mid-route min 40 m + "gate-snapped: clear to within ~118 m", other 4 honest budget best-effort (min 25/12/17/4 m). slot-A live in-flight ui.js badge-wording edit (uncommitted, holder preview :4173 up) left untouched. gh token STILL invalid — 9 commits stranded (already in Needs Keaton). | all 4 checks PASS; probe clearToM=118 | verified — gate-snap effective, no regressions |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
