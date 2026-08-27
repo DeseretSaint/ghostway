@@ -165,13 +165,16 @@ function renderEngineCard(app, card, result) {
           ? `<span class="opt-cams clear">0 cameras</span>`
           : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
       const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
-      // Strict safety floor couldn't find a fully clear path (camera-walled
-      // origin/destination) — be honest that this is best effort. Gate-snapped
-      // routes are clear to within a short, stated distance of the destination.
+      // Strict safety floor couldn't find a fully clear path — be honest about
+      // WHY. Gate-snapped routes are clear to within a short, stated distance.
+      // walled = no ≥30 m path exists anywhere (camera-walled destination);
+      // otherwise a clear path exists but blew the detour budget.
       const bestEffort = o.strictFallback
         ? o.clearToM
           ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} clear to within ~${fmtDistance(o.clearToM)}</span>`
-          : ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort</span>`
+          : o.walled
+            ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort — camera-walled</span>`
+            : ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort — clear route too long</span>`
         : '';
       // Over the detour budget: avoidance costs real extra time — say so.
       const overBudget = o.overBudget ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} costs extra time</span>` : '';
