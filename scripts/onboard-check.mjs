@@ -1,11 +1,17 @@
 // Workstream D: splash shows on load and dismisses; first-run onboarding walks
 // 3 steps (real clicks), persists; second load skips onboarding.
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
 // If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
+// Hermetic: spawn our own preview server (poll-until-up) instead of assuming
+// one is already running on :4173 (raw goto false-FAILed ERR_CONNECTION_REFUSED
+// standalone — the non-hermetic class filed in the QA queue).
+const pv = await startPreview();
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 const p = await b.newPage();
@@ -65,4 +71,5 @@ const pass =
   obShown && titles.length === 3 && titles.every(Boolean) && obDone &&
   persisted === '1' && obSecond;
 console.log(pass ? '\nONBOARDING PASS ✅ — splash + first-run flow work' : '\nONBOARDING FAIL ❌');
+pv.kill();
 process.exit(pass ? 0 : 1);

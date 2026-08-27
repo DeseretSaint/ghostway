@@ -1,12 +1,19 @@
 // Navigation-mode E2E: mock geolocation playback along a real routed path and
 // assert the live banner countdown, step advancement, and arrival screen work.
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
 // If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
 
+// Hermetic: spawn our own preview server (poll-until-up) instead of assuming
+// one is already running on :4173 (raw goto false-FAILed ERR_CONNECTION_REFUSED
+// standalone — the non-hermetic class filed in the QA queue).
+const pv = await startPreview();
+// Kill the preview even on an uncaught crash so no orphan vite squats :4173.
+process.on('exit', () => { try { pv.kill(); } catch {} });
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 const p = await b.newPage();
@@ -34,14 +41,16 @@ await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 600
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
 // Plan a real route: Pleasant Grove -> Costco Lehi.
+// waitForSelector instead of fixed 1300ms sleeps: photon latency measured
+// 0.8-3.9s (same flaky class interact-check had — round 58 fixed it there).
 await p.type('#toInput', 'Costco Lehi');
-await wait(1300);
+await p.waitForSelector('#suggestions .sugg', { timeout: 12000 });
 await p.click('#suggestions .sugg');
 await wait(300);
 await p.type('#fromInput', 'Pleasant Grove Utah');
-await wait(1300);
+await p.waitForSelector('#suggestions .sugg', { timeout: 12000 });
 await p.click('#suggestions .sugg');
-await wait(6000);
+await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 30000 });
 
 const routed = await p.evaluate(() => window.__ghostwayDebug?.routed);
 console.log('routed:', routed);
@@ -94,4 +103,5 @@ const pass =
   !arrival.hidden &&
   /arrived/i.test(arrival.text);
 console.log(pass ? '\nNAV PLAYBACK PASS ✅ — drove route, banner tracked, arrival screen shown' : '\nNAV PLAYBACK FAIL ❌');
+pv.kill();
 process.exit(pass ? 0 : 1);
