@@ -818,7 +818,11 @@ function startNav() {
   setFollow(true);
 
   const first = app._navSteps[0];
-  if (first) speak(phraseManeuver(first.distance, first.instruction, first.name), { interrupt: true });
+  if (first) {
+    const msg = phraseManeuver(first.distance, first.instruction, first.name);
+    speak(msg, { interrupt: true });
+    announceNav(msg);
+  }
 
   // Follow the user with GPS.
   if (navigator.geolocation) {
@@ -926,7 +930,9 @@ function checkOverSpeed() {
   const now = Date.now();
   if (over && (!app._lastOverVoice || now - app._lastOverVoice > 60000)) {
     app._lastOverVoice = now;
-    speak(`You're over the ${Math.round(limitKmh * 0.621371 / 5) * 5} mile per hour limit.`);
+    const msg = `You're over the ${Math.round(limitKmh * 0.621371 / 5) * 5} mile per hour limit.`;
+    speak(msg);
+    announceNav(msg);
   }
   if (!over) app._lastOverVoice = 0;
 }
@@ -989,6 +995,7 @@ function checkOffRoute(userC) {
     if (now - app._offSince > 6000 && !app._rerouting) {
       app._rerouting = true;
       speak('Rerouting.', { interrupt: true });
+      announceNav('Rerouting.');
       reRoute(userC);
     }
   } else {
@@ -1051,7 +1058,9 @@ function advanceStep(userC) {
 
   // Arrival: within 40m of the route end and past 97% of the route.
   if (traveled > app._routeTotal - 40 && frac > 0.97) {
-    speak(phraseArrival(), { interrupt: true });
+    const msg = phraseArrival();
+    speak(msg, { interrupt: true });
+    announceNav(msg);
     haptic();
     stopNav(true);
     return;
@@ -1073,7 +1082,9 @@ function advanceStep(userC) {
     if (s && idx > 0 && !app._voiceAnnounced[idx]) {
       app._voiceAnnounced[idx] = 1;
       const distToManeuver = Math.max(0, (s.startS || 0) - traveled + s.distance);
-      speak(phraseManeuver(distToManeuver, s.instruction, s.name));
+      const msg = phraseManeuver(distToManeuver, s.instruction, s.name);
+      speak(msg);
+      announceNav(msg);
     }
   } else {
     // Same step — refresh the countdown display.
@@ -1084,7 +1095,9 @@ function advanceStep(userC) {
       const distToManeuver = (steps[idx + 1]?.startS ?? app._routeTotal) - traveled;
       if (distToManeuver <= 220) {
         app._voiceAnnounced[idx + '_near'] = 1;
-        speak(phraseManeuver(Math.max(30, distToManeuver), s.instruction, s.name));
+        const msg = phraseManeuver(Math.max(30, distToManeuver), s.instruction, s.name);
+        speak(msg);
+        announceNav(msg);
       }
     }
     // Camera-ahead warning from route camera clusters — the same positions the
@@ -1096,7 +1109,9 @@ function advanceStep(userC) {
       const distToCam = c.at - traveled;
       if (distToCam > 0 && distToCam <= 250) {
         app._voiceAnnounced['camPt' + c.at] = 1;
-        speak('Camera ahead. You will pass it in about 200 meters.');
+        const msg = 'Camera ahead. You will pass it in about 200 meters.';
+        speak(msg);
+        announceNav(msg);
         haptic();
         break;
       }
@@ -1136,6 +1151,18 @@ function updateApproach(traveled) {
 
 // Keep the banner ETA live: renderNavStep only re-runs on step changes, so a
 // long step would otherwise show a stale remaining time (Maps parity).
+// Screen-reader mirror of voice guidance: maneuver/reroute/arrival/camera
+// announcements go through speechSynthesis only, so SR users (or anyone with
+// voice toggled off) get NOTHING. Write them to a visually-hidden aria-live
+// region too — one control point for all nav announcements.
+function announceNav(text) {
+  const el = $('#navLive');
+  if (!el || !text) return;
+  el.textContent = '';
+  // Clear-then-set on the next frame so identical back-to-back phrases
+  // re-announce instead of being swallowed by the live region.
+  requestAnimationFrame(() => { el.textContent = text; });
+}
 function updateEta(traveled) {
   const etaEl = $('#navEta');
   if (!etaEl || !app._totalDuration) return;

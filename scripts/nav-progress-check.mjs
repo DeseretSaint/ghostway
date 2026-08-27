@@ -100,7 +100,30 @@ const w0 = await fillPct();
 const e0 = await etaMin();
 const a0txt = await arriveTxt();
 const a0 = arriveMin(a0txt);
-console.log('fill at nav start:', w0, '| eta:', e0, '| arrive:', a0txt);
+// Round 68: ARIA live-region mirror of voice guidance. The first maneuver
+// phrase is announced at startNav — it must land in #navLive (visually
+// hidden, role=status) so SR users get it even with voice toggled off.
+const live0 = await p.evaluate(() => {
+  const el = document.querySelector('#navLive');
+  if (!el) return null;
+  const cs = getComputedStyle(el);
+  return {
+    text: el.textContent,
+    role: el.getAttribute('role'),
+    live: el.getAttribute('aria-live'),
+    hiddenW: cs.width,
+  };
+});
+console.log('fill at nav start:', w0, '| eta:', e0, '| arrive:', a0txt, '| live:', JSON.stringify(live0));
+// Watch the live region for the rest of the drive (step-change + camera
+// announcements must keep landing there).
+await p.evaluate(() => {
+  window.__liveSeen = [];
+  const el = document.querySelector('#navLive');
+  if (el) new MutationObserver(() => {
+    if (el.textContent) window.__liveSeen.push(el.textContent);
+  }).observe(el, { childList: true, characterData: true, subtree: true });
+});
 await drive(0, 0.45, 25);
 await wait(800);
 const w1 = await fillPct();
@@ -148,6 +171,8 @@ const appr = await p.evaluate(async () => {
   return seen;
 });
 console.log('approach scan:', JSON.stringify(appr));
+const liveSeen = await p.evaluate(() => window.__liveSeen || []);
+console.log('live-region announcements during drive:', liveSeen.length, liveSeen.slice(0, 3));
 
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 4));
 try { await Promise.race([b.close(), wait(5000)]); } catch {}
@@ -166,7 +191,13 @@ const pass =
   e2 !== null && e2 < e1 &&
   a0 !== null && a2 !== null &&
   (a2 <= a0 || a2 >= a0 + 700) && // arrival clock moves earlier (midnight-wrap tolerated)
-  appr.t && appr.f && appr.animOk && appr.distColor === 'rgb(255, 170, 64)';
-console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills + ETA counts down + arrival clock live + approach emphasis fires near turns' : '\nNAV-PROGRESS FAIL ❌');
+  appr.t && appr.f && appr.animOk && appr.distColor === 'rgb(255, 170, 64)' &&
+  live0 !== null &&
+  live0.role === 'status' &&
+  live0.live === 'polite' &&
+  live0.hiddenW === '1px' &&
+  (live0.text || '').length > 3 &&
+  liveSeen.length >= 1;
+console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills + ETA counts down + arrival clock live + approach emphasis fires near turns + SR live region announces' : '\nNAV-PROGRESS FAIL ❌');
 pv.kill();
 process.exit(pass ? 0 : 1);
