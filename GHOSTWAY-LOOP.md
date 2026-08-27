@@ -290,6 +290,26 @@ from this queue first when it's non-empty.
       FIX: port all 14 to scripts/lib-preview.mjs (round-23 pattern: spawn +
       poll-until-up + kill-tree). Same entry: fix engine-e2e "options shown: 0"
       race — wait for #route-card before counting options.
+- [ ] QA IMPROVEMENT OPPORTUNITY 2026-08-27 13:05 MDT (12-h QA pass): alert-check
+      FAILS standalone (exit 1, "drove points: 1", 0 alerts fired) — verified THIS
+      pass, reproducible. NOT the vague "Fastest-pick/nav-start timing" flake the
+      08:45 entry guessed: it is the SAME .sugg-recent flake already fixed in
+      engine-e2e/tiers-check/waypoint-check (07:40 + 08:00). alert-check's pick()
+      does bare waitForSelector('#suggestions .sugg') + click('.sugg'); round-71
+      recent-destinations rows (.sugg.sugg-recent) render INSTANTLY on field focus,
+      so the first pick clicks a RECENT row before photon results arrive →
+      degenerate route (navCoords length 1) → drive loop runs 1 point → both alert
+      assertions fail. QA probe (.qa-alert-probe.mjs, guarded selector) proves the
+      app is FINE: same flow with '.sugg:not(.sugg-recent)' picks real photon
+      results → navCoords 188, startNav works, 0 page errors. TEST-ONLY bug.
+      FIX: port the proven 07:40/08:00 pattern into alert-check's pick():
+      waitForFunction loading-row-gone + '.sugg:not(.sugg-recent)' (12s), click
+      that. SAME unguarded bare-.sugg pattern also sits in 8 more suites
+      (arrival-check, camchip-check, compact-check, follow-check,
+      graphload-status-check, nav-camchip-check, nav-progress-check, steps-check)
+      — they PASS today only because fresh headless localStorage has no recents;
+      they will flake identically once gw-recent is seeded (e.g. suite reuse or a
+      seeded profile). Port all 9 to the guarded selector in one sweep.
       PROGRESS (slot-C 2026-08-27 04:49 MDT): 2/14 DONE — engine-e2e +
       compact-check ported (startPreview + pv.kill before exit), both verified
       PASS standalone with NO external preview up, 0 orphan vite servers after.
