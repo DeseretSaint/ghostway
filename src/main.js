@@ -1115,7 +1115,17 @@ function updateCountdown(traveled) {
   } else {
     el.textContent = fmtNavDistance(Math.max(0, (app._routeTotal || 0) - traveled));
   }
+  updateProgress(traveled);
   updateCamChip(traveled);
+}
+
+// Thin route-progress bar along the banner's bottom edge (Maps parity):
+// fills left→right as the drive advances, so progress is visible at a glance.
+function updateProgress(traveled) {
+  const fill = $('#navProgressFill');
+  if (!fill) return;
+  const pct = Math.min(100, Math.max(0, (traveled / (app._routeTotal || 1)) * 100));
+  fill.style.width = pct.toFixed(1) + '%';
 }
 
 // Live camera accounting during navigation: counts camera clusters already
@@ -1197,7 +1207,8 @@ function renderNavStep() {
       <div id="speedChip" class="speed-chip" hidden></div>
       <div id="camChip" class="cam-chip" title="Cameras passed / ahead on this route">${icon('camera', { size: 14 })} 0</div>
       <div class="nav-eta">${eta}</div>
-    </div>`;
+    </div>
+    <div class="nav-progress" aria-hidden="true"><div class="nav-progress-fill" id="navProgressFill"></div></div>`;
   $('#navBanner').classList.toggle('compact', !!compact);
   $('#navStop').addEventListener('click', () => stopNav(false));
   $('#voiceBtn').addEventListener('click', () => {
@@ -1210,8 +1221,9 @@ function renderNavStep() {
     localStorage.setItem('gw-compact', app.state.compactBanner ? '1' : '0');
     renderNavStep();
   });
-  // Initialize the camera chip from the real progress, not a hardcoded 0.
+  // Initialize the camera chip + progress bar from the real progress, not a hardcoded 0.
   updateCamChip(traveled);
+  updateProgress(traveled);
 }
 
 function lower(s) {
