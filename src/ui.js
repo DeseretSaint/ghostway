@@ -36,13 +36,28 @@ export function buildPanel(app) {
     app._autoT = setTimeout(() => $('#goBtn').click(), 250);
   };
 
+  // Monotonic request token: photon responses can arrive out of order when the
+  // user keeps typing (slow first reply overtakes a fast second one). Only the
+  // newest request may write the panel — stale replies are dropped.
+  let reqSeq = 0;
   const render = async (q, which) => {
     if (q.length < 2) {
       box.hidden = true;
       return;
     }
     const near = app.state.userLoc || (app.map ? app.map.getCenter() : null);
+    const mySeq = ++reqSeq;
+    // Maps-parity immediate feedback: show a non-interactive "Searching…" row
+    // while the geocoder is in flight instead of a dead gap after the debounce.
+    box.innerHTML = '';
+    box.appendChild(
+      el('div', { class: 'sugg-loading', role: 'status' }, [
+        el('span', { class: 'sugg-name', text: 'Searching…' }),
+      ])
+    );
+    box.hidden = false;
     const places = await searchPlaces(q, 6, near).catch(() => []);
+    if (mySeq !== reqSeq) return; // a newer query is in flight — drop stale reply
     box.innerHTML = '';
     if (!places.length) {
       // Maps-parity empty state: tell the user the query matched nothing

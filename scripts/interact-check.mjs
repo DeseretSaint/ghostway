@@ -56,13 +56,16 @@ async function main() {
   checks.toHit = await atCenter('#toInput');
 
   // (B) Real mobile flow: set BOTH endpoints via suggestions, then REAL-click Go.
+  // waitForSelector (not a fixed sleep): photon latency varies 0.8-4s, so a
+  // fixed 1100ms wait false-FAILs whenever the geocoder is slow (same flaky
+  // class round 22/23 removed for the preview server).
   await page.type('#fromInput', 'Pleasant Grove, Utah');
-  await wait(1100);
+  try { await page.waitForSelector('#suggestions .sugg', { timeout: 12000 }); } catch {}
   let s = await page.$('#suggestions .sugg');
   if (s) await s.click();
   await wait(500);
   await page.type('#toInput', 'Lindon, Utah');
-  await wait(1100);
+  try { await page.waitForSelector('#suggestions .sugg', { timeout: 12000 }); } catch {}
   s = await page.$('#suggestions .sugg');
   if (s) await s.click();
   await wait(600);
