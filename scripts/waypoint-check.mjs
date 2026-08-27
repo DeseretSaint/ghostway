@@ -23,8 +23,18 @@ await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
 async function pick(inputSel, query) {
   await p.type(inputSel, query);
-  try { await p.waitForSelector('#suggestions .sugg', { timeout: 8000 }); await p.click('#suggestions .sugg'); }
-  catch { await p.focus(inputSel); await p.keyboard.press('Enter'); }
+  try {
+    // Wait for REAL photon results: loading row gone + a non-recent suggestion
+    // present. Recent-destinations rows (round 71) also match .sugg and appear
+    // instantly on focus — clicking one picks the WRONG place (from==to).
+    await p.waitForFunction(
+      () =>
+        !document.querySelector('#suggestions .sugg-loading') &&
+        !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'),
+      { timeout: 12000 }
+    );
+    await p.click('#suggestions .sugg:not(.sugg-recent)');
+  } catch { await p.focus(inputSel); await p.keyboard.press('Enter'); }
   await wait(500);
 }
 await pick('#toInput', 'Costco Lehi');

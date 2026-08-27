@@ -27,21 +27,48 @@ async function route(fromQ, toQ) {
   const edit = await p.$('#editRouteBtn');
   if (edit) await edit.click();
   await wait(300);
+  // Clear fields AND fire the input event so the app hides the suggestion
+  // panel (a bare .value='' leaves stale rows visible).
   await p.evaluate(() => {
-    document.querySelector('#fromInput').value = '';
-    document.querySelector('#toInput').value = '';
+    for (const sel of ['#fromInput', '#toInput']) {
+      const inp = document.querySelector(sel);
+      inp.value = '';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   });
   await p.type('#toInput', toQ);
-  try { await p.waitForSelector('#suggestions .sugg', { timeout: 8000 }); await p.click('#suggestions .sugg'); }
-  catch { await p.focus('#toInput'); await p.keyboard.press('Enter'); }
+  try {
+    // Wait for REAL search results: the loading row gone and a non-recent
+    // suggestion present (recent-destinations rows also match .sugg).
+    await p.waitForFunction(
+      () =>
+        !document.querySelector('#suggestions .sugg-loading') &&
+        !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'),
+      { timeout: 12000 }
+    );
+    await p.click('#suggestions .sugg:not(.sugg-recent)');
+  } catch { await p.focus('#toInput'); await p.keyboard.press('Enter'); }
   await wait(600);
   await p.type('#fromInput', fromQ);
-  try { await p.waitForSelector('#suggestions .sugg', { timeout: 8000 }); await p.click('#suggestions .sugg'); }
-  catch { await p.focus('#fromInput'); await p.keyboard.press('Enter'); }
-  await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 45000 });
+  try {
+    await p.waitForFunction(
+      () =>
+        !document.querySelector('#suggestions .sugg-loading') &&
+        !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'),
+      { timeout: 12000 }
+    );
+    await p.click('#suggestions .sugg:not(.sugg-recent)');
+  } catch { await p.focus('#fromInput'); await p.keyboard.press('Enter'); }
+  // The local + Valhalla paths set __ghostwayDebug.routed; the legacy
+  // BRouter/OSRM fallback does NOT — accept a rendered route card too so the
+  // outside-coverage leg doesn't burn the full 45s timeout.
+  await p.waitForFunction(
+    'window.__ghostwayDebug?.routed === true || (document.querySelector("#route-card") && !document.querySelector("#route-card").hidden)',
+    { timeout: 45000 }
+  );
   await wait(400);
   return p.evaluate(() => ({
-    dbg: window.__ghostwayDebug,
+    dbg: window.__ghostwayDebug || {},
     card: document.querySelector('#route-card')?.innerText?.replace(/\s+/g, ' ')?.slice(0, 160),
     opts: [...document.querySelectorAll('.route-opt .opt-meta')].map((e) => e.textContent),
   }));
