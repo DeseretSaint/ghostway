@@ -995,7 +995,10 @@ function checkOverSpeed() {
   const now = Date.now();
   if (over && (!app._lastOverVoice || now - app._lastOverVoice > 60000)) {
     app._lastOverVoice = now;
-    const msg = `You're over the ${Math.round(limitKmh * 0.621371 / 5) * 5} mile per hour limit.`;
+    // Voice + chip follow the persisted units pref (round-75 toggle).
+    const msg = getUnits() === 'mi'
+      ? `You're over the ${Math.round(limitKmh * 0.621371 / 5) * 5} mile per hour limit.`
+      : `You're over the ${Math.round(limitKmh / 5) * 5} kilometer per hour limit.`;
     speak(msg);
     announceNav(msg);
   }

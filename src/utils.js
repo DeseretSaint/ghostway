@@ -75,9 +75,12 @@ export function fmtNavDistance(m) {
   return `${Math.round(mi)} mi`;
 }
 
-export function fmtSpeed(mps, unit = 'mph') {
+export function fmtSpeed(mps, unit) {
   if (mps == null || !isFinite(mps)) return '';
-  if (unit === 'mph') return `${Math.round(mps * 2.23694)} mph`;
+  // Default follows the persisted distance-units pref (round-75 toggle):
+  // km → km/h, mi → mph. Explicit unit arg still wins for callers that pin.
+  const u = unit || (getUnits() === 'mi' ? 'mph' : 'kmh');
+  if (u === 'mph') return `${Math.round(mps * 2.23694)} mph`;
   return `${Math.round(mps * 3.6)} km/h`;
 }
 
