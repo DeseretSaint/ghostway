@@ -1269,14 +1269,28 @@ function closeDrawer() {
   // Safety: if animationend never fires, still hide.
   setTimeout(done, 260);
 }
+let modalReturnFocus = null;
 function openModal(html) {
   $('#modalBody').innerHTML = html;
+  // Dialog semantics: label from the modal's heading so screen readers
+  // announce what opened (every openModal body starts with an <h3>).
+  const card = document.querySelector('.modal-card');
+  const h = $('#modalBody').querySelector('h3, h2');
+  if (card) card.setAttribute('aria-label', h ? h.textContent.trim() : 'Details');
+  modalReturnFocus = document.activeElement;
   $('#modal').hidden = false;
   $('#scrim').hidden = false;
+  // Move focus into the dialog so keyboard users land on a control.
+  $('#modalClose').focus();
 }
 function closeModal() {
   $('#modal').hidden = true;
   if ($('#drawer').hidden) $('#scrim').hidden = true;
+  // Return focus to the element that opened the modal.
+  if (modalReturnFocus && typeof modalReturnFocus.focus === 'function') {
+    try { modalReturnFocus.focus(); } catch { /* detached */ }
+  }
+  modalReturnFocus = null;
 }
 
 function openCameraModal(props, coords) {
