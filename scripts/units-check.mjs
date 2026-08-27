@@ -40,7 +40,7 @@ async function main() {
 
   const checks = {};
   checks.btnExists = await page.evaluate(() => !!document.querySelector('#unitsBtn'));
-  checks.labelKm = await page.evaluate(() => document.querySelector('#unitsBtn')?.textContent?.trim());
+  checks.labelInitial = await page.evaluate(() => document.querySelector('#unitsBtn')?.textContent?.trim());
 
   await pickSuggestion(page, '#fromInput', 'Pleasant Grove, Utah');
   await wait(300);
@@ -57,27 +57,29 @@ async function main() {
   } catch { checks.routed = false; }
   await wait(1000);
   checks.cardShown = await page.evaluate(() => !document.querySelector('#route-card').hidden);
-  checks.metaKm = await page.evaluate(() => document.querySelector('.route-opt .opt-meta')?.textContent || '');
+  checks.metaInitial = await page.evaluate(() => document.querySelector('.route-opt .opt-meta')?.textContent || '');
 
-  // Flip to miles via a DOM-level click (bypasses any overlay coordinate race).
+  // Flip to km via a DOM-level click (bypasses any overlay coordinate race).
   await page.evaluate(() => document.querySelector('#unitsBtn').click());
   await wait(400);
-  checks.labelMi = await page.evaluate(() => document.querySelector('#unitsBtn')?.textContent?.trim());
-  checks.metaMi = await page.evaluate(() => document.querySelector('.route-opt .opt-meta')?.textContent || '');
+  checks.labelFlipped = await page.evaluate(() => document.querySelector('#unitsBtn')?.textContent?.trim());
+  checks.metaFlipped = await page.evaluate(() => document.querySelector('.route-opt .opt-meta')?.textContent || '');
   checks.persisted = await page.evaluate(() => localStorage.getItem('gw-units'));
 
   console.log(JSON.stringify(checks, null, 1));
   console.log('page errors:', errs.slice(0, 4));
 
+  // NOTE: 6efb209 made imperial (mi) the DEFAULT for US users, so seeding
+  // gw-units='mi' means the INITIAL state is miles; clicking flips to km.
   const pass =
     checks.btnExists &&
-    checks.labelKm === 'km' &&
+    checks.labelInitial === 'mi' &&
     checks.routed &&
     checks.cardShown &&
-    /km/.test(checks.metaKm) && !/0 min · 0 m/.test(checks.metaKm) &&
-    checks.labelMi === 'mi' &&
-    /mi/.test(checks.metaMi) &&
-    checks.persisted === 'mi' &&
+    /mi/.test(checks.metaInitial) && !/0 min · 0 m/.test(checks.metaInitial) &&
+    checks.labelFlipped === 'km' &&
+    /km/.test(checks.metaFlipped) &&
+    checks.persisted === 'km' &&
     errs.filter((e) => !/favicon/.test(e)).length === 0;
 
   try { await Promise.race([browser.close(), wait(5000)]); } catch {}
