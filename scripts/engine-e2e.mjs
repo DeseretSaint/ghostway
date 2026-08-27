@@ -1,10 +1,11 @@
 // End-to-end: engine integration over the real built app (vite preview).
-// 1. Graph loads (window.__ghostwayEngine === 'ready')
-// 2. Route PG → Lehi Costco via search + real clicks
-// 3. Route-options card renders with ≥2 options + camera counts
-// 4. Clicking an alternate option re-draws (hit-tested)
-// 5. Mode switch Strict re-routes and avoids ≥ as many cameras
-// 6. Start navigation banner shows (hit-tested)
+// 1. App boots (window.__gw) — graph loads LAZILY, only when a route enters coverage
+// 2. Route PG → Lehi Costco via search + real clicks (triggers the lazy graph load)
+// 3. Graph reaches 'ready' (window.__ghostwayEngine === 'ready')
+// 4. Route-options card renders with ≥2 options + camera counts
+// 5. Clicking an alternate option re-draws (hit-tested)
+// 6. Mode switch Strict re-routes and avoids ≥ as many cameras
+// 7. Start navigation banner shows (hit-tested)
 import puppeteer from 'puppeteer-core';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -24,10 +25,10 @@ p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
 await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
 
-// Wait for engine graph to load.
-await p.waitForFunction('window.__ghostwayEngine !== undefined', { timeout: 45000 });
-const engine = await p.evaluate(() => window.__ghostwayEngine);
-console.log('engine status:', engine);
+// Wait for the app to boot. The road graph loads LAZILY — only when a route
+// enters a shipped coverage region — so we assert engine-ready AFTER routing.
+await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
+console.log('app booted (__gw set)');
 
 // Real hit-test helper: elementFromPoint at element center.
 async function hit(sel) {
@@ -72,6 +73,12 @@ await p.waitForFunction(
 );
 const cardText = await p.evaluate(() => document.querySelector('#route-card')?.innerText?.replace(/\s+/g, ' ')?.slice(0, 400) || 'none');
 console.log('card:', cardText);
+
+// The PG → Lehi route is inside the Wasatch coverage box, so routing should
+// have triggered the lazy graph load. Assert the engine reached 'ready'.
+await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 });
+const engine = await p.evaluate(() => window.__ghostwayEngine);
+console.log('engine status (after route):', engine);
 
 const optCount = await p.evaluate(() => document.querySelectorAll('.route-opt').length);
 console.log('options shown:', optCount);

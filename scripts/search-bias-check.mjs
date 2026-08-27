@@ -25,7 +25,7 @@ await p.evaluateOnNewDocument(() => {
 });
 
 await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
-await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 });
+await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 await wait(1500);
 
 // Set GPS location first (like Keaton did — "My location" as start).

@@ -77,6 +77,14 @@ export function fmtDuration(sec) {
   return r ? `${h} h ${r} min` : `${h} h`;
 }
 
+// Maps-parity arrival clock: "now + drive time" as a short local time
+// (e.g. "2:45 PM"). Avoids timezone surprises by using the locale clock.
+export function fmtArrive(sec) {
+  if (sec == null) return '';
+  const d = new Date(Date.now() + sec * 1000);
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 export function haversine(a, b) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;

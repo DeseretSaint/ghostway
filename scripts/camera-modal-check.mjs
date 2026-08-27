@@ -16,7 +16,7 @@ p.on('pageerror', (e) => errs.push(String(e.message)));
 await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
 
 await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
-await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 });
+await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 await wait(2000);
 
 // Zoom into Pleasant Grove where Flock cameras are dense, then wait for the

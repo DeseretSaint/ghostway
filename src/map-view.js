@@ -10,8 +10,11 @@ export class MapView {
     this.map = new maplibregl.Map({
       container,
       style: CONFIG.mapStyle,
-      center: [-111.7646, 40.3778],
-      zoom: 11.5,
+      // Neutral default view (CONFIG.mapCenter). main.js jumps to the user's
+      // cached location right after map ready, so this only flashes on a true
+      // first launch with no saved position.
+      center: CONFIG.mapCenter.center,
+      zoom: CONFIG.mapCenter.zoom,
       attributionControl: false,
       maxPitch: 60,
     });

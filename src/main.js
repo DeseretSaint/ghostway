@@ -49,7 +49,7 @@ async function init() {
   window.__gw = app; // test/diagnostic hook
 
   // Open on the user's last-known position if we have one (feels personal);
-  // otherwise the map keeps its default Wasatch view (the shipped region).
+  // otherwise the map keeps its neutral default view (CONFIG.mapCenter).
   const boot = cachedLoc();
   if (boot) app.map.map.jumpTo({ center: boot, zoom: 12 });
 
@@ -135,42 +135,7 @@ async function init() {
 
   showStatus('Tap the locate button to start from your location, or search a destination.', 'info');
   registerSW();
-  preloadEngine();
   applyModeUI();
-}
-
-// Load the default region's road graph in the background (~6 MB gz) so the
-// engine is ready as soon as the app boots — first-route latency and the
-// e2e suites both depend on `window.__ghostwayEngine === 'ready'`. With one
-// shipped region this is always the right graph; once multiple regions ship,
-// gate this on the user's (cached) location and let ensureLocalEngine lazy-load
-// the rest.
-async function preloadEngine() {
-  try {
-    const g = await loadGraph();
-    app._engineReady = true;
-    window.__ghostwayEngine = 'ready';
-    // Live traffic for the loaded region (UDOT for Wasatch). Fails silently →
-    // free-flow routing.
-    try {
-      const traffic = await loadTraffic(g.bbox);
-      app.traffic = traffic;
-      if (traffic.ok && traffic.events.length) {
-        app.map.setIncidents(traffic.events);
-        enginePill(`${icon('shield', { size: 13 })} Engine ready · ${icon('warning', { size: 13 })} ${traffic.events.length} live traffic events`);
-      } else {
-        enginePill(`${icon('shield', { size: 13 })} Local camera-aware engine ready`);
-      }
-      window.__ghostwayTraffic = traffic.ok ? traffic.events.length : 'failed';
-    } catch (e) {
-      console.warn('traffic load failed', e);
-      window.__ghostwayTraffic = 'failed';
-    }
-  } catch (e) {
-    console.warn('engine load failed', e);
-    app._engineReady = false;
-    window.__ghostwayEngine = 'failed';
-  }
 }
 
 // Lazily fetch the on-device road graph for the region a route enters — so a
@@ -216,7 +181,10 @@ async function ensureLocalEngine(fromC, toC) {
 function enginePill(msg) {
   const s = $('#engineStatus');
   if (!s) return;
-  s.textContent = msg;
+  // msg may contain inline SVG icons built by our own icon() helper — render
+  // as markup, not literal text. Content is app-generated (never user input),
+  // so innerHTML is safe here.
+  s.innerHTML = msg;
   s.hidden = false;
   clearTimeout(s._t);
   s._t = setTimeout(() => (s.hidden = true), 4000);
@@ -1023,7 +991,7 @@ async function reRoute(fromC) {
     return;
   }
   try {
-    if (engineCovers(fromC, to.coords)) {
+    if (engineCovers(fromC, to.coords) && (await ensureLocalEngine(fromC, to.coords))) {
       const { options } = await planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
       app.state.options = options;
       app.state.chosen = pickOptionForMode(options);
@@ -1489,18 +1457,18 @@ function handleDrawer(action) {
       <ul class="src-list">
         <li><b>Base map:</b> OpenStreetMap via OpenFreeMap</li>
         <li><b>Cameras:</b> DeFlock (OpenStreetMap + volunteer ALPR map)</li>
-        <li><b>Live traffic:</b> UDOT open events (roadwork, closures, incidents)</li>
+        <li><b>Live traffic:</b> UDOT open events (Utah) + WZDx work-zone data (nationwide)</li>
         <li><b>Search:</b> Photon (OpenStreetMap)</li>
-        <li><b>Routing:</b> Ghostway engine (Wasatch Front) · Valhalla (national) · BRouter + OSRM fallback</li>
+        <li><b>Routing:</b> Ghostway engine (on-device, where a road graph ships) · Valhalla (national) · BRouter + OSRM fallback</li>
       </ul>
       <p class="muted small">All sources are open and free to use. No account, no tracking.</p>
     `);
   } else if (action === 'privacy') {
     openModal(`
       <h3>Privacy & how it works</h3>
-      <p>Inside the Wasatch Front coverage area, routing happens <b>entirely on your device</b>
-      using Ghostway's own prebuilt road graph — your destination never leaves your phone.</p>
-      <p>Outside coverage, routes fall back to public open-source servers (Photon, BRouter, OSRM).
+      <p>Where Ghostway ships a road graph (currently the Wasatch Front), routing happens
+      <b>entirely on your device</b> — your destination never leaves your phone.</p>
+      <p>Everywhere else, routes fall back to public open-source servers (Valhalla, Photon, BRouter, OSRM).
       Ghostway itself stores nothing about you.</p>
     `);
   } else if (action === 'donate') {

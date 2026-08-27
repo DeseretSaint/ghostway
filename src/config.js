@@ -60,10 +60,16 @@ export const CONFIG = {
     ],
   },
 
+  // --- Default map view (first launch, no saved location, no GPS permission) ---
+  //     Framed on the currently shipped coverage region. Returning users open on
+  //     their last known position (gw-loc-cache), and the locate button jumps to
+  //     GPS; search bias follows the same position.
+  mapCenter: { center: [-111.7646, 40.3778], zoom: 11.5 },
+
   // --- Local routing graphs: prebuilt road graphs, one per coverage region ---
-  //     (currently only the Wasatch Front ships). The graph loads at boot via
-  //     preloadEngine(); when multiple regions ship, routing will lazy-load the
-  //     region a route enters (see loadGraph/regionCovers in src/router.js) so
+  //     (currently only the Wasatch Front ships). Graphs load LAZILY: only when
+  //     a route actually enters a shipped region does ensureLocalEngine() fetch
+  //     that region's graph (see loadGraph/regionCovers in src/router.js), so
   //     users elsewhere never download a graph they won't use. Outside every
   //     shipped region we fall back to the key-free national Valhalla engine,
   //     then BRouter/OSRM.

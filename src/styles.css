@@ -464,6 +464,12 @@ body {
   font-size: 16px;
   color: var(--muted);
 }
+.rc-arrive {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  align-self: center;
+}
 .rc-badge {
   margin-top: 8px;
   font-size: 14px;

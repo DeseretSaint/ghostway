@@ -64,7 +64,7 @@ await p.evaluateOnNewDocument(() => {
   Object.defineProperty(navigator, 'geolocation', { value: mock, configurable: true });
 });
 await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
-await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 });
+await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 await wait(2500); // camera vector tiles
 // Isolate the heatmap: hide the circle-dot layer (its red/amber fills match the
 // heat ramp colors and would be miscounted as heatmap residue at z>=11).

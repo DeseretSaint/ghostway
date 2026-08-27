@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { $, el, debounce, escHtml, fmtDistance, fmtDuration } from './utils.js';
+import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtArrive } from './utils.js';
 import { searchPlaces } from './search.js';
 import { icon, stepIconSvg } from './icons.js';
 
@@ -199,6 +199,7 @@ function renderEngineCard(app, card, result) {
     <button id="editRouteBtn" class="text-link rc-edit" type="button">${icon('edit', { size: 14 })} Edit route</button>
     <div class="rc-head">
       <div class="rc-time">${fmtDuration(sel.duration)}</div>
+      <div class="rc-arrive">Arrive ${fmtArrive(sel.duration)}</div>
       <div class="rc-dist">${fmtDistance(sel.distance)}</div>
     </div>
     <div class="rc-badge">${
@@ -263,6 +264,7 @@ function renderLegacyCard(app, card, result) {
     <button id="editRouteBtn" class="text-link rc-edit" type="button">${icon('edit', { size: 14 })} Edit route</button>
     <div class="rc-head">
       <div class="rc-time">${fmtDuration(shown.duration)}</div>
+      <div class="rc-arrive">Arrive ${fmtArrive(shown.duration)}</div>
       <div class="rc-dist">${fmtDistance(shown.distance)}</div>
     </div>
     <div class="rc-badge">${headline}</div>
