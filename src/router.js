@@ -259,6 +259,17 @@ export const HARD_CAM_EXPOSURE = 160;
 // surface arterial then beats a freeway detour that only saves a minute or
 // two (the natural-route preference from the driver-preference research).
 const DIST_W = 0.06;
+// Road-class continuity bonus (engine-rebuild plan step 1, final piece): a
+// transition between freeway-class (posted >=95 km/h) and surface streets
+// costs CLASS_PEN seconds of SEARCH score. Drivers stay on one continuous
+// named arterial rather than hopping ramps unless the freeway saves real
+// time (TRB 2016 turns+signals; Beijing-taxi bounded-rationality arXiv
+// 2404.15589: intersection-loss terms beat pure shortest-path by 12%).
+// Search-only: not in tScore (budget) or reported metrics, so they stay
+// honest. Gated to generalized-cost modes (distW>0); Fastest stays pure time.
+// Admissibility preserved — h underestimates true cost (ignore the term), so
+// h <= true-cost still holds.
+const CLASS_PEN = 25;
 // Congestion multiplier: congested driving time is valued ~1.3-1.5x free-flow
 // time (Wardman & Ibáñez 1999; Abrantes & Wardman 2011 meta-analysis; ledger
 // round-80 research). Applied to the SEARCH score only — reported duration/
@@ -376,9 +387,20 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
       // Generalized cost: distance disutility (search score only; the budget
       // tracker tScore and reported metrics stay pure driving time).
       const distCost = cfg.distW * len;
+      // Road-class continuity: penalize hopping between freeway and surface
+      // (a ramp detour). Only in generalized-cost modes (distW>0); the first
+      // edge from the origin has no incoming class (treated as same class).
+      let classPenTerm = 0;
+      if (cfg.distW > 0 && u !== startNode) {
+        const pu = prevArc[u];
+        const prevSpd = pu >= 0 ? g.eSpd[g.arcEdge[pu]] : spd;
+        const prevCls = prevSpd >= 95 ? 1 : 0;
+        const newCls = spd >= 95 ? 1 : 0;
+        if (prevCls !== newCls) classPenTerm = CLASS_PEN;
+      }
       // Avoid-highways penalty: search-only multiplier (metrics stay honest).
       const pen = penalty ? penalty[e] : 1;
-      const ng = gScore[u] + (scoreTime + camCost) * pen + distCost;
+      const ng = gScore[u] + (scoreTime + classPenTerm + camCost) * pen + distCost;
       if (ng < gScore[v]) {
         // Detour budget: prune paths whose real driving time exceeds it.
         if (tScore) {
