@@ -2,11 +2,17 @@
 // layer and verify the modal shows ALPR classification + direction + mount +
 // data freshness (Workstream camera layer pass).
 import puppeteer from 'puppeteer-core';
+import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
 // If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
 setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+
+// Hermetic: spawn our own preview server (poll-until-up) instead of assuming
+// one is already running on :4173 (raw goto false-FAILed ERR_CONNECTION_REFUSED
+// standalone — the non-hermetic class filed in the QA queue).
+const pv = await startPreview();
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 const p = await b.newPage();
@@ -55,6 +61,7 @@ const cam = await p.evaluate(() => {
 if (!cam) {
   console.log('no rendered cameras found');
   try { await Promise.race([b.close(), wait(5000)]); } catch {}
+  pv.kill();
   process.exit(1);
 }
 console.log('camera props:', JSON.stringify(cam.props));
@@ -88,4 +95,5 @@ const showsGeneric = /Surveillance camera/i.test(modal.text);
 const showsMeta = /Faces|Mounted on|Mapped/i.test(modal.text);
 const pass = !modal.hidden && (isAlpr ? showsAlpr : showsGeneric) && showsMeta;
 console.log(pass ? '\nCAMERA-MODAL PASS ✅ — ALPR classification + metadata render' : '\nCAMERA-MODAL FAIL ❌');
+pv.kill();
 process.exit(pass ? 0 : 1);
