@@ -46,6 +46,13 @@ async function init() {
   buildPanel(app);
   wireApp();
   await app.map.ready();
+  // Apply a saved basemap preference (light/dark) before the splash clears.
+  const savedBase = localStorage.getItem('gw-basemap');
+  if (savedBase && savedBase !== 'standard' && CONFIG.basemaps[savedBase]) {
+    app.map.setBasemap(savedBase);
+    const bb = $('#basemapBtn');
+    if (bb) { bb.classList.add('on'); bb.setAttribute('aria-pressed', 'true'); }
+  }
   window.__gw = app; // test/diagnostic hook
 
   // Open on the user's last-known position if we have one (feels personal);
@@ -242,6 +249,17 @@ function wireApp() {
     app._camLayerOn = !(app._camLayerOn ?? true);
     app.map.setCameraLayerVisible(app._camLayerOn);
     $('#camLayerBtn').classList.toggle('off', !app._camLayerOn);
+  });
+
+  // Maps-parity basemap switcher (light/dark). Same open provider — no new
+  // third-party dependency. Preference persists in localStorage.
+  $('#basemapBtn').addEventListener('click', () => {
+    const next = app.map.getBasemap() === 'dark' ? 'standard' : 'dark';
+    app.map.setBasemap(next);
+    localStorage.setItem('gw-basemap', next);
+    const btn = $('#basemapBtn');
+    btn.classList.toggle('on', next === 'dark');
+    btn.setAttribute('aria-pressed', String(next === 'dark'));
   });
 
   $('#goBtn').addEventListener('click', onRoute);

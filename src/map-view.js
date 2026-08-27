@@ -25,13 +25,37 @@ export class MapView {
     this.camSourceReady = false;
     this._clickHandlers = [];
     this._userLayerReady = false;
+    this._basemap = 'standard';
+    this._wpGlobalWired = false;
+    this._wpDragging = false;
+    this._wpMoved = false;
+    this._wpDragStart = null;
+    this._routeData = null;
+    this._endpointData = null;
+    this._waypointData = null;
+    this._reports = null;
+    this._incidents = null;
+    this._userPos = null;
+    this._userHeading = null;
+    this._camVisible = true;
 
     this.map.on('load', () => this._onLoad());
   }
 
-  _onLoad() {
+  // Idempotent source/layer insertion — setStyle() diffs the new base style
+  // and may keep or drop our custom layers, so re-adding must never throw.
+  _addSource(id, def) {
+    const s = this.map;
+    if (!s.getSource(id)) s.addSource(id, def);
+  }
+  _addLayer(def) {
+    const s = this.map;
+    if (!s.getLayer(def.id)) s.addLayer(def);
+  }
+
+  _addAppLayers() {
     // Camera vector tiles.
-    this.map.addSource(CAMERA_LAYER.sourceId, {
+    this._addSource(CAMERA_LAYER.sourceId, {
       type: 'vector',
       tiles: [CONFIG.cameraTileUrl],
       minzoom: 0,
@@ -39,7 +63,7 @@ export class MapView {
     });
 
     // Heatmap (visible when zoomed out) — density of cameras.
-    this.map.addLayer({
+    this._addLayer({
       id: CAMERA_LAYER.heatId,
       type: 'heatmap',
       source: CAMERA_LAYER.sourceId,
@@ -67,7 +91,7 @@ export class MapView {
     });
 
     // Camera points (visible when zoomed in).
-    this.map.addLayer({
+    this._addLayer({
       id: CAMERA_LAYER.layerId,
       type: 'circle',
       source: CAMERA_LAYER.sourceId,
@@ -99,12 +123,12 @@ export class MapView {
     });
 
     // Route line source/layers.
-    this.map.addSource('route', {
+    this._addSource('route', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
     });
     // Drop shadow under the whole route (depth on light/satellite basemaps).
-    this.map.addLayer({
+    this._addLayer({
       id: 'route-shadow',
       type: 'line',
       source: 'route',
@@ -116,7 +140,7 @@ export class MapView {
       },
     });
     // White casing so the colored route reads on any basemap (Maps parity).
-    this.map.addLayer({
+    this._addLayer({
       id: 'route-casing',
       type: 'line',
       source: 'route',
@@ -127,7 +151,7 @@ export class MapView {
         'line-opacity': 0.92,
       },
     });
-    this.map.addLayer({
+    this._addLayer({
       id: 'route-line',
       type: 'line',
       source: 'route',
@@ -139,11 +163,11 @@ export class MapView {
     });
 
     // Route endpoint markers source.
-    this.map.addSource('endpoints', {
+    this._addSource('endpoints', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
     });
-    this.map.addLayer({
+    this._addLayer({
       id: 'endpoint-dots',
       type: 'circle',
       source: 'endpoints',
@@ -156,17 +180,17 @@ export class MapView {
     });
 
     // Draggable waypoint handle (Workstream C: route preview editing).
-    this.map.addSource('waypoint', {
+    this._addSource('waypoint', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
     });
-    this.map.addLayer({
+    this._addLayer({
       id: 'waypoint-halo',
       type: 'circle',
       source: 'waypoint',
       paint: { 'circle-radius': 14, 'circle-color': '#ffb454', 'circle-opacity': 0.22 },
     });
-    this.map.addLayer({
+    this._addLayer({
       id: 'waypoint-dot',
       type: 'circle',
       source: 'waypoint',
@@ -177,15 +201,48 @@ export class MapView {
         'circle-stroke-color': '#ffffff',
       },
     });
+  }
+
+  _onLoad() {
+    this._addAppLayers();
     this._waypointDragHandlers = [];
     this._waypointTapHandlers = [];
     this._reportClickHandlers = [];
-    this._wpDragging = false;
     this._wireWaypoint();
-
     this.camSourceReady = true;
     this._wireCameraClicks();
     this._readyResolve && this._readyResolve();
+  }
+
+  getBasemap() { return this._basemap; }
+
+  // Switch the base style. map.setStyle() wipes ALL custom sources/layers, so
+  // on the resulting 'style.load' we rebuild them and replay last-known data.
+  setBasemap(key) {
+    const url = CONFIG.basemaps && CONFIG.basemaps[key];
+    if (!url || this._basemap === key) return;
+    this._basemap = key;
+    let rebuilt = false;
+    const rebuild = () => {
+      if (rebuilt) return;
+      rebuilt = true;
+      this._addAppLayers();
+      this._wireCameraClicks();
+      this._wireWaypointLayer();
+      this._reapplyData();
+    };
+    this.map.setStyle(url);
+    this.map.once('style.load', rebuild);
+  }
+
+  _reapplyData() {
+    this.setRoute(this._routeData || []);
+    this.setEndpoints(this._endpointData || []);
+    this.setWaypoint(this._waypointData || null);
+    if (this._reports) this.setReports(this._reports);
+    if (this._incidents) this.setIncidents(this._incidents);
+    if (this._userPos) this.setUserPosition(this._userPos, this._userHeading);
+    this.setCameraLayerVisible(this._camVisible !== false);
   }
 
   ready() {
@@ -216,6 +273,7 @@ export class MapView {
 
   // ---- Waypoint drag (Workstream C) ----
   setWaypoint(coords) {
+    this._waypointData = coords;
     const src = this.map.getSource('waypoint');
     if (!src) return;
     src.setData({
@@ -228,16 +286,17 @@ export class MapView {
 
   // Community camera reports layer (distinct styling from known cameras).
   setReports(features) {
+    this._reports = features;
     const src = this.map.getSource('reports');
     if (src) {
       src.setData({ type: 'FeatureCollection', features });
       return;
     }
-    this.map.addSource('reports', {
+    this._addSource('reports', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features },
     });
-    this.map.addLayer({
+    this._addLayer({
       id: 'reports-dots',
       type: 'circle',
       source: 'reports',
@@ -274,29 +333,14 @@ export class MapView {
   }
 
   _wireWaypoint() {
-    const LAYER = 'waypoint-dot';
-    let dragStartPoint = null;
-    let moved = false;
-
-    this.map.on('mousedown', LAYER, (e) => {
-      e.preventDefault();
-      this._wpDragging = true;
-      moved = false;
-      dragStartPoint = e.point;
-      this.map.getCanvas().style.cursor = 'grabbing';
-    });
-    this.map.on('touchstart', LAYER, (e) => {
-      if (e.points.length !== 1) return;
-      e.preventDefault();
-      this._wpDragging = true;
-      moved = false;
-      dragStartPoint = e.point;
-    });
+    this._wireWaypointLayer();
+    if (this._wpGlobalWired) return;
+    this._wpGlobalWired = true;
 
     const onMove = (e) => {
       if (!this._wpDragging) return;
       e.preventDefault();
-      moved = true;
+      this._wpMoved = true;
       const c = e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
       if (c) this._waypointDragHandlers.forEach((h) => h(c, false));
     };
@@ -307,7 +351,7 @@ export class MapView {
       if (!this._wpDragging) return;
       this._wpDragging = false;
       this.map.getCanvas().style.cursor = '';
-      if (!moved && dragStartPoint) {
+      if (!this._wpMoved && this._wpDragStart) {
         // Treat as a tap on the waypoint handle.
         this._waypointTapHandlers.forEach((h) => h());
         return;
@@ -317,7 +361,26 @@ export class MapView {
     };
     this.map.on('mouseup', onUp);
     this.map.on('touchend', onUp);
+  }
 
+  // Layer-specific waypoint bindings (must be re-applied after a basemap
+  // switch wipes the layers). Global move/up listeners live in _wireWaypoint.
+  _wireWaypointLayer() {
+    const LAYER = 'waypoint-dot';
+    this.map.on('mousedown', LAYER, (e) => {
+      e.preventDefault();
+      this._wpDragging = true;
+      this._wpMoved = false;
+      this._wpDragStart = e.point;
+      this.map.getCanvas().style.cursor = 'grabbing';
+    });
+    this.map.on('touchstart', LAYER, (e) => {
+      if (e.points.length !== 1) return;
+      e.preventDefault();
+      this._wpDragging = true;
+      this._wpMoved = false;
+      this._wpDragStart = e.point;
+    });
     this.map.on('mouseenter', LAYER, () => {
       if (!this._wpDragging) this.map.getCanvas().style.cursor = 'grab';
     });
@@ -327,12 +390,14 @@ export class MapView {
   }
 
   setRoute(features) {
+    this._routeData = features;
     const src = this.map.getSource('route');
     if (src) src.setData({ type: 'FeatureCollection', features });
   }
 
   // Show/hide the camera heatmap + points (Workstream D: layer toggle).
   setCameraLayerVisible(on) {
+    this._camVisible = on;
     if (!this.camSourceReady) return;
     const v = on ? 'visible' : 'none';
     const heat = this.map.getLayer(CAMERA_LAYER.heatId);
@@ -343,6 +408,7 @@ export class MapView {
 
   // Live traffic incident markers from UDOT (Workstream B).
   setIncidents(events) {
+    this._incidents = events;
     const feats = (events || []).map((ev) => ({
       type: 'Feature',
       properties: { severity: ev.severity, label: ev.label || ev.category, road: ev.road || '' },
@@ -353,8 +419,8 @@ export class MapView {
       src.setData({ type: 'FeatureCollection', features: feats });
       return;
     }
-    this.map.addSource('incidents', { type: 'geojson', data: { type: 'FeatureCollection', features: feats } });
-    this.map.addLayer({
+    this._addSource('incidents', { type: 'geojson', data: { type: 'FeatureCollection', features: feats } });
+    this._addLayer({
       id: 'incident-halos',
       type: 'circle',
       source: 'incidents',
@@ -373,7 +439,7 @@ export class MapView {
         'circle-opacity': 0.28,
       },
     });
-    this.map.addLayer({
+    this._addLayer({
       id: 'incident-dots',
       type: 'circle',
       source: 'incidents',
@@ -396,6 +462,7 @@ export class MapView {
   }
 
   setEndpoints(features) {
+    this._endpointData = features;
     const src = this.map.getSource('endpoints');
     if (src) src.setData({ type: 'FeatureCollection', features });
   }
@@ -418,17 +485,17 @@ export class MapView {
   // ---- Follow mode (Workstream C): bearing-rotated driving camera ----
   _ensureUserLayer() {
     if (this._userLayerReady) return;
-    this.map.addSource('user-pos', {
+    this._addSource('user-pos', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
     });
-    this.map.addLayer({
+    this._addLayer({
       id: 'user-halo',
       type: 'circle',
       source: 'user-pos',
       paint: { 'circle-radius': 16, 'circle-color': '#3ad6c5', 'circle-opacity': 0.18 },
     });
-    this.map.addLayer({
+    this._addLayer({
       id: 'user-dot',
       type: 'circle',
       source: 'user-pos',
@@ -443,6 +510,8 @@ export class MapView {
   }
 
   setUserPosition(coords, headingDeg) {
+    this._userPos = coords;
+    this._userHeading = headingDeg;
     this._ensureUserLayer();
     const src = this.map.getSource('user-pos');
     if (src) {

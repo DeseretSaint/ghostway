@@ -4,6 +4,13 @@
 export const CONFIG = {
   // --- Base map tiles (OpenStreetMap data, served by OpenFreeMap — free, no key) ---
   mapStyle: 'https://tiles.openfreemap.org/styles/liberty',
+  // Basemap switcher (Maps parity: light/dark). Same open provider, no new
+  // third-party dependency. 'standard' = the default liberty style; 'dark' is
+  // the darkmatter-style alternative served by OpenFreeMap.
+  basemaps: {
+    standard: 'https://tiles.openfreemap.org/styles/liberty',
+    dark: 'https://tiles.openfreemap.org/styles/dark',
+  },
 
   // --- ALPR / Flock camera data (DeFlock, open ODbL/CC-BY data) ---
   // Two ways to get cameras:
