@@ -158,8 +158,8 @@ body {
 #topbar {
   position: absolute;
   top: max(10px, env(safe-area-inset-top));
-  left: 10px;
-  right: 10px;
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
   height: 52px;
   display: flex;
   align-items: center;
@@ -245,8 +245,8 @@ body {
 /* Panel */
 .panel {
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
   bottom: max(10px, env(safe-area-inset-bottom));
   z-index: 5;
   background: var(--panel);
@@ -575,7 +575,7 @@ body {
   background: var(--panel-solid);
   border-right: 1px solid var(--line);
   z-index: 9;
-  padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   box-shadow: var(--shadow-3);
   animation: slide 0.2s ease;
 }
@@ -650,8 +650,8 @@ body {
 .drawer-foot {
   position: absolute;
   bottom: max(16px, env(safe-area-inset-bottom));
-  left: 16px;
-  right: 16px;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
   font-size: 12px;
   color: var(--muted);
 }
@@ -663,7 +663,7 @@ body {
   z-index: 12;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   background: rgba(4, 8, 14, 0.6);
   backdrop-filter: blur(2px);
 }
@@ -728,12 +728,12 @@ details summary {
 @media (min-width: 720px) {
   .panel {
     left: auto;
-    right: 16px;
-    bottom: 16px;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
     width: 380px;
   }
   #topbar {
-    left: 16px;
+    left: max(16px, env(safe-area-inset-left));
     right: auto;
     width: auto;
   }
@@ -742,10 +742,10 @@ details summary {
 /* Desktop: one visual spine — panel becomes a left column (Google Maps style). */
 @media (min-width: 1024px) {
   .panel {
-    left: 16px;
+    left: max(16px, env(safe-area-inset-left));
     right: auto;
     top: 76px;
-    bottom: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
     width: 400px;
     max-height: none;
   }
@@ -767,8 +767,8 @@ details summary {
 /* Turn-by-turn navigation banner */
 .nav-banner {
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
   top: max(64px, calc(env(safe-area-inset-top) + 58px));
   z-index: 7;
   display: flex;
@@ -1072,7 +1072,7 @@ details summary {
 .map-chip {
   position: absolute;
   top: max(70px, calc(env(safe-area-inset-top) + 64px));
-  left: 10px;
+  left: max(10px, env(safe-area-inset-left));
   z-index: 4;
   width: 44px;
   height: 44px;
@@ -1101,7 +1101,7 @@ details summary {
 /* On-map camera legend (toggled by #legendBtn) */
 .legend-panel {
   position: absolute;
-  left: 10px;
+  left: max(10px, env(safe-area-inset-left));
   top: calc(max(70px, env(safe-area-inset-top) + 64px) + 104px);
   z-index: 5;
   width: 232px;
@@ -1167,7 +1167,7 @@ details summary {
 /* Recenter (follow mode) button */
 .recenter-btn {
   position: absolute;
-  right: 12px;
+  right: calc(12px + env(safe-area-inset-right));
   bottom: calc(28px + env(safe-area-inset-bottom));
   z-index: 6;
   width: 46px;
@@ -1232,7 +1232,7 @@ details summary {
   z-index: 90;
   display: grid;
   place-items: end center;
-  padding: max(18px, env(safe-area-inset-bottom));
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
   background: linear-gradient(180deg, rgba(11, 15, 23, 0.25) 0%, rgba(11, 15, 23, 0.85) 60%);
   animation: fade-in 0.35s ease;
 }
