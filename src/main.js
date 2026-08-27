@@ -954,7 +954,9 @@ function stopNav(arrived = false) {
 function showArrivalScreen() {
   const sel = app.state.route?.engine ? app.state.options[app.state.chosen] : app.state.route?.clear || app.state.route?.baseline;
   const elapsed = app._navStart ? Math.round((Date.now() - app._navStart) / 1000) : 0;
-  const cams = sel ? (sel.cameras ?? 0) : 0;
+  // Prefer the LIVE tracked count (what the drive actually passed) over the
+  // planned estimate — the chip updates it continuously during navigation.
+  const cams = app._camPassed != null ? app._camPassed : sel ? (sel.cameras ?? 0) : 0;
   openModal(`
     <h3>🏁 You've arrived</h3>
     <p class="arrival-cams">${
@@ -1136,12 +1138,20 @@ function updateCamChip(traveled) {
     else if (!nextCam) nextCam = c;
   }
   const ahead = nextCam && nextCam.at - traveled <= 250;
-  chip.innerHTML = ahead ? `${camIc} ${passed} ${icon('warning', { size: 14 })}` : `${camIc} ${passed}`;
-  chip.title = ahead
-    ? `Camera ${fmtNavDistance(Math.max(0, nextCam.at - traveled))} ahead`
-    : `${passed} camera${passed === 1 ? '' : 's'} passed on this route`;
+  const total = pts.length;
+  if (ahead) {
+    const d = fmtNavDistance(Math.max(0, nextCam.at - traveled));
+    chip.innerHTML = `<span class="cam-ahead-ic">${icon('warning', { size: 14 })}</span> Cam ${d}`;
+    chip.title = `Camera ${d} ahead · ${passed}/${total} passed on this route`;
+  } else {
+    chip.innerHTML = `${camIc} ${passed}/${total}`;
+    chip.title = `${passed} of ${total} camera${total === 1 ? '' : 's'} passed on this route`;
+  }
   chip.classList.toggle('ahead', !!ahead);
   chip.classList.toggle('passed', passed > 0 && !ahead);
+  // Remember the live count so the arrival screen can report what ACTUALLY
+  // happened, not just the planned estimate (mission honesty).
+  app._camPassed = passed;
 }
 
 function showNavBanner() {

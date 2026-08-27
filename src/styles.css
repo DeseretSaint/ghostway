@@ -1287,6 +1287,9 @@ details summary {
 /* Live camera counter in the nav banner */
 .cam-chip {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 13px;
   font-weight: 700;
   padding: 3px 8px;
@@ -1296,6 +1299,7 @@ details summary {
   border: 1px solid var(--line);
   white-space: nowrap;
 }
+.cam-chip .cam-ahead-ic { display: inline-flex; }
 .cam-chip.passed { color: var(--muted); }
 .cam-chip.ahead {
   color: #fff;
