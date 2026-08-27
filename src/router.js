@@ -126,8 +126,8 @@ function parseGraph(raw) {
   for (let i = 0; i < E; i++) arcCount += eOw[i] === 0 ? 2 : 1;
   const outStart = new Uint32Array(nodeCount + 1);
   for (let i = 0; i < E; i++) {
-    outStart[ea[i] + 1]++;
-    if (eOw[i] !== 1) outStart[eB[i] + 1]++; // reverse arc unless strictly a→b
+    if (eOw[i] !== 2) outStart[ea[i] + 1]++; // a->b arc unless oneway b->a (ow=2)
+    if (eOw[i] !== 1) outStart[eB[i] + 1]++; // reverse arc unless strictly a->b
   }
   for (let i = 0; i < nodeCount; i++) outStart[i + 1] += outStart[i];
   const arcTo = new Uint32Array(arcCount);
@@ -136,8 +136,11 @@ function parseGraph(raw) {
   const cursor = outStart.slice(0, nodeCount);
   for (let i = 0; i < E; i++) {
     const a = ea[i], b = eB[i];
-    let p = cursor[a]++;
-    arcTo[p] = b; arcEdge[p] = i; arcRev[p] = 0;
+    let p;
+    if (eOw[i] !== 2) {
+      p = cursor[a]++;
+      arcTo[p] = b; arcEdge[p] = i; arcRev[p] = 0;
+    }
     if (eOw[i] !== 1) {
       p = cursor[b]++;
       arcTo[p] = a; arcEdge[p] = i; arcRev[p] = 1;
