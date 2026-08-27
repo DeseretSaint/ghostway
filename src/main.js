@@ -1116,7 +1116,17 @@ function updateCountdown(traveled) {
     el.textContent = fmtNavDistance(Math.max(0, (app._routeTotal || 0) - traveled));
   }
   updateProgress(traveled);
+  updateEta(traveled);
   updateCamChip(traveled);
+}
+
+// Keep the banner ETA live: renderNavStep only re-runs on step changes, so a
+// long step would otherwise show a stale remaining time (Maps parity).
+function updateEta(traveled) {
+  const etaEl = $('#navEta');
+  if (!etaEl || !app._totalDuration) return;
+  const frac = Math.min(1, Math.max(0, traveled / (app._routeTotal || 1)));
+  etaEl.textContent = fmtDuration(app._totalDuration * (1 - frac));
 }
 
 // Thin route-progress bar along the banner's bottom edge (Maps parity):
@@ -1206,7 +1216,7 @@ function renderNavStep() {
       ${limitMph ? `<div class="speed-limit"><span class="sl-num">${limitMph}</span><span class="sl-lbl">MAX</span></div>` : ''}
       <div id="speedChip" class="speed-chip" hidden></div>
       <div id="camChip" class="cam-chip" title="Cameras passed / ahead on this route">${icon('camera', { size: 14 })} 0</div>
-      <div class="nav-eta">${eta}</div>
+      <div class="nav-eta" id="navEta">${eta}</div>
     </div>
     <div class="nav-progress" aria-hidden="true"><div class="nav-progress-fill" id="navProgressFill"></div></div>`;
   $('#navBanner').classList.toggle('compact', !!compact);

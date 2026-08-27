@@ -71,29 +71,45 @@ const fillPct = () => p.evaluate(() => {
   if (!el) return null;
   return parseFloat(el.style.width) || 0;
 });
+const etaMin = () => p.evaluate(() => {
+  const el = document.querySelector('#navEta');
+  if (!el) return null;
+  const t = el.textContent || '';
+  const m = t.match(/(\d+)\s*min/);
+  const h = t.match(/(\d+)\s*h/);
+  if (!m && !h) return null;
+  return (h ? parseInt(h[1], 10) * 60 : 0) + (m ? parseInt(m[1], 10) : 0);
+});
 
 const w0 = await fillPct();
-console.log('fill at nav start:', w0);
+const e0 = await etaMin();
+console.log('fill at nav start:', w0, '| eta:', e0);
 await drive(0, 0.45, 25);
 await wait(800);
 const w1 = await fillPct();
-console.log('fill at ~45% drive:', w1);
+const e1 = await etaMin();
+console.log('fill at ~45% drive:', w1, '| eta:', e1);
 await drive(0.45, 0.9, 25);
 await wait(800);
 const w2 = await fillPct();
-console.log('fill at ~90% drive:', w2);
+const e2 = await etaMin();
+console.log('fill at ~90% drive:', w2, '| eta:', e2);
 
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 4));
 try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
 // Bar must exist, start near 0, and grow monotonically with real progress,
-// reaching a large fill by ~90% of the route.
+// reaching a large fill by ~90% of the route. ETA must count DOWN live
+// (round 64: it was only re-rendered on step changes → stale on long steps).
 const pass =
   w0 !== null &&
   w0 < 10 &&
   w1 > w0 + 10 &&
   w2 > w1 + 10 &&
-  w2 > 60;
-console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills with real route progress' : '\nNAV-PROGRESS FAIL ❌');
+  w2 > 60 &&
+  e0 !== null &&
+  e1 !== null && e1 < e0 &&
+  e2 !== null && e2 < e1;
+console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills + ETA counts down with real progress' : '\nNAV-PROGRESS FAIL ❌');
 pv.kill();
 process.exit(pass ? 0 : 1);
