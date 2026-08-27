@@ -90,9 +90,21 @@ from this queue first when it's non-empty.
       SVG child; SVG className is SVGAnimatedString, not string) → false FAIL
       risk; also add watchdog to every puppeteer suite (browser.close() hangs
       under swiftshader — hit twice this round) — LANDED 2026-08-26 (round 22)
-- [ ] Camera-walled destinations: BYU has no ≥30 m approach road; consider
+- [x] Camera-walled destinations: BYU has no ≥30 m approach road; consider
       "clear within N m of endpoint" messaging or parking-gate snapping
-      — MEASURED 2026-08-26 (slot-A research, /tmp/gw-byu-approach.mjs):
+      — RESOLVED 2026-08-27 (slot-A round 52, commit 8b58dbe — PUSH BLOCKED,
+      gh token invalid). Gate-snap landed: router.js clearTail() = forward BFS
+      from origin over floor-legal edges (clear set) + reverse Dijkstra from
+      destination (shortest exposed tail); when walled and tail ≤200 m, route
+      hard-floor-clear to the gate with a relaxed 2x+5min budget (checked
+      post-search — the in-search maxCost prune wrongly rejected the 37-min
+      gate route under the 26.7-min budget). BYU served: mid-route min 40 m
+      (was 16 m best-effort), badge "clear to within ~118 m" (ui.js hunk rode
+      slot-B's b4eef44). Gate = North Canyon Rd node 436862, tail 118 m —
+      matches round-40/45 measurements exactly. avoidance-audit: gate-snapped
+      routes PASS the floor check with a gate note; best-effort 5→4.
+      Original research follows:
+      MEASURED 2026-08-26 (slot-A research, /tmp/gw-byu-approach.mjs):
       exposed tail is only **118 m of driving** (4 edges, North Canyon Rd,
       ALL floor-violating; min camera distance 17 m = inside ALPR read range).
       Clear network from PG = 496,997/527,282 nodes (94.3%); it ends at a gate
@@ -337,6 +349,34 @@ from this queue first when it's non-empty.
       true-distance fix — RESOLVED: committed a6e2994 (with snap-dist-check.mjs
       guard: onRoad 90.0 m / offRoad 334.8 m PASS). ow=2 fix landed on top
       (8df172d). Both on origin/main; working tree clean. DO NOT RE-DO.
+- [x] VERIFY NEXT (slot-C 02:46 MDT): gate-snap (camera-walled clearTail) was
+      ACTIVELY being written in src/router.js during this sweep (3 clearTail
+      variants observed 02:40-02:44; last mtime 02:44:25, holder un-locked).
+      Probe of the intermediate version: BYU Clearest walled=true but
+      clearToM=0 — gate-snap did NOT fire on the one corridor it's built for
+      (served route still passes cam at 16 m mid-route). Once router.js
+      stabilizes/commits: re-run /tmp/gw-gate-probe.mjs (BYU endpoints from
+      avoidance-audit) — expect clearToM≈118 (round-40/45 measured tail) and
+      Clearest mid-route min ≥30 m; then full battery (floor-audit,
+      engine-check, avoidance-audit, snap-dist-check).
+      — RESOLVED 2026-08-27 (slot-A round 52, commit 8b58dbe): the no-fire was
+      the in-search maxCost budget prune (37-min gate route vs 26.7-min
+      budget); fixed with unbounded search + post-search check. Verified on
+      committed code: BYU clearToM=118, Clearest mid-route min 40 m (≥30),
+      full battery PASS (floor-audit/engine-check/avoidance-audit/snap-dist).
+- [ ] UX (slot-B round 51 research, 2026-08-27 02:31 MDT): onboarding a11y gaps
+      — RESOLVED 2026-08-27 (slot-B round 52, commit b4eef44 — PUSH BLOCKED, gh
+      token invalid). All 3 fixes landed per spec: (1) ui.js Escape handler now
+      dismisses #onboarding via canonical #obSkip click (after drawer, before
+      suggestions); (2) index.html .ob-card has role="dialog" aria-modal="true"
+      aria-label="Welcome to Ghostway"; (3) main.js startOnboarding focuses
+      #obNext after reveal. escape-check.mjs extended with a first-run section
+      (fresh localStorage, 390×844 page): asserts overlay shown, dialog attrs,
+      activeElement=obNext, Escape hides overlay + gw-onboarded set. Verified:
+      build exit 0; escape-check PASS (12/12 assertions); interact-check PASS
+      (0 page errors). NOTE: landed after reaping a stale slot-A lock (pid 88488
+      dead, router.js mtime stable 12s, no ghostway procs) — slot-A's gate-snap
+      changeset (router.js/avoidance-audit.mjs/ledger) left uncommitted + untouched.
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -364,8 +404,9 @@ block on these — it queues and moves on.
       invalid ("The token in default is invalid"). Stranded LOCAL commits:
       slot-B round 50 (staged graph-load feedback + non-blocking traffic fix +
       graphload-status-check.mjs) + slot-A round 51 aa84b53 (walled-vs-budget
-      flag + honest audit summary) + ledger commits. Next run with a valid
-      token: git push.
+      flag + honest audit summary) + slot-B round 52 b4eef44 (onboarding a11y)
+      + slot-A round 52 8b58dbe (gate-snap for camera-walled destinations)
+      + ledger commits. Next run with a valid token: git push.
 
 ## Latest round
 | date | axis | what changed | proof | status |
@@ -421,7 +462,11 @@ block on these — it queues and moves on.
 | 2026-08-27 | ux (slot-B round 50) | first-route UX: (1) staged graph-load feedback — ensureLocalEngine now shows "Downloading map data…" → "Building route network…" (wires loadGraph's existing onProgress to showStatus) instead of a static "Routing…" during the ~6 MB lazy graph download; (2) FIXED first-route latency bug found while testing: ensureLocalEngine AWAITED loadTraffic (UDOT spatial query 5-10 s, retries up to ~65 s on ArcGIS 504s) before returning → first route render held hostage. Now fire-and-forget: route renders on free-flow speeds, incidents layer in after. New hermetic scripts/graphload-status-check.mjs (MutationObserver captures #status texts from addedNodes; asserts both stages ordered + card renders). | graphload-status-check PASS: stages ordered, card visible, 3 options, route 24 ms after engine ready (was blocked >120 s); interact-check PASS; engine-e2e PASS (strict opts + best-effort badge + nav banner, ERRORS []); build exit 0 | committed (local) — PUSH BLOCKED (gh token invalid again; see Needs Keaton) |
 | 2026-08-27 ~02:30 MDT | ops (slot-A, special task) | LAZY-ENGINE SPECIAL TASK: already DONE — verified, not re-done. Confirmed working tree CLEAN, 03e9224 (lazy-engine) + a6e2994 (nearestNode) + 8df172d (ow=2) all on origin/main, deploys 33052069113/33052180256/33052587996 all success. Marked both protected-changeset ops queue items RESOLVED so no future run re-evaluates. router.js is now fully UNBLOCKED for slot-A routing work (fix spec v2 walled-vs-budget flag is the next live item). | git status clean; origin/main == 28cf2a2 (03e9224 present); 3 deploys success | verified — task complete, ledger updated |
 | 2026-08-27 02:25 MDT | tests (slot-C) | read-only sweep under FRESH slot-B lock (02:18, "graph-load-status", holder alive w/ own preview :4173 → no build, no :4173, no edits; only ledger commits since 02:20 sweep) — NO code changed, verify only. All invariants HOLD, identical to 02:20: floor-audit 0 strict-legal edges <31.4 m (min bucket 30-40 m); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); avoidance-audit exit 0, Clearest mid-route minima unchanged 25/16/12/17/4 m — already-filed summary defect (01:32, escalated 01:55) persists unchanged, no drift. No new findings. | floor-audit PASS; engine-check PASS; avoidance-audit exit 0 (same numbers as 01:55) | verified — no regressions; nothing new |
-| 2026-08-27 | routing (slot-A round 51) | FIXED the filed audit-summary defect: router.js runs one unbounded strict probe when the floor search fails under budget → `walled` flag on the option (true = no ≥30 m path anywhere; false = clear path exists, over-budget); avoidance-audit branches BEST-EFFORT reason on o.walled + honest headline ("≥30 m on clearable corridors; N walled/budget destination(s) served best-effort"). Exit-0 CI gate unchanged. Lazy-engine special task confirmed already complete (03e9224 on origin/main) — not re-done. | build exit 0; engine-check PASS (modes distinct); snap-dist-check PASS (90.0/334.8 m); audit exit 0 — BYU "camera-walled", other 4 "exceeds detour budget" (matches round-45 measurement) | committed aa84b53 — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
+|| 2026-08-27 | routing (slot-A round 51) | FIXED the filed audit-summary defect: router.js runs one unbounded strict probe when the floor search fails under budget → `walled` flag on the option (true = no ≥30 m path anywhere; false = clear path exists, over-budget); avoidance-audit branches BEST-EFFORT reason on o.walled + honest headline ("≥30 m on clearable corridors; N walled/budget destination(s) served best-effort"). Exit-0 CI gate unchanged. Lazy-engine special task confirmed already complete (03e9224 on origin/main) — not re-done. | build exit 0; engine-check PASS (modes distinct); snap-dist-check PASS (90.0/334.8 m); audit exit 0 — BYU "camera-walled", other 4 "exceeds detour budget" (matches round-45 measurement) | committed aa84b53 — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
+||| 2026-08-27 02:32 MDT | tests (slot-C) | verification sweep over stranded tree (aa84b53 walled-flag + ea3f600 graphload, 6 ahead of origin/main) — NO code changed, verify only. CONFIRMED slot-A round-51 fix: avoidance-audit now correctly separates truly-walled (BYU only → "no ≥30 m path exists", min 16 m) from over-budget clearable (4 corridors → "camera-clear path exists but exceeds detour budget", min 25/12/17/4 m) — the filed 01:32 defect (walled/budget conflation + false PASS headline) is RESOLVED. All core invariants HOLD: floor-audit 0 strict-legal edges <31.4 m (273 in 30-40 m bucket); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check PASS (onRoad 90.0m/offRoad 334.8m); build exit 0. Live routing probe (avoidance-audit plans real routes on the shipped GWR1 graph + measures true min camera distance) shows no camera-avoidance regression. NOTE: headline "≥30 m on clearable corridors" describes path-existence, not the served best-effort route (25/16/12/17/4 m) — defensible but a reader could misread it as "served ≥30 m"; minor residual wording ambiguity only, not a regression. | floor-audit/engine-check/snap-dist-check/avoidance-audit all PASS; build exit 0 | verified — fix confirmed, no regressions |
+|| 2026-08-27 02:46 MDT | tests (slot-C) | verification sweep over UNCOMMITTED tree (in-flight gate-snap clearTail in router.js — actively rewritten 3× during sweep, mtime 02:44:25, holder un-locked; slot-B round-52 onboarding-a11y b4eef44 also landed mid-run). Removed stale crashed lock (PID 90978 dead, no live procs). Core invariants HOLD on committed code: floor-audit 0 strict-legal edges <31.4 m (273 in 30-40 m bucket); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); avoidance-audit exit 0 with correct walled/budget split (BYU walled, 4 budget); build exit 0. FINDING: intermediate gate-snap version does NOT fire on BYU — probe shows Clearest walled=true but clearToM=0, served route still passes cam at 16 m mid-route (expected clearToM≈118). Filed VERIFY NEXT queue item w/ probe script + expected values. Did NOT touch router.js (live edit in progress). | floor-audit/engine-check/avoidance-audit PASS; build exit 0; /tmp/gw-gate-probe.mjs: clearToM=0 on BYU | verified — invariants hold; gate-snap not yet effective (re-verify when stable) |
+|| 2026-08-27 ~02:45 MDT | accessibility (UX, slot-B round 52) | onboarding a11y (landed the pinned round-51 spec): .ob-card role=dialog+aria-modal+aria-label; startOnboarding focuses #obNext; Escape dismisses onboarding via canonical #obSkip; escape-check.mjs gains a first-run section (fresh localStorage, phone viewport). Reaped stale slot-A lock first (pid dead, mtime stable); slot-A's uncommitted gate-snap changeset untouched. | build exit 0; escape-check PASS 12/12 (obShown/obDialog/obFocus/obAfterEsc/obFlagSet all true, 0 errors); interact-check PASS | committed b4eef44 — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
+| 2026-08-27 ~02:50 MDT | routing (slot-A round 52) | GATE-SNAP for camera-walled destinations (resolves the long-queued BYU item + slot-C's 02:46 finding that the intermediate version didn't fire): router.js clearTail() = forward BFS from origin over floor-legal edges (clear set, first-edge exempt) + reverse Dijkstra from destination (shortest exposed tail); when walled and tail ≤200 m, serve the hard-floor-clear route to the gate instead of a floor-breaking best-effort route. ROOT CAUSE of the intermediate no-fire: the in-search maxCost prune tracks time on the best-score label only and rejected the 37-min gate route under the 26.7-min budget — fixed with unbounded search + post-search budget check (relaxed 2x+5min, gate routes only ever offered for walled destinations). clearToM flag exposed; ui.js badge "clear to within ~118 m" (hunk rode slot-B's b4eef44); avoidance-audit gate-snapped routes PASS the floor check with a gate note. | build exit 0; engine-check PASS (modes distinct); snap-dist-check PASS (90.0/334.8 m); floor-audit PASS (0 strict-legal <31.4 m); avoidance-audit PASS — BYU Clearest mid-route min 40 m (was 16 m), gate-snapped clear to within ~118 m (gate node 436862 North Canyon Rd — exact round-40/45 numbers); other 4 corridors unchanged; best-effort 5→4 | committed 8b58dbe — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
