@@ -841,6 +841,13 @@ details summary {
   color: var(--muted);
   text-align: right;
 }
+.nav-arrive {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  opacity: 0.85;
+}
 
 /* Avoidance mode switch (Strict / Moderate / Off) */
 .mode-switch {
@@ -1361,6 +1368,7 @@ select.rp-input {
 .nav-banner.compact .nav-then { display: none; }
 .nav-banner.compact .speed-limit { display: none; }
 .nav-banner.compact .nav-eta { font-size: 12px; }
+.nav-banner.compact .nav-arrive { display: none; }
 .nav-banner.compact .speed-chip { font-size: 12px; padding: 1px 7px; }
 .nav-banner.compact .cam-chip { font-size: 12px; padding: 1px 7px; }
 

@@ -80,10 +80,27 @@ const etaMin = () => p.evaluate(() => {
   if (!m && !h) return null;
   return (h ? parseInt(h[1], 10) * 60 : 0) + (m ? parseInt(m[1], 10) : 0);
 });
+// Round 66: arrival clock in the nav banner — "Arrive H:MM AM/PM", recomputed
+// every tick. Parse to minutes-of-day so we can assert it moves EARLIER as the
+// simulated drive eats remaining time.
+const arriveTxt = () => p.evaluate(() => {
+  const el = document.querySelector('#navArrive');
+  return el ? el.textContent : null;
+});
+const arriveMin = (t) => {
+  if (!t) return null;
+  const m = t.match(/Arrive\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10) % 12;
+  if (/PM/i.test(m[3] || '')) h += 12;
+  return h * 60 + parseInt(m[2], 10);
+};
 
 const w0 = await fillPct();
 const e0 = await etaMin();
-console.log('fill at nav start:', w0, '| eta:', e0);
+const a0txt = await arriveTxt();
+const a0 = arriveMin(a0txt);
+console.log('fill at nav start:', w0, '| eta:', e0, '| arrive:', a0txt);
 await drive(0, 0.45, 25);
 await wait(800);
 const w1 = await fillPct();
@@ -93,7 +110,9 @@ await drive(0.45, 0.9, 25);
 await wait(800);
 const w2 = await fillPct();
 const e2 = await etaMin();
-console.log('fill at ~90% drive:', w2, '| eta:', e2);
+const a2txt = await arriveTxt();
+const a2 = arriveMin(a2txt);
+console.log('fill at ~90% drive:', w2, '| eta:', e2, '| arrive:', a2txt);
 
 // Round 65: maneuver-approach emphasis — re-scan the route sampling the
 // banner's .approach class; both states must occur (near a turn = urgent,
@@ -145,7 +164,9 @@ const pass =
   e0 !== null &&
   e1 !== null && e1 < e0 &&
   e2 !== null && e2 < e1 &&
+  a0 !== null && a2 !== null &&
+  (a2 <= a0 || a2 >= a0 + 700) && // arrival clock moves earlier (midnight-wrap tolerated)
   appr.t && appr.f && appr.animOk && appr.distColor === 'rgb(255, 170, 64)';
-console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills + ETA counts down + approach emphasis fires near turns' : '\nNAV-PROGRESS FAIL ❌');
+console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills + ETA counts down + arrival clock live + approach emphasis fires near turns' : '\nNAV-PROGRESS FAIL ❌');
 pv.kill();
 process.exit(pass ? 0 : 1);

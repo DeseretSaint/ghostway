@@ -7,7 +7,7 @@ import { planRoute } from './routing.js';
 import { planRoutes, loadGraph, regionCovers, graphStatus } from './router.js';
 import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
-import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, haversine, haptic, pointToSegmentM } from './utils.js';
+import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, fmtArrive, haversine, haptic, pointToSegmentM } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
 import { icon, stepIconSvg } from './icons.js';
 import { registerSW } from './pwa.js';
@@ -1140,7 +1140,13 @@ function updateEta(traveled) {
   const etaEl = $('#navEta');
   if (!etaEl || !app._totalDuration) return;
   const frac = Math.min(1, Math.max(0, traveled / (app._routeTotal || 1)));
-  etaEl.textContent = fmtDuration(app._totalDuration * (1 - frac));
+  const remain = app._totalDuration * (1 - frac);
+  etaEl.textContent = fmtDuration(remain);
+  // Maps parity: show the arrival clock too — remaining time answers "how
+  // long", the arrival time answers "when". Recomputed every tick so it
+  // tracks real progress, not the estimate at nav start.
+  const arriveEl = $('#navArrive');
+  if (arriveEl) arriveEl.textContent = 'Arrive ' + fmtArrive(remain);
 }
 
 // Thin route-progress bar along the banner's bottom edge (Maps parity):
@@ -1231,6 +1237,7 @@ function renderNavStep() {
       <div id="speedChip" class="speed-chip" hidden></div>
       <div id="camChip" class="cam-chip" title="Cameras passed / ahead on this route">${icon('camera', { size: 14 })} 0</div>
       <div class="nav-eta" id="navEta">${eta}</div>
+      <div class="nav-arrive" id="navArrive">${eta ? 'Arrive ' + fmtArrive(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0]))) : ''}</div>
     </div>
     <div class="nav-progress" aria-hidden="true"><div class="nav-progress-fill" id="navProgressFill"></div></div>`;
   $('#navBanner').classList.toggle('compact', !!compact);
