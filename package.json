@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --host --port 4173",
     "serve": "node scripts/serve-https.mjs",
-    "fetch-cameras": "node scripts/fetch-cameras.mjs"
+    "fetch-cameras": "node scripts/fetch-cameras.mjs",
+    "avoidance-audit-random": "node scripts/avoidance-audit-random.mjs"
   },
   "devDependencies": {
     "@mapbox/vector-tile": "^3.0.0",
