@@ -59,10 +59,19 @@ try {
   });
   console.log('rc-arrive:', JSON.stringify(arrive.txt));
   console.log('card html:', arrive.html);
+  const pressed = await p.evaluate(() => {
+    const opts = [...document.querySelectorAll('.route-opt')];
+    const chosen = opts.filter((o) => o.getAttribute('aria-pressed') === 'true');
+    return { total: opts.length, pressedCount: chosen.length };
+  });
+  console.log('route-opt aria-pressed:', JSON.stringify(pressed));
+  const ariaOk = pressed.total >= 2 && pressed.pressedCount === 1;
+  console.log('exactly one route-opt aria-pressed=true:', ariaOk);
+
   const ok = !!arrive.txt && /Arrive\s+\d/.test(arrive.txt);
   console.log('arrival clock present:', ok);
   console.log('page errors:', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 5));
-  if (ok && errs.filter((e) => !/favicon|404/.test(e)).length === 0) code = 0;
+  if (ok && ariaOk && errs.filter((e) => !/favicon|404/.test(e)).length === 0) code = 0;
   try { await Promise.race([b.close(), wait(5000)]); } catch {}
 } catch (e) {
   console.error('arrival-check failed:', e.message);

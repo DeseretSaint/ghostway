@@ -232,7 +232,7 @@ function renderEngineCard(app, card, result) {
       // Over the detour budget: avoidance costs real extra time — say so.
       const overBudget = o.overBudget ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} costs extra time</span>` : '';
       return `
-        <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button">
+        <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button" aria-pressed="${i === chosen}">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
           ${clearBadge}
           <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}${bestEffort}${overBudget}</span>
