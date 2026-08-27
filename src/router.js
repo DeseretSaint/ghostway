@@ -23,6 +23,10 @@ import { CONFIG } from './config.js';
 let graph = null;
 let loadedRegionId = null;
 let loadPromise = null;
+// Every caller that kicks/awaits a graph load gets its progress callback fired
+// (not just the first) — otherwise a concurrent route started while a load is
+// in flight shows no stage feedback (stuck on "Downloading map data…").
+let loadProgressCbs = [];
 
 export function graphStatus() {
   return graph ? 'ready' : loadPromise ? 'loading' : 'idle';
@@ -53,6 +57,8 @@ export async function loadGraph(lon, lat, onProgress) {
   const region = (lon && typeof lon === 'object' ? lon : regionFor(lon, lat)) || CONFIG.engineRegions[0];
   if (!region) throw new Error('no engine region configured');
   if (graph && loadedRegionId === region.id) return graph;
+  if (onProgress) loadProgressCbs.push(onProgress);
+  const fireProgress = (stage) => { for (const cb of loadProgressCbs) { try { cb(stage); } catch { /* ignore */ } } };
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     const res = await fetch(region.url);
@@ -70,12 +76,13 @@ export async function loadGraph(lon, lat, onProgress) {
     } else {
       raw = buf;
     }
-    onProgress && onProgress('parse');
+    fireProgress('parse');
     graph = parseGraph(raw);
     loadedRegionId = region.id;
+    loadProgressCbs = [];
     return graph;
   })();
-  loadPromise.catch(() => (loadPromise = null));
+  loadPromise.catch(() => { loadPromise = null; loadProgressCbs = []; });
   return loadPromise;
 }
 
