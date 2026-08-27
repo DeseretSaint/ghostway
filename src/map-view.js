@@ -397,6 +397,29 @@ export class MapView {
     };
     this.map.on('mouseup', onUp);
     this.map.on('touchend', onUp);
+
+    // Fallback drag-end: if the pointer is RELEASED over UI chrome (zoom
+    // control, route panel, any overlay) instead of the map canvas, MapLibre
+    // never fires mouseup/touchend — the drag stays open and the drop is
+    // silently lost. Commit the waypoint at the last known pointer position
+    // on a window-level pointerup so releasing anywhere still works.
+    const onWindowUp = (ev) => {
+      if (!this._wpDragging) return;
+      this._wpDragging = false;
+      this.map.getCanvas().style.cursor = '';
+      if (!this._wpMoved && this._wpDragStart) {
+        this._waypointTapHandlers.forEach((h) => h());
+        return;
+      }
+      const rect = this.map.getCanvas().getBoundingClientRect();
+      const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+      const inside = x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
+      const lngLat = inside ? this.map.unproject([x, y]) : null;
+      const c = lngLat ? [lngLat.lng, lngLat.lat] : null;
+      if (c) this._waypointDragHandlers.forEach((h) => h(c, true));
+    };
+    window.addEventListener('pointerup', onWindowUp);
+    window.addEventListener('pointercancel', onWindowUp);
   }
 
   // Layer-specific waypoint bindings (must be re-applied after a basemap
