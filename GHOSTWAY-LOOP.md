@@ -216,6 +216,15 @@ from this queue first when it's non-empty.
       route-casing 036ad25 + recent-destinations f7de0f1) — gh auth valid;
       now 0 ahead/behind. Only uncommitted file: scripts/tiers-check.mjs
       (slot-C live work, untouched). TASK COMPLETE — DO NOT RE-DO.
+      Re-verified #41 2026-08-27 ~08:20 MDT (slot-A special-priority re-check):
+      premise still stale — 03e9224 on origin/main, main.js/config.js/map-view.js
+      clean (git diff empty), 0 ahead/behind, no lock files. Battery re-verified
+      on HEAD (7092dee, incl. slot-B units toggle bef3610): build exit 0,
+      engine-check PASS (modes distinct), snap-dist-check PASS (90.0/334.8 m).
+      Only untracked file: scripts/.probe-basemap.mjs (slot-B/C probe, untouched).
+      TASK COMPLETE — DO NOT RE-DO. NOTE: gh token INVALID again this run —
+      ledger commit (this entry) stranded locally, 1 ahead of origin/main;
+      next run with valid auth should push.
 - [x] ETA AF→Park City route-choice "8 km detour" theory — DISPROVEN 2026-08-26
       (round 36, instrumented). Directed exact-cost Dijkstra over the shipped
       graph (same effFactor+junctionPenalty+nodeDeg as router.js, directed arcs)
