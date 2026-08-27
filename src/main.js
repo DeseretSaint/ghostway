@@ -145,27 +145,36 @@ let _localEngineLoading = null;
 async function ensureLocalEngine(fromC, toC) {
   if (app._engineReady) return true;
   if (_localEngineLoading) return _localEngineLoading;
+  // First route in a region downloads the ~6 MB graph — tell the user what
+  // the wait is, instead of sitting on a static "Routing…".
+  showStatus('Downloading map data…', 'info');
   _localEngineLoading = (async () => {
     try {
-      const g = await loadGraph(fromC[0], fromC[1]);
+      const g = await loadGraph(fromC[0], fromC[1], (stage) => {
+        if (stage === 'parse') showStatus('Building route network…', 'info');
+      });
       app._engineReady = true;
       window.__ghostwayEngine = 'ready';
       // Live traffic for the loaded region (UDOT for Wasatch, WZDx elsewhere).
-      // Skip if the boot preload already fetched it (avoids a double fetch
-      // when a route fires while preload is still in flight).
-      if (!app.traffic) try {
-        const traffic = await loadTraffic(g.bbox);
-        app.traffic = traffic;
-        if (traffic.ok && traffic.events.length) {
-          app.map.setIncidents(traffic.events);
-          enginePill(`${icon('shield', { size: 13 })} Local engine ready · ${icon('warning', { size: 13 })} ${traffic.events.length} live traffic events`);
-        } else {
-          enginePill(`${icon('shield', { size: 13 })} Local camera-aware engine ready`);
-        }
-        window.__ghostwayTraffic = traffic.ok ? traffic.events.length : 'failed';
-      } catch (e) {
-        console.warn('traffic load failed', e);
-        window.__ghostwayTraffic = 'failed';
+      // Fire-and-forget: the UDOT spatial query can take 5-10 s (and retries up
+      // to ~65 s when ArcGIS 504s), and awaiting it here would hold the FIRST
+      // route hostage. Route renders on free-flow speeds now; incidents layer
+      // in when they arrive. Skip if boot preload already fetched it.
+      if (!app.traffic && !app._trafficLoading) {
+        app._trafficLoading = true;
+        loadTraffic(g.bbox).then((traffic) => {
+          app.traffic = traffic;
+          if (traffic.ok && traffic.events.length) {
+            app.map.setIncidents(traffic.events);
+            enginePill(`${icon('shield', { size: 13 })} Local engine ready · ${icon('warning', { size: 13 })} ${traffic.events.length} live traffic events`);
+          } else {
+            enginePill(`${icon('shield', { size: 13 })} Local camera-aware engine ready`);
+          }
+          window.__ghostwayTraffic = traffic.ok ? traffic.events.length : 'failed';
+        }).catch((e) => {
+          console.warn('traffic load failed', e);
+          window.__ghostwayTraffic = 'failed';
+        }).finally(() => { app._trafficLoading = false; });
       }
       return true;
     } catch (e) {
