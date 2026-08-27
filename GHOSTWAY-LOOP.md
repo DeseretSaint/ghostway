@@ -79,7 +79,11 @@ free, privacy-first.
 Research-only runs (locked or warm-deploy) append ideas here. Edit runs pull
 from this queue first when it's non-empty.
 - [x] Mid-zoom heatmap clustering (visual noise reduction) — landed 2026-08-26
-- [ ] Route-line anti-cut: Douglas-Peucker already in; audit edge cases on highways
+- [x] Route-line anti-cut: Douglas-Peucker already in; audit edge cases on highways
+      — RESOLVED 2026-08-26 (round 31): new scripts/geometry-audit.mjs proves the
+      DP invariant on 9 real routes (5 corridors × modes): every raw point ≤3 m
+      from the drawn line (worst 2.99 m), endpoints kept, 18-43% of points kept.
+      Red test: tol=100 m drops a 90° corner → metric flags 67.5 m deviation.
 - [ ] Speed: chunk the graph load / show progress; measure on throttled connection
 - [x] Test infra: interact-check menuHit/gpsHit return {} (elementFromPoint hits
       SVG child; SVG className is SVGAnimatedString, not string) → false FAIL
@@ -179,6 +183,7 @@ block on these — it queues and moves on.
 | 2026-08-26 | ops (round 28) | unblocked shipping: gh auth valid again → pushed stranded round-26 commit (4a40564..a949827); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (another session's in-flight work, mtimes 18:38-18:42) | push exit 0; deploy run 33028465289 success; curl https://deseretsaint.github.io/ghostway/ → HTTP 200 in 1.78s, correct title | shipped |
 | 2026-08-26 | data-freshness (round 29) | monthly graph-rebuild CI (graph-refresh.yml, 2nd of month, gated on floor-audit + engine-check) + shipped graph rebuilt from fresh Aug 25 OSM + Aug 26 DeFlock (was Aug 15) | pipeline proven locally: rebuild 1.8s/552,448 edges; floor-audit PASS (0 <31.4 m); engine-check/avoidance-audit/smoke/engine-e2e PASS, 0 console errors | shipped (round 30) |
 | 2026-08-26 | ops (round 30) | unblocked round-29: gh auth valid → pushed stranded commit (3fbfdc1..63d78bf); watched deploy to success; verified live site. Did NOT touch the 16-file uncommitted lazy-engine changeset (mtimes 18:38-18:42, <24 h — still in grace window) | push exit 0; deploy run 33030124464 success; curl live site → HTTP 200 in 2.37s, correct title | shipped |
+| 2026-08-26 | route-geometry (round 31) | closed queued "route-line anti-cut" item: new scripts/geometry-audit.mjs — permanent guard proving the drawn line never leaves road geometry (DP invariant: every raw route point ≤3 m from simplified polyline, endpoints kept) across 5 corridors × modes incl. I-15 + canyon curves | audit PASS: 9/9 routes, worst deviation 2.99 m ≤ 3 m tol, 18-43% points kept; red test PASS (tol=100 m cut → 67.5 m flagged); build exit 0; engine-check PASS | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
