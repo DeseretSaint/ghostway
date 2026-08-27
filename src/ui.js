@@ -109,6 +109,30 @@ export function buildPanel(app) {
   };
   fromInput.addEventListener('keydown', onEnter);
   toInput.addEventListener('keydown', onEnter);
+
+  // Maps-parity keyboard navigation through suggestions: ArrowDown/ArrowUp
+  // move focus between the field and the result rows. Rows are buttons, so
+  // Enter selects natively; Escape closes via the document handler below.
+  const moveFocus = (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (box.hidden) return;
+    const rows = [...box.querySelectorAll('.sugg')];
+    if (!rows.length) return; // loading/empty state — arrows stay textual
+    e.preventDefault();
+    const idx = rows.indexOf(document.activeElement);
+    const next =
+      e.key === 'ArrowDown'
+        ? (idx + 1) % rows.length // from the field (idx -1) → first row
+        : idx <= 0
+          ? rows.length - 1 // from the field or first row → last row (wrap)
+          : idx - 1;
+    rows[next].focus();
+    rows[next].scrollIntoView({ block: 'nearest' });
+  };
+  fromInput.addEventListener('keydown', moveFocus);
+  toInput.addEventListener('keydown', moveFocus);
+  box.addEventListener('keydown', moveFocus);
+
   [fromInput, toInput].forEach((inp) =>
     inp.addEventListener('focus', () => (box.dataset.owner = inp.id))
   );
