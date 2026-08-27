@@ -238,6 +238,8 @@ function wireApp() {
 
   $('#gpsBtn').addEventListener('click', useMyLocation);
   $('#recenterBtn').addEventListener('click', () => setFollow(true));
+  $('#zoomInBtn').addEventListener('click', () => app.map.zoomIn());
+  $('#zoomOutBtn').addEventListener('click', () => app.map.zoomOut());
   // Tap the banner (anywhere but its buttons) to open the full turn-by-turn list.
   $('#navBanner').addEventListener('click', (e) => {
     if (e.target.closest('button')) return;

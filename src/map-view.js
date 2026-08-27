@@ -19,7 +19,6 @@ export class MapView {
       maxPitch: 60,
     });
     this.map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
-    this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
     this.routeSource = null;
     this.camSourceReady = false;
@@ -215,6 +214,10 @@ export class MapView {
   }
 
   getBasemap() { return this._basemap; }
+
+  // Custom zoom buttons (Maps-parity look) drive the map directly.
+  zoomIn() { this.map.zoomIn(); }
+  zoomOut() { this.map.zoomOut(); }
 
   // Switch the base style. map.setStyle() wipes ALL custom sources/layers, so
   // on the resulting 'style.load' we rebuild them and replay last-known data.

@@ -71,6 +71,15 @@
 
       <button id="unitsBtn" class="map-chip units-chip" title="Toggle distance units (miles / kilometres)" aria-label="Toggle distance units">km</button>
 
+      <div id="zoomCtrl" class="zoom-ctrl" role="group" aria-label="Map zoom">
+        <button id="zoomInBtn" class="zoom-btn" aria-label="Zoom in" title="Zoom in">
+          <svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button id="zoomOutBtn" class="zoom-btn" aria-label="Zoom out" title="Zoom out">
+          <svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+        </button>
+      </div>
+
       <div id="legendPanel" class="legend-panel" role="note" aria-label="Camera legend" hidden>
         <div class="legend-title">Camera types</div>
         <div class="legend-row"><span class="legend-dot" style="background:#ff4d6d"></span>Flock Safety ALPR — reads plates at speed</div>
