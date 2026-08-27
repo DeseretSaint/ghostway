@@ -40,8 +40,24 @@ const modal = await page.evaluate(async () => {
   return { w: r.width, h: r.height, display: cs.display, hidden: el.hidden };
 });
 
-console.log(JSON.stringify({ clear, modal, errors }, null, 1));
-const ok = clear && clear.w >= 44 && clear.h >= 44 && modal && modal.w >= 44 && modal.h >= 44 && errors.length === 0;
+// Reveal the avoidance panel to measure .chip-toggle + .mode-btn.
+const chips = await page.evaluate(async () => {
+  const at = document.querySelector('#avoid-toggle');
+  if (at) at.hidden = false;
+  await new Promise(r => setTimeout(r, 200));
+  const pick = (sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return { w: r.width, h: r.height, display: cs.display, hidden: el.hidden };
+  };
+  return { chipToggle: pick('.chip-toggle'), modeBtn: pick('.mode-btn'), navVoice: pick('.nav-voice') };
+});
+
+console.log(JSON.stringify({ clear, modal, chips, errors }, null, 1));
+const g = (o) => o && o.w >= 44 && o.h >= 44 && o.display !== 'none' && !o.hidden;
+const ok = g(clear) && g(modal) && g(chips.chipToggle) && g(chips.modeBtn) && errors.length === 0;
 console.log(ok ? 'TOUCH-TARGET PASS ✅' : 'TOUCH-TARGET FAIL ❌');
 await Promise.race([browser.close(), new Promise(r => setTimeout(r, 3000))]);
 kill();

@@ -72,9 +72,9 @@
         </div>
 
         <div id="route-actions" class="route-actions" hidden>
-          <button id="swapBtn" class="ghost-btn" title="Swap">⇅</button>
+          <button id="swapBtn" class="ghost-btn" title="Swap" aria-label="Swap start and destination">⇅</button>
           <button id="goBtn" class="primary-btn">Route me clear</button>
-          <button id="clearRouteBtn" class="ghost-btn" title="Clear route">✕</button>
+          <button id="clearRouteBtn" class="ghost-btn" title="Clear route" aria-label="Clear route">✕</button>
         </div>
 
         <div id="avoid-toggle" class="avoid-toggle" hidden>
@@ -89,15 +89,15 @@
             Avoid highways
           </button>
         </div>
-        <div id="engineStatus" class="engine-status" hidden></div>
+        <div id="engineStatus" class="engine-status" role="status" hidden></div>
 
         <div id="route-card" class="route-card" hidden></div>
 
-        <div id="status" class="status" hidden></div>
+        <div id="status" class="status" role="status" hidden></div>
       </section>
 
       <!-- Slide-in menu / settings -->
-      <aside id="drawer" class="drawer" hidden>
+      <aside id="drawer" class="drawer" aria-label="Menu" hidden>
         <div class="drawer-head">
           <h2>Ghostway</h2>
           <button id="closeDrawer" class="icon-btn" aria-label="Close">×</button>

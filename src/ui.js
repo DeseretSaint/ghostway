@@ -272,9 +272,10 @@ function stepIcon(mod) {
 
 export function showStatus(msg, kind = 'info') {
   const s = $('#status');
-  s.textContent = msg;
   s.className = 'status ' + kind;
   s.hidden = false;
+  // Set text AFTER unhiding so screen readers announce it (role="status").
+  s.textContent = msg;
 }
 
 export function clearStatus() {

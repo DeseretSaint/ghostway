@@ -410,7 +410,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
+  min-height: 44px;
   padding: 4px 12px;
   border-radius: 999px;
   border: 1px solid var(--line-strong);
@@ -808,7 +808,7 @@ details summary {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
-  min-height: 36px;
+  min-height: 44px;
   padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
@@ -962,8 +962,8 @@ details summary {
   color: var(--ink);
   display: grid;
   place-items: center;
-  min-width: 36px;
-  min-height: 32px;
+  min-width: 44px;
+  min-height: 44px;
 }
 .nav-voice:hover {
   opacity: 0.9;
