@@ -581,6 +581,22 @@ body {
 .status.info {
   color: var(--muted);
 }
+.offline-banner {
+  position: absolute;
+  top: calc(max(10px, env(safe-area-inset-top)) + 60px);
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 9;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+  border: 1px solid var(--accent-2);
+  color: var(--accent-2);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
 
 /* Drawer */
 .scrim {

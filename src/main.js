@@ -136,6 +136,19 @@ async function init() {
   showStatus('Tap the locate button to start from your location, or search a destination.', 'info');
   registerSW();
   applyModeUI();
+  wireOfflineBanner();
+}
+
+// Maps-parity offline banner: the app still routes on-device when the network
+// drops (bundled graph + cached tiles), but search/traffic/geocoding don't —
+// say so instead of failing silently.
+function wireOfflineBanner() {
+  const banner = $('#offlineBanner');
+  if (!banner) return;
+  const update = () => { banner.hidden = navigator.onLine; };
+  window.addEventListener('online', update);
+  window.addEventListener('offline', update);
+  update();
 }
 
 // Lazily fetch the on-device road graph for the region a route enters — so a
