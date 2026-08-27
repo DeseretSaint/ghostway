@@ -617,6 +617,10 @@ async function routeWithFallbacks(from, to) {
 function selectOption(i) {
   if (!app.state.options[i]) return;
   app.state.chosen = i;
+  // Keep the route object's chosen index in sync too — renderEngineCard reads
+  // result.chosen, so without this the card re-renders with the OLD selection
+  // (map line updates, card aria-pressed/.chosen don't). Round-81 fix.
+  if (app.state.route?.engine) app.state.route.chosen = i;
   drawEngineRoutes();
   renderRouteCard(app, app.state.route);
 }

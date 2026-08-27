@@ -287,11 +287,22 @@ function renderEngineCard(app, card, result) {
         : '';
       // Over the detour budget: avoidance costs real extra time — say so.
       const overBudget = o.overBudget ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} costs extra time</span>` : '';
+      // Distance tradeoff vs the fastest option (driver-preference research,
+      // round 79: distance carries independent disutility — a route that is
+      // SHORTER in distance but a bit slower is genuinely preferred on short
+      // urban trips, so the card must make the distance delta visible, not
+      // just the time delta).
+      const dKm = o.distance - fastest.distance; // meters
+      const tradeoff =
+        fastest && o !== fastest && Math.abs(dKm) >= 100
+          ? `<span class="opt-tradeoff ${dKm < 0 ? 'shorter' : 'longer'}">${dKm < 0 ? '↓' : '↑'} ${fmtDistance(Math.abs(dKm))} ${dKm < 0 ? 'shorter' : 'longer'} than fastest</span>`
+          : '';
       return `
         <button class="route-opt ${i === chosen ? 'chosen' : ''}" data-opt="${i}" type="button" aria-pressed="${i === chosen}">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
           ${clearBadge}
           <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${delay}${bestEffort}${overBudget}</span>
+          ${tradeoff}
         </button>`;
     })
     .join('');
