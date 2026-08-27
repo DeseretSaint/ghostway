@@ -231,7 +231,12 @@ export class MapView {
       this._wireWaypointLayer();
       this._reapplyData();
     };
-    this.map.setStyle(url);
+    // diff: false — MapLibre's default style-diff path silently REMOVES our
+    // custom sources/layers (they're absent from the new base style) and never
+    // fires 'style.load', so the rebuild handler below would never run and the
+    // route/camera/endpoint layers would stay wiped. Force a full style swap,
+    // which always fires 'style.load'.
+    this.map.setStyle(url, { diff: false });
     this.map.once('style.load', rebuild);
   }
 
