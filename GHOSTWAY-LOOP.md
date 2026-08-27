@@ -727,3 +727,68 @@ block on these — it queues and moves on.
 CONCRETE REPRO: see screenshot img_180b5056ea06.jpg. The engine currently over-favors the highway/fastest even when a natural surface-street route is shorter distance and avoids cameras. Investigate: why did the engine pick the camera route over the green one? Is the distance model wrong? Is there a penalty for camera count vs. distance? Does the engine weight "fastest time" too heavily vs. "natural shortest route"?
 Deliver findings + a plan to the Ghostway chat. This is the current #1 priority for Slot-A (routing).
 SLOT-C CONFIRMED REPRO 2026-08-27 ~09:19 MDT: avoidance-audit live probe on committed tree (3013b93) reproduces it on the exact corridor — PG→Costco: Fastest/Balanced pass cameras at 7 m mid-route; Clearest still passes 1 cam at 25 m and is flagged "camera-clear path exists but exceeds detour budget" (i.e. a ≥30 m-clear route EXISTS but the 1.25×fastest+90 s budget rejects it). So the engine is NOT missing a clear path — the detour budget + time-only cost model are choosing the camera-passing route, matching Keaton's diagnosis (over-favors fastest time over natural/camera-free). Slot-A owns the fix per directive.
+
+## Driver preference research
+2026-08-27 ~09:20 MDT (slot-B round 79, research for the custom-engine rebuild — Keaton directive #2).
+Question: how do real drivers choose routes; when do they prefer surface arterials over freeways;
+what makes a route feel "natural"; how do commercial apps balance distance vs time vs obstacles.
+
+FINDINGS (published research):
+1. Drivers do NOT minimize time. Ramming 2002 (MIT, "Network knowledge and route choice"):
+   a MAJORITY of travelers fail to minimize travel time or distance. Observational GPS studies
+   (Ramming 2002, Li 2004, Zhu 2010, Prato & Bekhor 2006): FEWER THAN 50% of drivers take the
+   shortest-time route, with no clear preference for shortest-time over shortest-distance.
+2. Road-class preference is real but nuanced. US studies (Ramming/Li/Zhu) found travelers prefer
+   PRIMARY roads/freeways — but Flanders follow-ups link preference to road PURPOSE/environment,
+   not just class. J. Transport Geography 2015 (radial networks, orbital vs center): drivers weigh
+   comfort (avoid dense centers) against DIRECTNESS; when the surface route is spatially direct,
+   directness/distance often beats the orbital/freeway detour. This is exactly the Costco case:
+   the surface arterial is the direct line; the freeway is a time-bet with on/off-ramp overhead.
+3. Distance carries independent disutility (Wardman 1985, Leeds ITS WP212, stated-preference of
+   motorists' route choice; Wardman's later VTTS meta-analyses): utility = f(time, distance, ...).
+   Distance ≈ fuel/wear cost + perceived effort, so a route that is SHORTER in distance but a bit
+   slower is genuinely preferred when the time delta is small. Rule of thumb from the literature:
+   on short urban trips (<10 mi / 16 km — the turn-study exception threshold), time savings must
+   be substantial to justify extra distance; the freeway's fixed ramp overhead rarely pays off.
+4. Turn minimization = "natural feel". TRB 2016 ("Psychology of Route Choice in Familiar Networks:
+   Minimizing Turns and Embracing Signals"): drivers accept LONGER time AND distance for FEWER
+   turns; real driven routes have fewer turns/mile than BOTH the shortest-time and shortest-distance
+   paths; when a turn is unavoidable, drivers prefer making it at a SIGNALIZED intersection.
+   UCL London courier GPS study: 63% of trips minimized ANGULAR distance (straightness/turns) vs
+   51% for block distance — cognitive load, not meters, is what people minimize.
+5. Habit + familiarity dominate repeat trips. ~50% of commuters use a single route; route choice
+   goes subconscious/habitual (IEEE 2010 experimental route-choice studies); Knapper et al. 2016:
+   57% of 1,306 recorded trips repeated a prior route. A "natural" route to a local = the familiar
+   arterial chain they already drive — named, continuous, few decisions. Navigation systems that
+   ignore familiarity/turns/stoplights in favor of pure time/distance cost are documented to
+   underperform (PMC8395743 familiarity review; Beijing taxi study arXiv 2404.15589: a bounded-
+   rationality model with intersection-loss terms beat pure shortest-path by 12%).
+6. How Google Maps does it: optimizes FASTEST TIME (not shortest distance) as the primary metric,
+   but (a) shows 2-3 ALTERNATIVE routes and lets the user pick, (b) applies turn penalties
+   (left-across-traffic costs more), road-class weighting, historical+live traffic, and explicit
+   user prefs (avoid highways/tolls). The top result is deliberately not always the shortest.
+   Valhalla's production approach = per-request preference knobs: use_highways/use_roads/use_tolls
+   (0-1) implemented as edge-cost FACTORS (multipliers), plus turn/intersection penalties — the
+   industry-standard way to encode driver preference in a custom engine.
+
+IMPLICATIONS FOR THE GHOSTWAY ENGINE REBUILD (for Slot-A):
+- Replace time-only cost with a GENERALIZED COST: time + distance-equivalent (e.g. each extra km
+  ≈ N seconds of time, Wardman-style) + turn penalty (signalized < unsignalized) + road-class
+  continuity bonus (staying on one named arterial should cost less than hopping ramps) + camera
+  exposure. This directly produces "natural" routes: the State-St-style arterial wins when the
+  freeway only saves a minute or two.
+- Make the detour budget DISTANCE-aware, not time-only: today 1.25×fastest+90 s rejects the clear
+  Costco route even though it is likely SHORTER in distance. A clear route that adds little or no
+  distance should be served even if it costs a few minutes (research point 3: drivers accept
+  time-for-distance trades on short urban trips; research point 1: <50% take fastest anyway).
+- Keep the 3-option card (Fastest/Balanced/Clearest) — it matches Google's alternatives pattern —
+  but rank/default by generalized cost, and surface distance prominently in the option meta so the
+  shorter natural route is visibly competitive.
+- Long-term: a "prefer surface streets" knob (Valhalla use_highways analog, 0-1 edge-cost factor)
+  is the standard mechanism; cheap to add once generalized cost lands.
+
+SOURCES: eprints.whiterose.ac.uk/2340 (Wardman 1985); dspace.mit.edu/1721.1/49797 (Ramming 2002);
+trid.trb.org/1421056 (turns+signals 2016); discovery.ucl.ac.uk/16229 (angularity);
+doi 10.1016/j.jtrangeo.2015.08.013 (orbital vs center); journals.plos.org/plosone 0134322
+(Wardrop empirical test); PMC8395743 (familiarity review); arxiv 2404.15589 (Beijing taxi);
+valhalla docs costing_options (use_highways factors); Google Maps routing explainers (iblead et al.).
