@@ -30,7 +30,7 @@ async function main() {
   page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
   await page.evaluateOnNewDocument(() => {
     localStorage.setItem('gw-onboarded', '1');
-    localStorage.setItem('gw-units', 'km');
+    localStorage.setItem('gw-units', 'mi');
   });
   await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
   try {

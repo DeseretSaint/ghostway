@@ -38,11 +38,12 @@ export function escHtml(s) {
   ));
 }
 
-// Distance units preference (Maps parity): 'km' (default, metric) or 'mi'
-// (imperial). Persisted in localStorage. The whole app reads through
+// Distance units preference (Maps parity): 'mi' (default, imperial) or 'km'
+// (metric). Persisted in localStorage. The whole app reads through
 // fmtDistance/fmtNavDistance so flipping the pref re-skins every distance.
+// Default is imperial (mph/mi) for US users (Keaton's preference).
 export function getUnits() {
-  try { return localStorage.getItem('gw-units') === 'mi' ? 'mi' : 'km'; } catch { return 'km'; }
+  try { const v = localStorage.getItem('gw-units'); return v === 'km' ? 'km' : 'mi'; } catch { return 'mi'; }
 }
 export function setUnits(u) {
   try { localStorage.setItem('gw-units', u === 'mi' ? 'mi' : 'km'); } catch {}
