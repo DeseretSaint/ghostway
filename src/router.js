@@ -190,7 +190,7 @@ export function nearestNode(lon, lat) {
   const CELL = g.CELL;
   const gx = Math.floor(lon / CELL);
   const gy = Math.floor(lat / CELL);
-  let best = -1, bestScore = Infinity;
+  let best = -1, bestScore = Infinity, bestDist = Infinity;
   for (let ring = 0; ring < 8 && best === -1; ring++) {
     for (let dx = -ring; dx <= ring; dx++) {
       for (let dy = -ring; dy <= ring; dy++) {
@@ -209,13 +209,18 @@ export function nearestNode(lon, lat) {
           const deg = g.nodeDeg[n];
           const penalty = deg >= 3 ? 0 : deg === 2 ? 120 : 400;
           const score = d + penalty;
-          if (score < bestScore) { bestScore = score; best = n; }
+          // Selection uses distance + low-degree penalty so a real arterial
+          // node wins over a closer dead-end stub. But the caller-facing
+          // `dist` must be the TRUE snapping distance (meters), never the
+          // score — folding the penalty into it (and sqrt-ing metres) corrupts
+          // every downstream snap check (e.g. planRoutes' >1200 m guard).
+          if (score < bestScore) { bestScore = score; best = n; bestDist = d; }
         }
       }
     }
     if (best !== -1) break;
   }
-  return { node: best, dist: bestScore === Infinity ? Infinity : Math.sqrt(Math.max(0, bestScore)) };
+  return { node: best, dist: bestScore === Infinity ? Infinity : bestDist };
 }
 
 // ---- Cost modes ----
@@ -655,9 +660,11 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   }
 
   const balanced = astar(graph, s.node, t.node, 'moderate', edgeFactor, edgeDelay);
-  if (balanced && balanced.cameras < fastest.cameras && balanced.distance <= fastest.distance * 1.35) {
-    options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
-  } else if (balanced && balanced.distance <= fastest.distance * 1.05) {
+  // Offer Balanced whenever it's a sane detour — the geometry-aware dedupe
+  // below drops it if it traces the same road as Fastest. The old gate also
+  // required fewer cameras, which hid surface-street alternatives whenever
+  // camera counts tied (the "only Fastest shows" complaint).
+  if (balanced && balanced.distance <= fastest.distance * 1.35) {
     options.push({ mode: 'moderate', label: 'Balanced', route: balanced });
   }
 
@@ -685,11 +692,11 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   if (clearest) clearest.strictFallback = strictFallback;
   if (clearest) clearest.overBudget = overBudget;
   if (clearest) {
-    // strict is only a distinct option if it actually avoids more cameras
-    const bestSoFar = Math.min(...options.map((o) => o.route.cameras));
-    if (clearest.cameras < bestSoFar) {
-      options.push({ mode: 'strict', label: 'Clearest', route: clearest });
-    } else if (!options.some((o) => o.mode === 'moderate') && clearest.cameras < fastest.cameras) {
+    // Offer Clearest whenever it's a plausible alternative — even when camera
+    // counts tie Fastest (dense corridors: the surface-street option may pass
+    // the same camera count on completely different roads). Geometry-aware
+    // dedupe below drops it if it's the same shape; overBudget flags the cost.
+    if (clearest.distance <= fastest.distance * 2) {
       options.push({ mode: 'strict', label: 'Clearest', route: clearest });
     }
   }
@@ -719,7 +726,50 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
 }
 
 function similar(a, b) {
-  if (Math.abs(a.distance - b.distance) / Math.max(a.distance, 1) > 0.03) return false;
-  if (a.cameras !== b.cameras) return false;
-  return true;
+  // Geometry-aware sameness: two options are "the same route" only when they
+  // trace nearly the same road. The old distance+camera-count comparison
+  // merged genuinely different corridors (I-15 vs State Street with similar
+  // distance and equal camera counts) and hid real alternatives from the user.
+  if (Math.abs(a.distance - b.distance) / Math.max(a.distance, 1) > 0.25) return false;
+  return routeOverlap(a.coords, b.coords) > 0.85;
+}
+
+// Fraction of route B's length that runs within 60 m of route A (grid-indexed,
+// O(n)). Symmetric enough for dedupe: corridors that split for any meaningful
+// stretch (a different arterial, a freeway vs its frontage road) score low.
+function routeOverlap(aCoords, bCoords) {
+  if (!aCoords || !bCoords || aCoords.length < 2 || bCoords.length < 2) return 0;
+  const kx = Math.cos((bCoords[0][1] * Math.PI) / 180) * 111320;
+  const ky = 111320;
+  const CELL = 120; // meters
+  const grid = new Map();
+  for (const c of aCoords) {
+    const k = Math.floor((c[0] * kx) / CELL) + ',' + Math.floor((c[1] * ky) / CELL);
+    let arr = grid.get(k);
+    if (!arr) grid.set(k, (arr = []));
+    arr.push([c[0] * kx, c[1] * ky]);
+  }
+  let near = 0, total = 0;
+  for (let i = 1; i < bCoords.length; i++) {
+    const x0 = bCoords[i - 1][0] * kx, y0 = bCoords[i - 1][1] * ky;
+    const x1 = bCoords[i][0] * kx, y1 = bCoords[i][1] * ky;
+    const segLen = Math.hypot(x1 - x0, y1 - y0);
+    if (segLen < 1) continue;
+    total += segLen;
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    const gx = Math.floor(mx / CELL), gy = Math.floor(my / CELL);
+    let best = Infinity;
+    for (let dx = -1; dx <= 1 && best > 60; dx++) {
+      for (let dy = -1; dy <= 1 && best > 60; dy++) {
+        const pts = grid.get((gx + dx) + ',' + (gy + dy));
+        if (!pts) continue;
+        for (const [px, py] of pts) {
+          const d = Math.hypot(px - mx, py - my);
+          if (d < best) { best = d; if (best <= 60) break; }
+        }
+      }
+    }
+    if (best <= 60) near += segLen;
+  }
+  return total ? near / total : 0;
 }
