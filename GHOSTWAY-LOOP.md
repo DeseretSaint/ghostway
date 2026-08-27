@@ -386,10 +386,25 @@ from this queue first when it's non-empty.
       headless UI: PG→Costco (known budget case) renders "best effort — clear route
       too long · costs extra time" on the Clearest card; interact-check PASS, build
       exit 0, 0 page errors.
-- [ ] UX NEXT (slot-B): BYU corridor badge — once slot-A's in-flight gate-snap
-      (router.js clearTail, uncommitted, mtime live) lands, verify the Clearest card
-      shows "clear to within ~120 m" for BYU (clearToM branch). Probe: PG→BYU route,
-      assert .opt-warn text. Do NOT touch router.js until slot-A commits.
+- [x] UX NEXT (slot-B): BYU corridor badge — RESOLVED 2026-08-27 (slot-B round 54,
+      commit below): gate-snap (8b58dbe) verified in the REAL headless UI. New
+      hermetic scripts/byu-gate-check.mjs injects the exact audit endpoints
+      (PG→BYU [-111.6553,40.2523]) via __gw.state, clicks the real #goBtn, and
+      asserts the Clearest card badge. PASS: "clear to within ~118 m" renders
+      (37-min gate route, matches audit clearToM=118 exactly); "best effort —
+      camera-walled" badge ABSENT; 0 page errors; interact-check PASS; build
+      exit 0. NOTE: photon-geocoded "Brigham Young University" dest lands on a
+      DIFFERENT node than the audit coords and still shows camera-walled
+      best-effort — gate-snap is endpoint-sensitive (tail >200 m from that
+      node). Not a regression (badge is honest), but a future UX angle: gate-
+      snap could search a small dest-radius for the shortest clear tail.
+- [ ] UX/routing (slot-B round 54 finding): gate-snap is endpoint-sensitive —
+      photon-geocoded "Brigham Young University" dest snaps to a node whose
+      exposed tail >200 m, so the UI route still shows camera-walled best-effort
+      while the audit coords get the gate-snap badge. Future angle: clearTail()
+      could search a small dest-radius (e.g. nearest 3-5 snap candidates) for
+      the shortest clear tail. Touches router.js — slot-A territory; filed here
+      for visibility.
 
 ## Needs Keaton
 Decisions that require Keaton (money, legal, destructive ops). Loop does not
@@ -481,7 +496,9 @@ block on these — it queues and moves on.
 || 2026-08-27 ~02:45 MDT | accessibility (UX, slot-B round 52) | onboarding a11y (landed the pinned round-51 spec): .ob-card role=dialog+aria-modal+aria-label; startOnboarding focuses #obNext; Escape dismisses onboarding via canonical #obSkip; escape-check.mjs gains a first-run section (fresh localStorage, phone viewport). Reaped stale slot-A lock first (pid dead, mtime stable); slot-A's uncommitted gate-snap changeset untouched. | build exit 0; escape-check PASS 12/12 (obShown/obDialog/obFocus/obAfterEsc/obFlagSet all true, 0 errors); interact-check PASS | committed b4eef44 — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
 | 2026-08-27 ~02:50 MDT | routing (slot-A round 52) | GATE-SNAP for camera-walled destinations (resolves the long-queued BYU item + slot-C's 02:46 finding that the intermediate version didn't fire): router.js clearTail() = forward BFS from origin over floor-legal edges (clear set, first-edge exempt) + reverse Dijkstra from destination (shortest exposed tail); when walled and tail ≤200 m, serve the hard-floor-clear route to the gate instead of a floor-breaking best-effort route. ROOT CAUSE of the intermediate no-fire: the in-search maxCost prune tracks time on the best-score label only and rejected the 37-min gate route under the 26.7-min budget — fixed with unbounded search + post-search budget check (relaxed 2x+5min, gate routes only ever offered for walled destinations). clearToM flag exposed; ui.js badge "clear to within ~118 m" (hunk rode slot-B's b4eef44); avoidance-audit gate-snapped routes PASS the floor check with a gate note. | build exit 0; engine-check PASS (modes distinct); snap-dist-check PASS (90.0/334.8 m); floor-audit PASS (0 strict-legal <31.4 m); avoidance-audit PASS — BYU Clearest mid-route min 40 m (was 16 m), gate-snapped clear to within ~118 m (gate node 436862 North Canyon Rd — exact round-40/45 numbers); other 4 corridors unchanged; best-effort 5→4 | committed 8b58dbe — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
 | 2026-08-27 02:58 MDT | tests (slot-C) | INDEPENDENT gate-snap verification on COMMITTED tree (8b58dbe) — closes the 02:46 VERIFY NEXT item. /tmp/gw-gate-probe.mjs re-run: BYU Clearest walled=true, clearToM=118 (was 0 on the intermediate build). Full battery: floor-audit 0 strict-legal edges <31.4 m; engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit PASS — BYU Clearest mid-route min 40 m + "gate-snapped: clear to within ~118 m", other 4 honest budget best-effort (min 25/12/17/4 m). slot-A live in-flight ui.js badge-wording edit (uncommitted, holder preview :4173 up) left untouched. gh token STILL invalid — 9 commits stranded (already in Needs Keaton). | all 4 checks PASS; probe clearToM=118 | verified — gate-snap effective, no regressions |
+| 2026-08-27 03:11 MDT | tests (slot-C) | read-only sweep under FRESH slot-B lock (03:09, round 54 byu-gate-badge-verify, holder preview :4173 up → no build, no :4173, no edits; only untracked scripts/byu-gate-check.mjs since 02:58) — NO code changed, verify only. All invariants HOLD, ZERO drift from 02:58: floor-audit 0 strict-legal edges <31.4 m (273 in 30-40 m bucket); engine-check modes distinct (Fastest/Balanced 10km/10min/2cams, Clearest 10km/11min/1cam); snap-dist-check 90.0/334.8 m; avoidance-audit PASS — BYU gate-snapped (Clearest mid-route min 40 m, clear to within ~118 m), other 4 honest budget best-effort (25/12/17/4 m), walled/budget split correct. gh token STILL invalid — now 11 commits ahead of origin/main stranded (36439e5 r53 badge + a098d43 ledger added). | floor-audit/engine-check/snap-dist-check/avoidance-audit all PASS | verified — no regressions, nothing new |
 | 2026-08-27 ~03:05 MDT | ops (slot-A, special task re-check) | LAZY-ENGINE SPECIAL TASK: premise stale — changeset already evaluated/committed/pushed in round 48 (03e9224 confirmed on origin/main; working tree 100% clean, 0 uncommitted files, no lock). Nothing to evaluate or commit; ledger already marks it TASK COMPLETE — DO NOT RE-DO. Attempted to push the 11 stranded commits (aa84b53..a098d43): gh token still invalid AND git credential helper fails ("could not read Username") → push still blocked (Needs Keaton). | git status --porcelain empty; git branch -r --contains 03e9224 = origin/main; git push fails on auth | verified — no action needed; push awaits auth fix |
+| 2026-08-27 ~03:15 MDT | ux (slot-B round 54) | verified gate-snap (8b58dbe) in the REAL headless UI + new hermetic guard scripts/byu-gate-check.mjs: injects exact audit endpoints (PG→BYU) via __gw.state, clicks real #goBtn, asserts Clearest badge. BYU Clearest renders "clear to within ~118 m" (37-min gate route — matches audit clearToM=118 exactly); "best effort — camera-walled" badge gone; 0 page errors. FINDING: photon-geocoded "Brigham Young University" dest snaps to a different node (tail >200 m) → still honest camera-walled best-effort; gate-snap is endpoint-sensitive (queued future angle: dest-radius tail search). | byu-gate-check PASS; interact-check PASS (0 page errors); build exit 0 | committed (local) — PUSH BLOCKED (gh token invalid; see Needs Keaton) |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).
