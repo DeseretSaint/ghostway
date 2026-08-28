@@ -239,7 +239,7 @@ from this queue first when it's non-empty.
       about the final approach, not a detour complaint). Re-verify (8) after
       removal — the overflow may disappear on its own.
 
-      (11) REMOVE THE DRAGGABLE WAYPOINT — it renders in a color that reads as
+      (11) REMOVE THE DRAGGABLE WAYPOINT — RESOLVED 2026-08-27 ~22:05 (slot-C, commit a815613, PUSHED): it renders in a color that reads as
       another surveillance-camera marker (unintuitive, no clear purpose,
       conflicts with the visual language of the map). Delete the waypoint-drag
       feature (round landed ~12:00 waypoint-drag; find + remove UI affordance,
@@ -1569,3 +1569,5 @@ today: verdict CLOSED, brief delivered to Ghostway chat, no engine/UX change req
 engine rebuild COMPLETE on origin/main and already consumes the research (generalized cost +
 distance-aware budget + surface-street knob + "Most natural" pill). NO new research, NO code
 change, NO brief re-delivery this run (avoids duplicate spam). Zero slot-B UX items open.
+
+| 2026-08-27 ~22:09 MDT | tests (slot-C) | FOUND + FIXED A REAL ROUTING REGRESSION in slot-B's uncommitted waypoint-removal changeset (queue item 11). slot-B deleted the MapView waypoint methods/handlers (src/map-view.js: `_wireWaypoint`, `onWaypointDrag`, `onWaypointTap`, `setWaypoint`, waypoint layers + `_waypointData`) but LEFT main.js calling them → `F.map.onWaypointDrag is not a function` threw at boot, so the route card NEVER rendered and routing was 100% broken (engine-e2e FAILED: card: none, startNavBtn missing). COMPLETED the removal on the main.js side: removed the boot `onWaypointDrag`/`onWaypointTap` wiring, deleted the now-orphaned `reRouteViaWaypoint()` function, removed `setWaypoint()` calls in `drawEngineRoutes`/`startNav`/`clearRoute`, dropped the now-false "Draggable waypoint" legend entry, and the dead `_waypointData` field. Verified grep: zero remaining refs to the removed API across src + index.html. FULL BATTERY GREEN after fix: build exit 0; engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams); snap-dist 90.0/334.8 m; floor-audit 0 strict-legal <31.4 m; avoidance-audit LIVE PROBE PASS (5 corridors ≥30 m clearable); avoidance-audit-random SEED=314159 PASS (22/22 clearable floor, camera-aware alt on all 21); engine-e2e PASS standalone (card renders Fast/Balanced/Clearest, strict switch, startNav + banner + voice, ERRORS []); interact-check PASS (full flow, 0 page errors). Committed + pushed a815613 (fixes deploy-blocking breakage — Keaton's iPhone would have hit a dead route card). Queue item (11) marked resolved. | engine-check/snap-dist/floor-audit/avoidance-audit/avoidance-audit-random/engine-e2e/interact-check all PASS | verified — regression fixed, routing restored, item 11 closed |
