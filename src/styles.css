@@ -1006,6 +1006,7 @@ details summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   width: 100%;
   min-height: 48px;
@@ -1036,6 +1037,7 @@ details summary {
 .route-opt-mod {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   width: 100%;
   min-height: 38px;
@@ -1065,7 +1067,9 @@ details summary {
 .opt-meta {
   color: var(--muted);
   font-size: 12px;
-  white-space: nowrap;
+  /* Badges (cameras + hwy + delay + best-effort) can exceed the button width
+     on narrow phones — wrap instead of spilling out (queue item 5). */
+  overflow-wrap: anywhere;
 }
 .opt-cams.clear {
   color: var(--accent);
