@@ -200,6 +200,62 @@ from this queue first when it's non-empty.
       Update tests/scripts referencing avoidHighways. Verify: no
       references remain (grep), build + full suite PASS, UI shows no toggle.
 
+      ADDENDUM 4 (Keaton field feedback, Waze comparison ~19:55 MDT 2026-08-27,
+      screenshot img_9c8994de5f83 — route card now shows Fastest/Balanced/
+      Strict correctly, no-hw sunset landed):
+
+      (8) ZERO SCROLL on the navigation/route card — the panel must fit the
+      map + Start button + options without any scrolling at 320-430 px widths.
+      Verify with a real headless geometry probe (document.scrollingElement +
+      panel scrollHeight == clientHeight, no scrollable overflow anywhere in
+      the card). This was attempted in round 45 (sticky Start btn); the bar is
+      now stricter: NO scroll, period.
+
+      (9) SELECTED MODE = THE ROUTE, not a re-choice. Selecting Strict should
+      show ONE route (the strict route) — not a card listing all three modes
+      again, forcing the user to pick the mode they already picked. Spec:
+      mode picker (Fast/Balanced/Strict segmented control or chips) lives at
+      the TOP level of search, separate from the route card; the route card
+      shows only the route for the selected mode. Persist the chosen mode
+      (localStorage, like gw-avoid-hw was) and DEFAULT TO STRICT — camera
+      avoidance is the app's mission, so new users get Strict first. Switching
+      the mode chip re-routes and swaps the single card.
+
+      (10) REMOVE OPTION-CARD WARNINGS — drop the "costs extra time",
+      "best effort — clear route too long", and "+X min vs fastest" detour
+      warnings entirely. The map shows the routes side by side; time/distance
+      are visible per option; the warnings are noise. KEEP: 0-camera/
+      camera-free badge, per-option camera count, "Most natural" pill, and the
+      honest gate-snap "clear to within ~N m" (that one is a real safety fact
+      about the final approach, not a detour complaint). Re-verify (8) after
+      removal — the overflow may disappear on its own.
+
+      (11) REMOVE THE DRAGGABLE WAYPOINT — it renders in a color that reads as
+      another surveillance-camera marker (unintuitive, no clear purpose,
+      conflicts with the visual language of the map). Delete the waypoint-drag
+      feature (round landed ~12:00 waypoint-drag; find + remove UI affordance,
+      drag handling, and tests) or, if waypoints are kept for future use,
+      restyle to a clearly-distinct affordance — but default is REMOVE. Verify
+      no dead code/refs remain and the camera legend is unambiguous.
+
+      (12) STATE-DOT-AGNOSTIC LIVE TRAFFIC — the data-sources text says "Live
+      traffic: UDOT open events (Utah) + WZDx work-zone data (nationwide)",
+      which is Utah favoritism. WZDx (work zones) is already nationwide; the
+      gap is DOT *incident/event* feeds. Most state DOTs expose open 511
+      APIs (many are ArcGIS/GeoJSON or the shared 511 systems — e.g.
+      UDOT's pattern generalizes; several states use the same vendor).
+      Spec: build a per-state DOT event-feed registry (docs + config keyed
+      by state → feed URL + parser adapter), auto-detect the states the
+      route/user touches (start state, destination state, states crossed by
+      the route bbox) and activate those feeds. Priority: UT first (already
+      working), then the states on common corridors from UT (ID, WY, CO, NV,
+      AZ, NM, CA) — each needs a small adapter (URL + field mapping to the
+      existing traffic-event shape). Fallback when a state has no open feed:
+      WZDx + community reports only, no error. Update the data-sources
+      wording to list the actual active feeds + "your state's DOT" behavior,
+      no "Utah" branding. Research each candidate state's 511/ArcGIS endpoint
+      before writing the adapter (grounded, no guessing URLs).
+
 - [x] ROUTING CONNECTIVITY (RESOLVED slot-A 2026-08-27 — runtime connected-components check; see ledger line ~1223) — filed 2026-08-27 ~16:38 from randomized
       avoidance audit): 1/50 sampled pairs = (-111.6106,40.1738)→(-111.5440,
       39.9701) — two real roads (deg≥3, in-bbox) with NO path between them →
@@ -1379,3 +1435,4 @@ multiplier meta-analysis).
 | 2026-08-27 ~19:4x MDT | tests (slot-C) | verification battery over committed+pushed HEAD == origin/main == dc0d73e (0/0, no lock, no live procs, :4173 free; git diff c019e24..HEAD = ledger-only = zero code drift since 19:5x battery) — NO code changed, verify only. All camera-avoidance invariants HOLD: engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m). RANDOMIZED GATE fresh seed 424242 (never sampled before) PASS: 24 clean, 1 clearable-floor PASS, camera-aware alt present on all 22 camera-adjacent fastest routes, 0 unreachable, 0 crashes/timeouts — 10th distinct green seed family, gate generalizes. nohw-gate probe (.probe-nohw0.mjs) still CLEAN on c019e24: all 4 freeway-free corridors (fastest hwyKm=0) emit NO no_highways option — item (4) fix holds. LIVE ROUTING: engine-e2e PASS standalone exit 0 (strict 3 options incl 0-cam 6.2 mi honest best-effort badge, startNav, banner + voice); MINOR OBS: ERRORS array carried 3 net::ERR_CONNECTION_REFUSED entries this run (vs usual []) — suite gate still PASSes (exit 0), looks like SW/photon teardown network noise, not a functional regression; watch on next run. 0 orphan vite servers after. | engine-check/snap-dist/avoidance-audit-random(SEED=424242)/nohw-probe/engine-e2e all PASS | verified — zero drift, green; fresh-seed generalization + nohw gate hold |
 | 2026-08-27 ~20:1x MDT | routing (slot-A) | HIGHEST-PRIORITY #1 directive re-fire (cron) + lazy-engine re-check — NO-OP (read-state-first). Item (1) PG→Costco camera-route CLOSED: 6-step engine rebuild (2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route cf9869a + connectivity 44f5bf4 + randomized gate 3a8e246 + gate false-FAIL 57b3d9c + seed-31337 far-detour 915ae51 + nohw gate c019e24) all on origin/main; Clearest = natural surface arterial, 0 cams/165 m, reconverges State St; driver-preference findings 1-48 logged (lines 886-1089) and consumed by the rebuild. Item (2) lazy-engine premise STALE: 03e9224 ancestor of origin/main; main.js/config.js/map-view.js clean; NO uncommitted changeset to evaluate/commit; DO NOT RE-DO. VERIFY THIS RUN: HEAD == origin/main (0/0 after fetch); routing files diff empty; engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m). No locks, no live procs. Plan exhausted; awaiting new field-drive feedback from Keaton. | engine-check PASS; snap-dist PASS; rev-list 0/0; routing diff empty | verified — directive complete; no new routing work |
 | 2026-08-27 ~20:2x MDT | routing (slot-A) | HIGHEST-PRIORITY #1 directive re-fire (cron) + lazy-engine re-check — NO-OP (read-state-first). Item (1) PG→Costco camera-route CLOSED: 6-step engine rebuild (2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route cf9869a + connectivity 44f5bf4 + randomized gate 3a8e246 + gate false-FAIL 57b3d9c + seed-31337 far-detour 915ae51 + nohw gate c019e24) all on origin/main; Clearest = natural surface arterial, 0 cams/165 m, reconverges State St; driver-preference findings 1-48 logged + consumed by rebuild. Item (2) lazy-engine premise STALE: 03e9224 ancestor of origin/main; main.js/config.js/map-view.js clean; NO uncommitted changeset to evaluate/commit; DO NOT RE-DO. VERIFY THIS RUN: HEAD == origin/main == 167218e (0/0 after fetch); routing files diff empty; build exit 0 (999ms); engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m). No locks, no live procs; only untracked dead-holder probe scripts (untouched). Plan exhausted; awaiting new field-drive feedback from Keaton. | build exit 0; engine-check PASS; snap-dist PASS; rev-list 0/0; routing diff empty | verified — directive complete; no new routing work |
+| 2026-08-27 ~19:5x MDT | tests (slot-C) | verification battery over committed HEAD == b1a1957 (0 ahead/0 behind; src/ui.js uncommitted = slot-B LIVE work, mtime 19:55, overflow-check running on :4173 → engine-level probes only, no build, no :4173 contention) — NO code changed, verify only. All camera-avoidance invariants HOLD, ZERO drift: engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m); 5-corridor avoidance-audit PASS (PG->Costco Keaton repro stays fixed, BYU gate 40m/~118m, Lehi->SLC 142m, Orem->Airport 96m, AF->PC 40m; 4 budget best-effort). RANDOMIZED GATE fresh seed 98765 (never sampled before) PASS: 24 clean, camera-aware alt present on all 23 camera-adjacent fastest routes, 0 unreachable, 0 crashes/timeouts — 11th distinct green seed family, gate generalizes. | engine-check/snap-dist/avoidance-audit/avoidance-audit-random(SEED=98765) all PASS | verified — zero drift, green; fresh-seed generalization confirmed |
