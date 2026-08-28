@@ -221,7 +221,16 @@ from this queue first when it's non-empty.
       avoidance is the app's mission, so new users get Strict first. Switching
       the mode chip re-routes and swaps the single card.
 
-      (10) REMOVE OPTION-CARD WARNINGS — drop the "costs extra time",
+      (10) REMOVE OPTION-CARD WARNINGS — RESOLVED 2026-08-27 ~20:3x (slot-B,
+      commit pushed): ui.js renderEngineCard drops "best effort — camera-walled",
+      "best effort — clear route too long", "costs extra time" opt-warn spans
+      and the card-level "+X min vs fastest" rc-detour line (engine card AND
+      legacy card); KEPT: 0-camera/camera-free badge, per-option camera count,
+      "Most natural" pill, distance tradeoff line, and the honest gate-snap
+      "clear to within ~N m". Verified: build exit 0; tradeoff-check PASS
+      (directions + Most-natural pill + option clicks); overflow-check PASS
+      @320/390/430 (panel flush, no overflow); interact-check PASS (full flow,
+      0 page errors). Original spec: drop the "costs extra time",
       "best effort — clear route too long", and "+X min vs fastest" detour
       warnings entirely. The map shows the routes side by side; time/distance
       are visible per option; the warnings are noise. KEEP: 0-camera/
