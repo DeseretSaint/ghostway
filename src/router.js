@@ -877,11 +877,20 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   // post-search-check pattern gate-snap already uses below.
   const strictProbe = astar(graph, s.node, t.node, 'strict', edgeFactor, edgeDelay, {});
   const distOk = strictProbe && (strictProbe.distance - fastest.distance) <= distSlack;
-  let clearest = strictProbe && (strictProbe.duration <= strictBudget || (distOk && strictProbe.duration <= strictTimeCap)) ? strictProbe : null;
+  // Large-detour clear cap (new): a corridor where the only camera-free path is
+  // far longer than the budget (e.g. dense-camera PG→Orem needs a 3.3x loop) would
+  // otherwise be dropped by the time gate AND collapse into Fastest under the
+  // geometry dedupe — leaving the user NO camera-aware choice at all (seed-31337
+  // pair 7: fastest passes 2 cams, only `off` offered). If the strict probe is
+  // genuinely camera-free (0 cams) and within a sane distance ceiling (4x), still
+  // surface it as a best-effort Clearest so the driver can choose to avoid plates.
+  const withinCap = strictProbe && strictProbe.cameras === 0 && strictProbe.distance <= fastest.distance * 4;
+  let clearest = strictProbe && (strictProbe.duration <= strictBudget || (distOk && strictProbe.duration <= strictTimeCap) || withinCap) ? strictProbe : null;
   let strictFallback = false;
   let overBudget = false;
   let walled = false;
   let clearToM = 0;
+  let largeDetour = false;
   if (!clearest) {
     // Camera-walled or budget-exhausted. The unbounded probe already tells us
     // which: null = truly walled (no ≥floor path anywhere); an over-budget hit
@@ -938,16 +947,26 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     strictFallback = true;
     overBudget = true;
   }
+  if (clearest && clearest === strictProbe && !strictFallback) {
+    // Accepted only via the large-detour clear cap (camera-free but far over the
+    // time budget): surface honestly as a best-effort Clearest, not as a win.
+    largeDetour = true;
+    strictFallback = true;
+    overBudget = true;
+  }
   if (clearest) clearest.strictFallback = strictFallback;
   if (clearest) clearest.overBudget = overBudget;
   if (clearest) clearest.walled = walled;
   if (clearest) clearest.clearToM = clearToM;
+  if (clearest) clearest.largeDetour = largeDetour;
   if (clearest) {
     // Offer Clearest whenever it's a plausible alternative — even when camera
     // counts tie Fastest (dense corridors: the surface-street option may pass
     // the same camera count on completely different roads). Geometry-aware
-    // dedupe below drops it if it's the same shape; overBudget flags the cost.
-    if (clearest.distance <= fastest.distance * 2) {
+    // dedupe below drops it if it's the same shape; overBudget/largeDetour flag
+    // the cost. The large-detour clear cap (withinCap) relaxes the old hard 2x
+    // clamp so a far-longer but genuinely camera-free route is still shown.
+    if (clearest.distance <= fastest.distance * 4 || withinCap) {
       options.push({ mode: 'strict', label: 'Clearest', route: clearest });
     }
   }
@@ -973,6 +992,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
       o.overBudget = !!o.route.overBudget;
       o.walled = !!o.route.walled;
       o.clearToM = o.route.clearToM || 0;
+      o.largeDetour = !!o.route.largeDetour;
     }
   }
 
