@@ -36,14 +36,17 @@ jobs:
 
       - name: Checksums
         working-directory: android/app/build/outputs/apk/debug
-        run: sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt
+        run: |
+          cp app-debug.apk ghostway-android.apk
+          sha256sum ghostway-android.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ghostway-debug-apk
+          name: ghostway-android-apk
           path: |
-            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/debug/ghostway-android.apk
             android/app/build/outputs/apk/debug/SHA256SUMS.txt
 
       - name: Publish rolling release
@@ -55,12 +58,8 @@ jobs:
           TAG=android-latest
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$TAG" \
-            --title "Ghostway Android (auto-build)" \
-            --notes "Automated build of the current main branch.
-
-          Sideload the APK, then enable Android Auto: Android Auto app → About → tap the version ~10x → Developer settings → 'Unknown sources'. Full guide: docs/android-auto-setup.md.
-
-          Verify integrity with SHA256SUMS.txt." \
+            --title "Ghostway for Android — download & install" \
+            --notes-file .github/RELEASE-NOTES-android.md \
             --prerelease \
-            android/app/build/outputs/apk/debug/*.apk \
+            android/app/build/outputs/apk/debug/ghostway-android.apk \
             android/app/build/outputs/apk/debug/SHA256SUMS.txt

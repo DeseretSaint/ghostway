@@ -1,14 +1,19 @@
 # Android Auto — install & enable (Ghostway sideload path)
 
+**TL;DR:** Download `ghostway-android.apk` from
+[Releases](https://github.com/DeseretSaint/ghostway/releases/tag/android-latest)
+→ open it → allow "install unknown apps" → install. Then in the Android Auto
+app: About → tap the version ~10× → Developer settings → "Unknown sources" ON.
+Details below.
+
 Android Auto does not require the Play Store. It runs **sideloaded APKs** once
-you turn on developer mode and allow unknown sources. Ghostway ships its AA
-wrapper as a debug APK built by CI (`android-apk.yml` → artifact
-`ghostway-debug-apk`).
+you turn on developer mode and allow unknown sources. Ghostway's Android app
+is built automatically on every push (workflow `android-apk.yml` → the
+`android-latest` release, refreshed automatically).
 
 ## One-time setup (about 2 minutes)
 
-1. Download the APK: GitHub repo → **Actions** → latest **android-apk** run →
-   **Artifacts** → `ghostway-debug-apk` (unzip it on the phone).
+1. Download the APK: **[Releases page](https://github.com/DeseretSaint/ghostway/releases/tag/android-latest)** → download **ghostway-android.apk** on the phone.
 2. On the phone, open the **Android Auto** app (may be in Settings → apps).
 3. Scroll to the bottom → **Version and permissions info** (or "About").
 4. Tap the **version number ~10 times** until developer mode is offered.
