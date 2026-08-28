@@ -2,7 +2,7 @@ package app.ghostway;
 
 import android.content.Intent;
 import androidx.car.app.CarAppService;
-import androidx.car.app.validation.HostValidator;
+import androidx.car.app.CarContext;
 import androidx.car.app.Session;
 import androidx.car.app.Screen;
 import androidx.car.app.model.ItemList;
@@ -10,6 +10,7 @@ import androidx.car.app.model.ListTemplate;
 import androidx.car.app.model.Row;
 import androidx.car.app.model.Template;
 import androidx.car.app.model.Action;
+import androidx.car.app.validation.HostValidator;
 
 /**
  * Ghostway's Android Auto session (v1): a shallow, templated mirror of the
@@ -39,23 +40,23 @@ public class GhostwayCarAppService extends CarAppService {
     }
 
     static class HomeScreen extends Screen {
-        HomeScreen(androidx.car.app.CarContext ctx) {
+        HomeScreen(CarContext ctx) {
             super(ctx);
         }
 
         @Override
         public Template onGetTemplate() {
-            ItemList list = ItemList.builder()
-                .addItem(Row.builder()
+            ItemList list = new ItemList.Builder()
+                .addItem(new Row.Builder()
                     .setTitle("Open Ghostway on this phone")
                     .addText("Routing, camera avoidance, and navigation run in the phone app; the car screen mirrors status in v1.")
                     .build())
-                .addItem(Row.builder()
+                .addItem(new Row.Builder()
                     .setTitle("Camera-avoiding navigation")
-                    .addText("Strict mode keeps you ≥30 m from known ALPR cameras on clearable corridors.")
+                    .addText("Strict mode keeps you 30+ m from known ALPR cameras on clearable corridors.")
                     .build())
                 .build();
-            return ListTemplate.builder()
+            return new ListTemplate.Builder()
                 .setSingleList(list)
                 .setTitle("Ghostway")
                 .setHeaderAction(Action.APP_ICON)
