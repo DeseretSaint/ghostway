@@ -75,12 +75,55 @@ export async function loadTraffic(bbox, force = false) {
       });
     }
     cache = { ok: true, events, grid: buildGrid(events), at: Date.now() };
+    // Merge per-state DOT feeds (ID/AZ/NV/CO verified) into the cache. A fetch
+    // that finishes after the UDOT layer updates the cache in place — next
+    // reader within the 5-min TTL gets the merged set.
+    loadDotFeeds(bbox, events).then((extra) => {
+      if (extra.length && cache && cache.at === Date.now()) {
+        cache.events = cache.events.concat(extra);
+        cache.grid = buildGrid(cache.events);
+      }
+    }).catch(() => {});
     return cache;
   } catch (e) {
     console.warn('traffic load failed', e.message);
     cache = { ok: false, events: [], grid: new Map(), at: Date.now() };
     return cache;
   }
+}
+
+// ---- Per-state DOT event feeds (queue item 12) ----
+// State-DOT-agnostic incident layer: for every state the corridor touches that
+// has a verified key-free feed, fetch + parse it in parallel and merge into the
+// event set. States without a feed degrade silently to the national WZDx
+// snapshot + community reports. Registry + parsers: src/data/dot-feeds.js.
+import { DOT_FEEDS, statesForBbox } from './data/dot-feeds.js';
+
+async function loadDotFeeds(bbox, existingEvents) {
+  const states = statesForBbox(bbox);
+  const jobs = [];
+  for (const st of states) {
+    for (const feed of DOT_FEEDS[st] || []) {
+      // Skip a feed if the primary layer (e.g. UDOT) already covers this state.
+      if (st === 'UT' && existingEvents.length) continue;
+      jobs.push(
+        (async () => {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 20000);
+          const res = await fetch(feed.url, { signal: ctrl.signal });
+          clearTimeout(t);
+          if (!res.ok) throw new Error(`${feed.name} ${res.status}`);
+          const j = await res.json();
+          return feed.parse(j, bbox);
+        })().catch((e) => {
+          console.warn(`dot feed ${feed.name} failed:`, e.message);
+          return [];
+        })
+      );
+    }
+  }
+  const results = await Promise.all(jobs);
+  return results.flat();
 }
 
 function buildGrid(events) {
