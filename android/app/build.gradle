@@ -27,8 +27,8 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'androidx.car.app:app:1.4.0'
-    implementation 'androidx.car.app:app-projected:1.4.0'
+    implementation 'androidx.car.app:app:1.7.0'
+    implementation 'androidx.car.app:app-projected:1.7.0'
     // kotlin-stdlib 1.8 folds jdk7/jdk8 variants — force alignment to kill
     // duplicate-class failures between appcompat's 1.6.21 and newer stdlib.
     constraints {
