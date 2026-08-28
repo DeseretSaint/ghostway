@@ -139,6 +139,42 @@ from this queue first when it's non-empty.
       src/router.js planRoutes options assembly L795-925; src/ui.js
       renderEngineCard L258-333 ("Most natural" pill L309-313).
 
+      ADDENDUM 2 (Keaton field feedback, Waze comparison ~18:58 MDT 2026-08-27,
+      2.6-mi route, screenshot img_e18b4f8330b8): FOUR more defects, prepend to
+      the (1)/(2)/(3) work order:
+
+      (4) NO-HIGHWAYS STILL ITS OWN OPTION — round-1 spec said fold it into a
+      modifier; the card STILL shows a separate "No highways" option (5 min /
+      1.8 mi, 1 cam). Implement now: remove the no_highways option card; apply
+      hwPenalty inside the Balanced/Clearest generalized searches when
+      avoidHighways is on. ALSO: the no-hw option appeared on a route with NO
+      highways on it at all (0 hwy km on all options) — gate: only apply/offer
+      any no-highways behavior when the fastest route actually contains ≥0.5 km
+      freeway.
+
+      (5) TEXT OVERFLOW — option text spills out of the route-option selector
+      buttons (opt-meta line too long with badges). Fix with CSS: allow wrap,
+      or truncate with ellipsis + title attr; verify at 320-430 px widths via
+      real headless hit/geometry probe (panel scrollHeight ≤ clientHeight,
+      no horizontal overflow on .route-opt).
+
+      (6) ANDROID AUTO — still no clear path; yes, an APK is required. Per the
+      research deliverable in (3) above: Capacitor/TWA wrapper + androidx
+      car-app library, sideloaded, AA dev-mode Unknown sources. Escalate: build
+      the minimal wrap-APK this round (GitHub Actions can build it; debug APK
+      fine for sideload testing) rather than doc-only.
+
+      (7) DRIVE-WITHOUT-ROUTING — started driving without pressing Start; the
+      distance/time-to-destination display did NOT auto-update. Expected:
+      ongoing GPS tracking recomputes distance/ETA to the last-searched
+      destination continuously (Waze behavior). Current app only computes on
+      route request. Fix: when a destination search has been performed and GPS
+      is live, recompute (or at least re-measure straight/graph distance +
+      duration estimate to the destination) on significant movement (e.g.
+      ≥100 m or ≥30 s), throttled; no full re-route unless "re-route" tapped,
+      to keep battery/compute sane. Verify with scripts GPS playback at
+      multiple timestamps showing the readout changing.
+
 - [x] ROUTING CONNECTIVITY (RESOLVED slot-A 2026-08-27 — runtime connected-components check; see ledger line ~1223) — filed 2026-08-27 ~16:38 from randomized
       avoidance audit): 1/50 sampled pairs = (-111.6106,40.1738)→(-111.5440,
       39.9701) — two real roads (deg≥3, in-bbox) with NO path between them →
@@ -1294,3 +1330,4 @@ multiplier meta-analysis).
 | 2026-08-27 ~18:5x MDT | routing (slot-A) | HIGHEST-PRIORITY directive re-fire + lazy-engine re-check — NO-OP by design (read-state-first). Both items CLOSED in ledger: (1) PG→Costco camera-route #1 directive fully fixed (6-step engine rebuild 2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route cf9869a + connectivity 44f5bf4 + randomized gate 3a8e246 + gate false-FAIL 57b3d9c + seed-31337 far-detour fix 915ae51, all ancestors of origin/main; Clearest = natural continuous surface arterial, 0 cams/165 m, reconverges at State St; root cause + plan at lines 816-823/1015-1085; driver-preference research findings 1-45 in ledger). (2) Lazy-engine secondary: premise STALE (~95th confirmation) — 03e9224 long on origin/main; main.js/config.js/map-view.js + engine-check/snap-dist-check clean; NO uncommitted changeset to evaluate/build/commit; DO NOT RE-DO. Battery re-verified THIS run: engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m). State: HEAD == origin/main == 475a62a (0/0), no locks, no live procs; uncommitted = slot-B addendum 15 + slot-C 18:39/18:46 battery lines (committed + pushed with this entry). Plan exhausted; awaiting new field-drive feedback from Keaton. | engine-check/snap-dist PASS; rev-list 0/0 | verified — directive complete; no new routing work |
 | 2026-08-27 ~18:52 MDT | tests (slot-C) | verification battery over committed+pushed HEAD == origin/main == cd4e64f (0/0, no lock, no live procs, :4173 free; git diff --stat 915ae51..HEAD on src/engine/scripts/public/package.json EMPTY = ledger+docs-only since the verified seed-31337 fix) — NO code changed, verify only. All camera-avoidance invariants HOLD, ZERO drift: engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m); avoidance-audit LIVE PROBE PASS — all 5 corridors Clearest >=30 m mid-route (PG->Costco Keaton repro fixed, BYU gate 40m/~118m, Lehi->SLC 142m, Orem->Airport 96m, AF->PC 40m), 4 budget best-effort. RANDOMIZED GATE fresh seed 60221 (never sampled before) PASS: 23 clean, 3 clearable-floor PASS, camera-aware alt present on all 20 camera-adjacent fastest routes, 1 unreachable = known disconnected-component gap (Valhalla fallback), 0 crashes/timeouts — 6th distinct green seed (20260827/99177/55123/4242/24680/88888/13579/271828/60221), gate generalizes. | engine-check/snap-dist/avoidance-audit/avoidance-audit-random(SEED=60221) all PASS | verified — zero drift, green; fresh-seed generalization confirmed |
 | 2026-08-27 ~18:5x MDT | ux (slot-B) | Driver-preference RESEARCH directive re-run (44th): CLOSED per ledger — findings 1-45 + addenda 1-15 (all sourced) under "Driver preference research", fully consumed by slot-A's COMPLETE engine rebuild (6 steps 2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route cf9869a + connectivity 44f5bf4 + randomized gate 3a8e246 + gate false-FAIL 57b3d9c + seed-31337 far-detour 915ae51, all on origin/main). FRESH 2026 searches added Addendum 16 / FINDINGS 46-47 (NEW, citable): 46. Silgu/Inal/Lav 2026 (Arabian J Sci Eng, s13369-026-11336-5) peer-reviewed state-of-the-art review — route choice "cannot be explained solely by rational cost minimization"; user heterogeneity + trust + multi-attribute cost (time/distance/fuel/tolls/safety/VTTS) = the 2026 academic consensus behind Ghostway's generalized cost + per-user knobs. 47. Mai et al. arXiv 2608.15339 (Aug 2026) unifies recursive logit / logit DDC / max-entropy IRL under one soft-Bellman representation — the formal frontier of the Google-RHIP direction (finding 40); confirms learned cost needs trajectory data Ghostway won't collect → hand-tuned cost stays the right OSS stand-in. Both confirmatory — NO engine change required. Coordination with slot-A complete (rebuild consumed findings 1-45; 46-47 need nothing). State: HEAD == origin/main == cd4e64f (0/0), no locks, no live procs, :4173 free; tree clean except untracked dead-holder probes (untouched). No code changed (doc/ledger only → no typecheck/smoke needed). Brief delivered to Ghostway chat. | git rev-list 0/0; no locks; fresh searches reinforce; findings 46-47 logged | verified — directive satisfied; addendum 16 |
+| 2026-08-27 ~18:57 MDT | routing (slot-A) | HIGHEST-PRIORITY directive re-fire + lazy-engine re-check — NO-OP by design (read-state-first). Both items CLOSED in ledger: (1) PG→Costco camera-route #1 directive fully fixed (6-step engine rebuild 2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route cf9869a + connectivity 44f5bf4 + randomized gate 3a8e246 + gate false-FAIL 57b3d9c + seed-31337 far-detour 915ae51, all ancestors of origin/main; Clearest = natural continuous surface arterial, 0 cams/165 m, reconverges at State St; root cause + plan at lines 816-823/1015-1085; driver-preference research findings 1-47 in ledger). (2) Lazy-engine secondary: premise STALE (~96th confirmation) — 03e9224 confirmed ancestor of origin/main THIS run (merge-base OK); main.js/config.js/map-view.js + engine-check/snap-dist-check clean; NO uncommitted changeset to evaluate/build/commit; DO NOT RE-DO. Battery re-verified THIS run: engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m); git diff --stat 915ae51..HEAD on src/engine/scripts/public/package.json EMPTY = ledger+docs-only since the verified seed-31337 fix (zero code drift). State: HEAD == origin/main == 27c8796 (0/0), no locks, no live procs. Plan exhausted; awaiting new field-drive feedback from Keaton. | engine-check/snap-dist PASS; rev-list 0/0; merge-base 03e9224 OK; routing diff empty | verified — directive complete; no new routing work |
