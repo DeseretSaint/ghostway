@@ -890,6 +890,12 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   // genuinely camera-free (0 cams) and within a sane distance ceiling (4x), still
   // surface it as a best-effort Clearest so the driver can choose to avoid plates.
   const withinCap = strictProbe && strictProbe.cameras === 0 && strictProbe.distance <= fastest.distance * 4;
+  // capOnly = the strict probe was accepted ONLY because it's a camera-free 0-cam
+  // route within the 4x distance safety cap — i.e. a genuine long detour, NOT a
+  // near-equal clear route that already fits the time budget. Drives the honest
+  // "best effort — costs extra time" badge (seed-31337) without mislabeling a
+  // camera-free route that is the same distance/time as Fastest (seed-314159).
+  const capOnly = withinCap && !(strictProbe.duration <= strictBudget) && !(distOk && strictProbe.duration <= strictTimeCap);
   let clearest = strictProbe && (strictProbe.duration <= strictBudget || (distOk && strictProbe.duration <= strictTimeCap) || withinCap) ? strictProbe : null;
   let strictFallback = false;
   let overBudget = false;
@@ -954,10 +960,12 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   }
   if (clearest && clearest === strictProbe && !strictFallback) {
     // Accepted only via the large-detour clear cap (camera-free but far over the
-    // time budget): surface honestly as a best-effort Clearest, not as a win.
-    largeDetour = true;
-    strictFallback = true;
-    overBudget = true;
+    // time budget, e.g. seed-31337): surface honestly as a best-effort Clearest,
+    // not as a win. A near-equal clear route (seed-314159: 0 cams, same distance)
+    // is NOT flagged — it's a genuine avoidance win, not a detour.
+    largeDetour = capOnly;
+    strictFallback = capOnly;
+    overBudget = capOnly;
   }
   if (clearest) clearest.strictFallback = strictFallback;
   if (clearest) clearest.overBudget = overBudget;
@@ -979,7 +987,15 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   // Dedupe near-identical shapes.
   const uniq = [];
   for (const o of options) {
-    if (!uniq.some((u) => similar(u.route, o.route))) uniq.push(o);
+    const twin = uniq.find((u) => similar(u.route, o.route));
+    if (!twin) { uniq.push(o); continue; }
+    // A camera-FREE strict route that mirrors a camera-passing twin is NOT a
+    // redundant duplicate — it is the app's core avoidance win (e.g. seed-314159:
+    // fastest clips an ALPR cam at 19 m on a road the Clearest variant clears).
+    // Keep it so the user always has a camera-aware choice whenever Fastest
+    // passes a camera. (Equal camera counts still dedupe → queue-item-1 badges
+    // the Fastest card instead.)
+    if (o.mode === 'strict' && (o.route.cameras || 0) < (twin.route.cameras || 0)) uniq.push(o);
   }
 
   // Attach instructions + geometry.
