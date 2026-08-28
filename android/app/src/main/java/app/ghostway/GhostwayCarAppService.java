@@ -30,13 +30,15 @@ public class GhostwayCarAppService extends CarAppService {
     }
 
     @Override
-    public Session onCreateSession(Intent intent) {
-        return new Session() {
-            @Override
-            public Screen onCreateScreen(Intent intent) {
-                return new HomeScreen(getCarContext());
-            }
-        };
+    public Session onCreateSession() {
+        return new HomeSession();
+    }
+
+    static class HomeSession extends Session {
+        @Override
+        public Screen onCreateScreen(Intent intent) {
+            return new HomeScreen(getCarContext());
+        }
     }
 
     static class HomeScreen extends Screen {
