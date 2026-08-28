@@ -31,7 +31,6 @@ export class MapView {
     this._wpDragStart = null;
     this._routeData = null;
     this._endpointData = null;
-    this._waypointData = null;
     this._reports = null;
     this._incidents = null;
     this._userPos = null;
@@ -177,37 +176,11 @@ export class MapView {
         'circle-stroke-color': '#ffffff',
       },
     });
-
-    // Draggable waypoint handle (Workstream C: route preview editing).
-    this._addSource('waypoint', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] },
-    });
-    this._addLayer({
-      id: 'waypoint-halo',
-      type: 'circle',
-      source: 'waypoint',
-      paint: { 'circle-radius': 14, 'circle-color': '#ffb454', 'circle-opacity': 0.22 },
-    });
-    this._addLayer({
-      id: 'waypoint-dot',
-      type: 'circle',
-      source: 'waypoint',
-      paint: {
-        'circle-radius': 8,
-        'circle-color': '#ffb454',
-        'circle-stroke-width': 2.5,
-        'circle-stroke-color': '#ffffff',
-      },
-    });
   }
 
   _onLoad() {
     this._addAppLayers();
-    this._waypointDragHandlers = [];
-    this._waypointTapHandlers = [];
     this._reportClickHandlers = [];
-    this._wireWaypoint();
     this.camSourceReady = true;
     this._wireCameraClicks();
     this._readyResolve && this._readyResolve();
@@ -243,7 +216,6 @@ export class MapView {
       rebuilt = true;
       this._addAppLayers();
       this._wireCameraClicks();
-      this._wireWaypointLayer();
       this._reapplyData();
     };
     // diff: false — MapLibre's default style-diff path silently REMOVES our
@@ -258,7 +230,6 @@ export class MapView {
   _reapplyData() {
     this.setRoute(this._routeData || []);
     this.setEndpoints(this._endpointData || []);
-    this.setWaypoint(this._waypointData || null);
     if (this._reports) this.setReports(this._reports);
     if (this._incidents) this.setIncidents(this._incidents);
     if (this._userPos) this.setUserPosition(this._userPos, this._userHeading);
@@ -289,19 +260,6 @@ export class MapView {
 
   onCameraClick(handler) {
     this._clickHandlers.push(handler);
-  }
-
-  // ---- Waypoint drag (Workstream C) ----
-  setWaypoint(coords) {
-    this._waypointData = coords;
-    const src = this.map.getSource('waypoint');
-    if (!src) return;
-    src.setData({
-      type: 'FeatureCollection',
-      features: coords
-        ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coords } }]
-        : [],
-    });
   }
 
   // Community camera reports layer (distinct styling from known cameras).
@@ -344,14 +302,6 @@ export class MapView {
     this._reportClickHandlers.push(handler);
   }
 
-  onWaypointDrag(handler) {
-    this._waypointDragHandlers.push(handler);
-  }
-
-  onWaypointTap(handler) {
-    this._waypointTapHandlers.push(handler);
-  }
-
   // Tap an alternative route line → select that option (index carried on the
   // feature's optIndex property, set by drawEngineRoutes in main.js). When
   // multiple route lines overlap at the tap point, prefer the one that is NOT
@@ -368,85 +318,6 @@ export class MapView {
     });
   }
 
-  _wireWaypoint() {
-    this._wireWaypointLayer();
-    if (this._wpGlobalWired) return;
-    this._wpGlobalWired = true;
-
-    const onMove = (e) => {
-      if (!this._wpDragging) return;
-      e.preventDefault();
-      this._wpMoved = true;
-      const c = e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
-      if (c) this._waypointDragHandlers.forEach((h) => h(c, false));
-    };
-    this.map.on('mousemove', onMove);
-    this.map.on('touchmove', onMove);
-
-    const onUp = (e) => {
-      if (!this._wpDragging) return;
-      this._wpDragging = false;
-      this.map.getCanvas().style.cursor = '';
-      if (!this._wpMoved && this._wpDragStart) {
-        // Treat as a tap on the waypoint handle.
-        this._waypointTapHandlers.forEach((h) => h());
-        return;
-      }
-      const c = e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
-      if (c) this._waypointDragHandlers.forEach((h) => h(c, true));
-    };
-    this.map.on('mouseup', onUp);
-    this.map.on('touchend', onUp);
-
-    // Fallback drag-end: if the pointer is RELEASED over UI chrome (zoom
-    // control, route panel, any overlay) instead of the map canvas, MapLibre
-    // never fires mouseup/touchend — the drag stays open and the drop is
-    // silently lost. Commit the waypoint at the last known pointer position
-    // on a window-level pointerup so releasing anywhere still works.
-    const onWindowUp = (ev) => {
-      if (!this._wpDragging) return;
-      this._wpDragging = false;
-      this.map.getCanvas().style.cursor = '';
-      if (!this._wpMoved && this._wpDragStart) {
-        this._waypointTapHandlers.forEach((h) => h());
-        return;
-      }
-      const rect = this.map.getCanvas().getBoundingClientRect();
-      const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
-      const inside = x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
-      const lngLat = inside ? this.map.unproject([x, y]) : null;
-      const c = lngLat ? [lngLat.lng, lngLat.lat] : null;
-      if (c) this._waypointDragHandlers.forEach((h) => h(c, true));
-    };
-    window.addEventListener('pointerup', onWindowUp);
-    window.addEventListener('pointercancel', onWindowUp);
-  }
-
-  // Layer-specific waypoint bindings (must be re-applied after a basemap
-  // switch wipes the layers). Global move/up listeners live in _wireWaypoint.
-  _wireWaypointLayer() {
-    const LAYER = 'waypoint-dot';
-    this.map.on('mousedown', LAYER, (e) => {
-      e.preventDefault();
-      this._wpDragging = true;
-      this._wpMoved = false;
-      this._wpDragStart = e.point;
-      this.map.getCanvas().style.cursor = 'grabbing';
-    });
-    this.map.on('touchstart', LAYER, (e) => {
-      if (e.points.length !== 1) return;
-      e.preventDefault();
-      this._wpDragging = true;
-      this._wpMoved = false;
-      this._wpDragStart = e.point;
-    });
-    this.map.on('mouseenter', LAYER, () => {
-      if (!this._wpDragging) this.map.getCanvas().style.cursor = 'grab';
-    });
-    this.map.on('mouseleave', LAYER, () => {
-      if (!this._wpDragging) this.map.getCanvas().style.cursor = '';
-    });
-  }
 
   setRoute(features) {
     this._routeData = features;

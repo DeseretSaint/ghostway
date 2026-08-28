@@ -140,22 +140,6 @@ async function init() {
     selectOption(optIndex);
   });
 
-  // Waypoint drag: live-move the handle, re-route on drop (Workstream C).
-  app.map.onWaypointDrag((coords, commit) => {
-    if (!app.state.route || !app.state.route.engine) return;
-    app.state.waypoint = coords;
-    app.map.setWaypoint(coords);
-    if (commit) reRouteViaWaypoint();
-  });
-  // Tap the waypoint handle: remove the via-point and re-route direct.
-  // (The default mid-route handle is a drag affordance only — no tap action.)
-  app.map.onWaypointTap(() => {
-    if (!app.state.route || !app.state.route.via || !app.state.waypoint) return;
-    app.state.waypoint = null;
-    app.map.setWaypoint(null);
-    onRoute();
-  });
-
   showStatus('Tap the locate button to start from your location, or search a destination.', 'info');
   registerSW();
   applyModeUI();
@@ -644,83 +628,6 @@ function selectOption(i) {
   renderRouteCard(app, app.state.route);
 }
 
-// ---- Waypoint ("via point") routing: from → via → to, two stitched legs ----
-async function reRouteViaWaypoint() {
-  const from = app.state.from, to = app.state.to, via = app.state.waypoint;
-  if (!from || !to || !via) return;
-  showStatus('Rerouting via waypoint…', 'info');
-  try {
-    const mode = app.state.avoid ? (app.state.mode || 'moderate') : 'off';
-    let opt1, opt2, source;
-    const local = engineCovers(from.coords, via) && engineCovers(via, to.coords);
-    if (local) {
-      const ok = await ensureLocalEngine(from.coords, via);
-      if (ok) {
-        source = 'local';
-        const cc = communityCams();
-        const r1 = await planRoutes(from.coords, via, { traffic: app.traffic || null, communityCams: cc, avoidHighways: app.state.avoidHighways });
-        const r2 = await planRoutes(via, to.coords, { traffic: app.traffic || null, communityCams: cc, avoidHighways: app.state.avoidHighways });
-        opt1 = r1.options[pickOptionForMode(r1.options)];
-        opt2 = r2.options[pickOptionForMode(r2.options)];
-      } else {
-        source = 'valhalla';
-        const closures = await nationalClosures(from.coords, to.coords);
-        const r1 = await valhallaPlanRoutes(from.coords, via, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
-        const r2 = await valhallaPlanRoutes(via, to.coords, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
-        opt1 = r1.options[pickOptionForMode(r1.options)];
-        opt2 = r2.options[pickOptionForMode(r2.options)];
-      }
-    } else {
-      source = 'valhalla';
-      const closures = await nationalClosures(from.coords, to.coords);
-      const r1 = await valhallaPlanRoutes(from.coords, via, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
-      const r2 = await valhallaPlanRoutes(via, to.coords, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
-      opt1 = r1.options[pickOptionForMode(r1.options)];
-      opt2 = r2.options[pickOptionForMode(r2.options)];
-    }
-    // Stitch the two legs into one through-route.
-    const leg2Steps = (opt2.instructions || []).map((s) => ({ ...s, at: (s.at || 0) + opt1.distance }));
-    const rawCoords = [...(opt1.route ? opt1.route.coords : opt1.coords), ...(opt2.route ? opt2.route.coords : opt2.coords).slice(1)];
-    const stitched = {
-      mode,
-      label: 'Via waypoint',
-      coords: [...opt1.coords, ...opt2.coords.slice(1)],
-      route: { coords: rawCoords }, // nav bookkeeping uses raw geometry
-      distance: opt1.distance + opt2.distance,
-      duration: opt1.duration + opt2.duration,
-      delay: (opt1.delay || 0) + (opt2.delay || 0),
-      cameras: (opt1.cameras || 0) + (opt2.cameras || 0),
-      cameraPoints: [
-        ...(opt1.cameraPoints || []),
-        ...(opt2.cameraPoints || []).map((c) => ({ ...c, at: c.at + opt1.distance })),
-      ],
-      instructions: [...(opt1.instructions || []), ...leg2Steps],
-    };
-    app.state.options = [stitched];
-    app.state.chosen = 0;
-    app.state.route = { engine: true, source, via: true, options: [stitched], chosen: 0 };
-    drawEngineRoutes();
-    app.map.setWaypoint(via);
-    renderRouteCard(app, app.state.route);
-    clearStatus();
-    window.__ghostwayDebug = { ...(window.__ghostwayDebug || {}), viaRoute: true, viaSource: source };
-
-    // If navigating, refresh the live step bookkeeping without restarting nav.
-    if (app.state.navigating) {
-      app._navSteps = stitched.instructions.map((s) => ({ ...s, startS: s.at || 0 }));
-      app._navRouteCoords = stitched.coords;
-      app._routeCum = cumulativeDistances(stitched.coords);
-      app._routeTotal = app._routeCum[app._routeCum.length - 1] || stitched.distance;
-      app._camPts = stitched.cameraPoints || [];
-      app._voiceAnnounced = {};
-      renderNavStep();
-    }
-  } catch (e) {
-    console.warn('via reroute failed', e);
-    showStatus('Could not route via that waypoint.', 'warn');
-  }
-}
-
 function drawEngineRoutes() {
   const { options, chosen } = app.state;
   // Distinct colors per option so the user can tell the alternatives apart on
@@ -750,17 +657,6 @@ function drawEngineRoutes() {
     { type: 'Feature', properties: { color: '#ff4d6d' }, geometry: { type: 'Point', coordinates: sel.coords[sel.coords.length - 1] } },
   ]);
   app.map.fitTo(sel.coords, true);
-
-  // Waypoint grab-handle: keep an existing via position, else offer the
-  // midpoint of the chosen route as a draggable handle (Workstream C).
-  if (app.state.route && app.state.route.via && app.state.waypoint) {
-    app.map.setWaypoint(app.state.waypoint);
-  } else if (!app.state.navigating) {
-    app.state.waypoint = sel.coords[Math.floor(sel.coords.length / 2)];
-    app.map.setWaypoint(app.state.waypoint);
-  } else {
-    app.map.setWaypoint(null);
-  }
 
   // Nav bookkeeping for the chosen option. IMPORTANT: steps carry cumulative
   // distances measured on the RAW arc path, so the progress tracker must also
@@ -929,7 +825,6 @@ function startNav() {
 
   // Hide the planning panel, show the nav banner.
   $('#panel').hidden = true;
-  app.map.setWaypoint(null); // no drag handle while driving
   showNavBanner();
   setFollow(true);
 
@@ -1477,7 +1372,6 @@ function clearRoute() {
   $('#route-card').hidden = true;
   app.map.setRoute([]);
   app.map.setEndpoints([]);
-  app.map.setWaypoint(null);
   clearStatus();
 }
 
@@ -1733,7 +1627,6 @@ function handleDrawer(action) {
         <li><span class="lg-halo"></span> Heatmap halo = camera density</li>
         <li><span class="lg-line teal"></span> Your chosen route</li>
         <li><span class="lg-line grey"></span> Alternative route</li>
-        <li><span class="lg-dot" style="background:#ffb454"></span> Draggable waypoint — drag it to reroute through that point</li>
         <li><span class="lg-dot closure"></span> Live closure (UDOT)</li>
         <li><span class="lg-dot roadwork"></span> Live roadwork / lane closure (UDOT)</li>
       </ul>
