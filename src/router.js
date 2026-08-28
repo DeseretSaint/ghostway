@@ -828,6 +828,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
 
   const options = [{ mode: 'off', label: 'Fastest', route: fastest }];
 
+  const balanced = astar(graph, s.node, t.node, 'moderate', edgeFactor, edgeDelay);
   // Avoid-highways option (surface-street preference knob, engine-rebuild plan
   // step 3 — Valhalla use_highways analog): freeway-class edges (≥95 km/h
   // posted) carry a search-only cost factor (reported metrics stay honest).
@@ -836,16 +837,20 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   // natural arterial chain a local would take — shorter distance, camera-aware
   // — not just the time-optimal surface path. Offered when it produces a
   // genuinely different shape within a sane detour (≤1.6x distance).
-  if (avoidHighways) {
+  // Freeway gate (addendum-2 item 4, Keaton field report): only offer any
+  // no-highways behavior when the fastest route actually uses ≥0.5 km of
+  // freeway — on freeway-free corridors the search can only reproduce
+  // Balanced, which rendered a redundant "Without highways" chip on a route
+  // with zero highway. Also dedupe vs Balanced: when the penalty search
+  // converges on the same shape, Balanced (a primary slot) wins.
+  if (avoidHighways && fastest.highwayKm >= 0.5) {
     const hwPenalty = new Float32Array(graph.edgeCount);
     for (let e = 0; e < graph.edgeCount; e++) hwPenalty[e] = graph.eSpd[e] >= 95 ? 3.0 : 1.0;
     const noHw = astar(graph, s.node, t.node, 'moderate', edgeFactor, edgeDelay, { penalty: hwPenalty });
-    if (noHw && !similar(noHw, fastest) && noHw.distance <= fastest.distance * 1.6) {
+    if (noHw && !similar(noHw, fastest) && !(balanced && similar(noHw, balanced)) && noHw.distance <= fastest.distance * 1.6) {
       options.push({ mode: 'no_highways', label: 'No highways', route: noHw });
     }
   }
-
-  const balanced = astar(graph, s.node, t.node, 'moderate', edgeFactor, edgeDelay);
   // Offer Balanced whenever it's a sane detour — the geometry-aware dedupe
   // below drops it if it traces the same road as Fastest. The old gate also
   // required fewer cameras, which hid surface-street alternatives whenever
