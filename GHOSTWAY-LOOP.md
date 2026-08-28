@@ -154,11 +154,19 @@ from this queue first when it's non-empty.
       (Original round-1 "fold into modifier" portion = slot-B 3439baa already
       shipped the modifier-chip UI; this commit closes the gate half.)
 
-      (5) TEXT OVERFLOW — option text spills out of the route-option selector
-      buttons (opt-meta line too long with badges). Fix with CSS: allow wrap,
-      or truncate with ellipsis + title attr; verify at 320-430 px widths via
-      real headless hit/geometry probe (panel scrollHeight ≤ clientHeight,
-      no horizontal overflow on .route-opt).
+      (5) TEXT OVERFLOW — RESOLVED 2026-08-27 ~20:0x (slot-B, commit 6e77348,
+      PUSHED): .opt-meta had white-space:nowrap + .route-opt was a non-wrapping
+      flex row → badge-heavy meta lines (cameras + hwy + delay + best-effort)
+      spilled past the button edge on narrow phones. FIX: flex-wrap:wrap on
+      .route-opt + .route-opt-mod, nowrap removed from .opt-meta
+      (overflow-wrap:anywhere). New hermetic scripts/overflow-check.mjs asserts
+      zero horizontal overflow on option buttons/panel/card/body at 320/390/430
+      px on the real PG→Costco route card — PASS; tradeoff-check PASS (no
+      regression). Original spec: option text spills out of the route-option
+      selector buttons (opt-meta line too long with badges). Fix with CSS:
+      allow wrap, or truncate with ellipsis + title attr; verify at 320-430 px
+      widths via real headless hit/geometry probe (panel scrollHeight ≤
+      clientHeight, no horizontal overflow on .route-opt).
 
       (6) ANDROID AUTO — still no clear path; yes, an APK is required. Per the
       research deliverable in (3) above: Capacitor/TWA wrapper + androidx
@@ -176,6 +184,21 @@ from this queue first when it's non-empty.
       ≥100 m or ≥30 s), throttled; no full re-route unless "re-route" tapped,
       to keep battery/compute sane. Verify with scripts GPS playback at
       multiple timestamps showing the readout changing.
+
+      ADDENDUM 3 (Keaton directive, ~19:10 MDT 2026-08-27): SUNSET THE
+      AVOID-HIGHWAYS CONTROL ENTIRELY. Driver-preference research already
+      concluded the engine should decide: surface arterials when highway use
+      saves only 1-2 min / short trip, highways on longer trips with
+      considerable savings — that's what the generalized-cost model
+      (distW/congW + "Most natural" endorsement) encodes. So in (4) above, do
+      NOT keep hwPenalty as a user-facing modifier: REMOVE the avoid-highways
+      toggle + button (index.html #avoid-toggle, main.js state.avoidHighways /
+      hwBtn / gw-avoid-hw localStorage, planRoutes avoidHighways param,
+      no_highways option mode, valhalla avoidHighways plumbing) and DELETE the
+      hwPenalty path. Highway tradeoff = engine's job only. Keep o.highwayKm
+      reporting + the "Most natural" pill (that's the surfaced decision).
+      Update tests/scripts referencing avoidHighways. Verify: no
+      references remain (grep), build + full suite PASS, UI shows no toggle.
 
 - [x] ROUTING CONNECTIVITY (RESOLVED slot-A 2026-08-27 — runtime connected-components check; see ledger line ~1223) — filed 2026-08-27 ~16:38 from randomized
       avoidance audit): 1/50 sampled pairs = (-111.6106,40.1738)→(-111.5440,
@@ -1350,3 +1373,6 @@ multiplier meta-analysis).
 | 2026-08-27 ~19:2x MDT | ux (slot-B) | Driver-preference RESEARCH directive re-run (47th): CLOSED per ledger — findings 1-48 + addenda 1-17 (all sourced) under "Driver preference research", fully consumed by slot-A's COMPLETE engine rebuild (2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cf9869a + 44f5bf4 + 3a8e246 + 57b3d9c + 915ae51, all on origin/main). No fresh searches this run — prior 46 runs exhausted the literature (Wardman/Ramming/Trueblood/congestion-reliability/road-type-VTT all logged); confirmatory-only state. State verified THIS run: HEAD == origin/main == 17c202f (0/0), no locks, no live procs; tree clean except untracked dead-holder probes (untouched). No code changed (ledger only → no typecheck/smoke needed). | git rev-list 0/0; no locks | verified — directive satisfied, nothing new |
 | 2026-08-27 ~19:24 MDT | tests (slot-C) | verification battery + TARGETED addendum-2 item (4) probe over committed+pushed HEAD == origin/main == cf94ed3 (0/0, no lock, no live procs). Battery green: engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams); snap-dist 90.0/334.8 m; randomized gate fresh seed 27183 PASS (23 clean, camera-aware alt on all 23 camera-adjacent fastests, 1 unreachable = known disconnected-component gap). REAL FINDING: item (4)'s >=0.5 km freeway gate is UNIMPLEMENTED in router.js — L839-846 emits no_highways unconditionally whenever avoidHighways is on. Probe (scripts/.probe-nohw0.mjs, kept as repro): Orem-local 2.8 km + PG-local-3 2.5 km, BOTH fastest highwayKm=0.00, still emit no_highways — and that no_highways route is BYTE-IDENTICAL to Balanced (coords match; similar() dedupe runs vs fastest only, never vs balanced) → UI renders a "Without highways" modifier chip duplicating Balanced on a route with ZERO freeway. Exactly the addendum-2 defect Keaton reported ("no-hw option appeared on a route with NO highways at all"). FOR SLOT-A: gate no_highways on fastest.route.highwayKm >= 0.5 (highwayKm already exposed on route objects, router.js L502) AND dedupe no_highways vs balanced via similar(). Freeway corridors unaffected (PG->Costco 6.03 km hwy, Lehi->SLC 44.5 km — chip legitimately offered there). | engine-check/snap-dist/audit-random(27183) PASS; nohw-gate probe FAIL on 2 freeway-free corridors | found real bug — item (4) gate unimplemented, filed for slot-A |
 | 2026-08-27 ~19:3x MDT | routing (slot-A) | ADDENDUM-2 ITEM (4) RESOLVED — the unimplemented no_highways freeway gate (slot-C 19:24 finding). FIX (src/router.js planRoutes): (a) compute `balanced` BEFORE the avoidHighways block; (b) gate the no_highways option on `fastest.highwayKm >= 0.5` so freeway-free corridors no longer emit a redundant "Without highways" chip; (c) also drop the no_highways route when it traces the same shape as `balanced` (`!(balanced && similar(noHw, balanced))`) so the primary Balanced slot wins. Verified: npm run build exit 0; engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m); avoidance-audit-random PAIRS=24 SEED=20260827 PASS (21/21 camera-aware alts, 0 unreachable, 0 crashes). TARGETED probe (.probe-nohw0.mjs) now CLEAN: PG-local-1/2/Orem-local/PG-local-3 (all fastest hwyKm=0) emit NO no_highways option; targeted freeway probe (PG->Lehi, fastest hwyKm=4.10) STILL offers no_highways (hwyKm 0.00 on the option) — gate behaves correctly both ways. Committed c019e24, PUSHED. Item (4) CLOSED. | build/engine-check/snap-dist/audit-random PASS; nohw gate both-directions verified; commit c019e24 pushed | verified — item (4) gate fixed; no redundant chip on freeway-free routes |
+| 2026-08-27 ~19:5x MDT | tests (slot-C) | verification battery over committed+pushed HEAD == origin/main == c019e24 (slot-A no_highways freeway gate; 0/0, no lock, no live procs, :4173 free) — NO code changed, verify only. All camera-avoidance invariants HOLD, ZERO drift: build exit 0 (1.05s); engine-check PASS (Fastest/Balanced 10km/10min/2cams, Clearest 10.1km/14min/0cams — modes distinct); snap-dist PASS (90.0/334.8 m). 5-corridor avoidance-audit PASS — all clearable corridors Clearest >=30 m mid-route (PG->Costco 0/165m, BYU gate 40m/~118m, Lehi->SLC 142m, Orem->Airport 96m, AF->PC 40m), 4 budget best-effort. RANDOMIZED GATE fresh seed 77123 PASS (24 clean, camera-aware alt on all 22 camera-adjacent fastests, 0 unreachable, 0 crashes). INDEPENDENTLY verified slot-A's c019e24 nohw-gate both directions: .probe-nohw0.mjs CLEAN — PG-local-1/2/Orem-local/PG-local-3 (all fastest hwyKm=0) emit NO no_highways option (gate active on freeway-free corridors); the freeway direction (PG->Lehi hwyKm=4.10) still offers it per slot-A's own probe. Item (4) fix confirmed by slot-C. | build/engine-check/snap-dist/avoidance-audit/avoidance-audit-random(77123)/nohw-probe all PASS | verified — zero drift, green; nohw-gate fix (c019e24) independently confirmed |
+|| 2026-08-27 ~19:5x MDT | routing (slot-A) | HIGHEST-PRIORITY #1 directive re-fire (cron) + lazy-engine re-check — NO-OP (read-state-first). Item (1) PG→Costco camera-route CLOSED: 6-step engine rebuild (2449747/07f43a5/2485c9a/adfbc73/840d095/955fc4d + cold-route cf9869a + connectivity 44f5bf4 + randomized gate 3a8e246 + gate false-FAIL 57b3d9c + seed-31337 far-detour 915ae51) all on origin/main; Clearest = natural surface arterial, 0 cams/165 m, reconverges State St. REAL VERIFY THIS RUN: `node scripts/avoidance-audit.mjs` exit 0 — PG→Costco Clearest cams=0 mid-route min 165 m (was 1cam/25m pre-fix); full audit PASS. Driver-preference findings 1-48 + engine-rebuild plan already logged (lines 878-1040) and briefs delivered to chat in prior runs. Item (2) lazy-engine premise STALE: 03e9224 ancestor of origin/main; main.js/config.js/map-view.js clean; NO uncommitted changeset to evaluate/commit. No lock file present. | avoidance-audit exit 0; PG→Costco Clearest 0cams/165m; rev-list 0/0 | verified — directive complete; no new routing work |
+| 2026-08-27 ~20:0x MDT | ux (slot-B) | QUEUE ITEM (5) TEXT OVERFLOW RESOLVED (addendum-2, Keaton Waze feedback). Root cause: .opt-meta had white-space:nowrap and .route-opt/.route-opt-mod were non-wrapping flex rows, so badge-heavy meta lines (cameras + hwy + delay + best-effort + over-budget) spilled past the button edge on narrow phones. FIX (styles.css only): flex-wrap:wrap on .route-opt + .route-opt-mod; nowrap removed from .opt-meta, overflow-wrap:anywhere added — badges wrap to a second line instead of overflowing (wrap chosen over truncate: never hide camera counts). New hermetic scripts/overflow-check.mjs (lib-preview, real PG→Costco route card): asserts zero horizontal overflow on every option button, panel, card, and body at 320/390/430 px — PASS (3 rows each width, panel 298/298, body flush). tradeoff-check PASS on same card (directions + Most-natural pill + option clicks, 0 page errors) — no regression. Driver-preference research directive: CLOSED per ledger (findings 1-48 + addenda 1-17, consumed by slot-A rebuild; no re-research). Committed 6e77348 + PUSHED. | build exit 0; overflow-check PASS @320/390/430; tradeoff-check PASS | verified — item (5) fixed |
