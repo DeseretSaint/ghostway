@@ -2,7 +2,7 @@ package app.ghostway;
 
 import android.content.Intent;
 import androidx.car.app.CarAppService;
-import androidx.car.app.HostValidator;
+import androidx.car.app.validation.HostValidator;
 import androidx.car.app.Session;
 import androidx.car.app.Screen;
 import androidx.car.app.model.ItemList;
