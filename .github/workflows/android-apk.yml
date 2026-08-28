@@ -1,0 +1,38 @@
+name: android-apk
+
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android-apk.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Bundle PWA into Android assets
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          mkdir -p android/app/src/main/assets/www
+          cp -r dist/* android/app/src/main/assets/www/
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          gradle wrapper --gradle-version 8.7 || true
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghostway-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
