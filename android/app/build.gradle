@@ -29,4 +29,14 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.car.app:app:1.4.0'
     implementation 'androidx.car.app:app-projected:1.4.0'
+    // kotlin-stdlib 1.8 folds jdk7/jdk8 variants — force alignment to kill
+    // duplicate-class failures between appcompat's 1.6.21 and newer stdlib.
+    constraints {
+        implementation('org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22') {
+            because 'kotlin-stdlib 1.8+ merged jdk7/jdk8 artifacts'
+        }
+        implementation('org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22') {
+            because 'kotlin-stdlib 1.8+ merged jdk7/jdk8 artifacts'
+        }
+    }
 }
