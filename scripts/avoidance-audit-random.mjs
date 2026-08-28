@@ -189,15 +189,34 @@ for (let pi = 0; pi < pairs.length; pi++) {
 
   const strict = options.find((o) => o.mode === 'strict');
   const fastest = options.find((o) => o.mode === 'off') || options[0];
-  if (!strict) { optionFails++; console.log(`  ${tag}  ❌ no strict option in [${options.map((o) => o.mode).join(',')}]`); continue; }
 
   const fCoords = (fastest.route && fastest.route.coords) || fastest.coords;
-  const sCoords = (strict.route && strict.route.coords) || strict.coords;
   const fAudit = auditRoute(fCoords);
-  const sAudit = auditRoute(sCoords);
-
   const fastestNearCam = fAudit.minMid < NEAR_CAM;
   if (fastestNearCam) camNearFastest++;
+
+  if (!strict) {
+    // Geometry dedupe (router.js similar()) collapses Clearest into Fastest
+    // when both are the same shape — the DESIRED product behavior when Fastest
+    // is already camera-free (queue item 1: 0-camera badge on the Fastest card
+    // instead of a duplicate Clearest card). Only a defect when fastest
+    // actually passes near a camera: then a camera-aware alternative must exist.
+    if (fastestNearCam || fastest.cameras > 0) {
+      optionFails++;
+      console.log(`  ${tag}  ❌ no strict option in [${options.map((o) => o.mode).join(',')}] but fastest passes cam at ${fAudit.minMid.toFixed(0)} m (cams=${fastest.cameras})`);
+      continue;
+    }
+    if (fAudit.minMid < FLOOR) {
+      floorFails++;
+      console.log(`  ${tag}  ❌ collapsed Clearest==Fastest but mid-route min ${fAudit.minMid.toFixed(1)} m (< ${FLOOR} m), cams=${fastest.cameras}`);
+      continue;
+    }
+    clearable++; ok++; // fastest already IS the clearest route
+    continue;
+  }
+
+  const sCoords = (strict.route && strict.route.coords) || strict.coords;
+  const sAudit = auditRoute(sCoords);
 
   // (a) floor on clearable corridors
   const walledOrBudget = strict.strictFallback && !strict.clearToM;
