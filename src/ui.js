@@ -279,14 +279,16 @@ function renderEngineCard(app, card, result) {
         ? `<span class="opt-clear-badge">${icon('shieldCheck', { size: 14 })} Camera-free route</span>`
         : '';
     const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
-    const bestEffort = o.strictFallback
-      ? o.clearToM
+    // Keaton 2026-08-27 (item 10): drop the detour-complaint warnings
+    // ("best effort — camera-walled", "best effort — clear route too long",
+    // "costs extra time") — the map shows routes side by side and per-option
+    // time/distance is visible, so the warnings are noise. KEEP the honest
+    // gate-snap "clear to within ~N m" line: that is a real safety fact about
+    // the final approach, not a detour complaint.
+    const bestEffort =
+      o.strictFallback && o.clearToM
         ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} clear to within ~${fmtDistance(o.clearToM)}</span>`
-        : o.walled
-          ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort — camera-walled</span>`
-          : ` · <span class="opt-warn">${icon('warning', { size: 13 })} best effort — clear route too long</span>`
-      : '';
-    const overBudget = o.overBudget ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} costs extra time</span>` : '';
+        : '';
     const dKm = o.distance - fastest.distance;
     const tradeoff =
       fastest && o !== fastest && Math.abs(dKm) >= 100
@@ -302,7 +304,7 @@ function renderEngineCard(app, card, result) {
         <button class="route-opt ${idx === chosen ? 'chosen' : ''}" data-opt="${idx}" type="button" aria-pressed="${idx === chosen}">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
           ${clearBadge}
-          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${hw}${delay}${bestEffort}${overBudget}</span>
+          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${hw}${delay}${bestEffort}</span>
           ${tradeoff}
           ${natural}
         </button>`;
@@ -316,13 +318,9 @@ function renderEngineCard(app, card, result) {
     ? `<button class="route-opt-mod ${options.indexOf(hwOpt) === chosen ? 'chosen' : ''}" data-opt="${options.indexOf(hwOpt)}" type="button" aria-pressed="${options.indexOf(hwOpt) === chosen}">${icon('road', { size: 13 })} Without highways · ${fmtDuration(hwOpt.duration)} · ${fmtDistance(hwOpt.distance)} · ${hwOpt.cameras === 0 ? '0 cameras' : hwOpt.cameras + ' camera' + (hwOpt.cameras === 1 ? '' : 's')}</button>`
     : '';
 
-  const detourVsFastest =
-    sel.mode !== 'off' && fastest
-      ? `<div class="rc-detour">+${fmtDistance(Math.max(0, sel.distance - fastest.distance))} · +${Math.max(
-          0,
-          Math.round((sel.duration - fastest.duration) / 60)
-        )} min vs fastest</div>`
-      : '';
+  // Item (10): the "+X min vs fastest" detour warning is gone — per-option
+  // time/distance are visible on each button and the map shows routes side by
+  // side, so the card-level complaint was noise.
 
   const steps = sel.instructions || [];
   const stepHtml = steps
@@ -347,7 +345,6 @@ function renderEngineCard(app, card, result) {
         ? `${icon('shield', { size: 15 })} Fully clear of known cameras`
         : `${icon('shield', { size: 15 })} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
     }</div>
-    ${detourVsFastest}
     <div class="route-options">${optHtml}</div>${modifierHtml ? `\n    <div class="route-modifiers">${modifierHtml}</div>` : ''}
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : ''}
@@ -370,11 +367,6 @@ function modeEmoji(mode) {
 function renderLegacyCard(app, card, result) {
   const shown = result.avoid && result.applied ? result.clear : result.baseline;
   const baseline = result.baseline;
-
-  const detour = result.applied ? shown.distance - baseline.distance : 0;
-  const extraMin = result.applied
-    ? Math.max(0, Math.round((shown.duration - baseline.duration) / 60))
-    : 0;
 
   let headline;
   if (result.routerDown) {
@@ -408,7 +400,6 @@ function renderLegacyCard(app, card, result) {
       <div class="rc-dist">${fmtDistance(shown.distance)}</div>
     </div>
     <div class="rc-badge">${headline}</div>
-    ${result.applied ? `<div class="rc-detour">+${fmtDistance(detour)} · +${extraMin} min vs fastest</div>` : ''}
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : '<p class="muted small">Turn-by-turn directions unavailable right now.</p>'}
     ${result.applied ? `<button id="showFastest" class="text-link">Show fastest route instead</button>` : ''}
