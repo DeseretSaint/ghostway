@@ -260,15 +260,12 @@ function renderEngineCard(app, card, result) {
   const sel = options[chosen];
   const fastest = options.find((o) => o.mode === 'off') || options[0];
 
-  // Always render three primary slots — Fastest / Balanced / Clearest — so the
-  // card reads Fast/Balanced/Strict regardless of the avoid-highways toggle.
-  // The "No highways" surface preference is the SAME corridor as a modifier,
-  // not a fourth competitor: demote it to a subordinate chip (Keaton feedback
-  // 2026-08-27 — with avoidHighways ON, "No highways" crowded Balanced/Clearest
-  // out of the card). Router still emits it as a distinct option; this only
-  // changes its presentation. Three primary options are geometry-deduped by the
-  // engine, and a 0-camera Fastest already shows the "Camera-free route" badge,
-  // so the "Clearest == Fastest" collapse needs no extra code here.
+  // Always render three primary slots — Fastest / Balanced / Clearest. The
+  // avoid-highways option is fully retired (addendum 3): the engine decides
+  // highway tradeoffs via the generalized cost model, and the "Most natural"
+  // pill surfaces the win. Three primary options are geometry-deduped by the
+  // engine, and a 0-camera Fastest already shows the "Camera-free route"
+  // badge, so the "Clearest == Fastest" collapse needs no extra code here.
   const optBtn = (o, idx) => {
     const cams =
       o.cameras === 0
@@ -290,9 +287,13 @@ function renderEngineCard(app, card, result) {
         ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} clear to within ~${fmtDistance(o.clearToM)}</span>`
         : '';
     const dKm = o.distance - fastest.distance;
+    // Distance tradeoff vs fastest: shown as a compact suffix in the meta line
+    // (Keaton feedback: the big standalone "↓ shorter / ↑ longer than fastest"
+    // tradeoff span spilled the card and duplicated what the map comparison
+    // already shows — keep the info, kill the noise).
     const tradeoff =
       fastest && o !== fastest && Math.abs(dKm) >= 100
-        ? `<span class="opt-tradeoff ${dKm < 0 ? 'shorter' : 'longer'}">${dKm < 0 ? '↓' : '↑'} ${fmtDistance(Math.abs(dKm))} ${dKm < 0 ? 'shorter' : 'longer'} than fastest</span>`
+        ? ` · <span class="opt-tradeoff ${dKm < 0 ? 'shorter' : 'longer'}">${dKm < 0 ? '↓' : '↑'} ${fmtDistance(Math.abs(dKm))}</span>`
         : '';
     const natural =
       fastest && o !== fastest && o.distance < fastest.distance &&
@@ -310,17 +311,7 @@ function renderEngineCard(app, card, result) {
         </button>`;
   };
 
-  const primaryOpts = options.filter((o) => o.mode !== 'no_highways');
-  const hwOpt = options.find((o) => o.mode === 'no_highways');
-  const optHtml = primaryOpts.map((o) => optBtn(o, options.indexOf(o))).join('');
-  // "No highways" = modifier chip beneath the three primary slots.
-  const modifierHtml = hwOpt
-    ? `<button class="route-opt-mod ${options.indexOf(hwOpt) === chosen ? 'chosen' : ''}" data-opt="${options.indexOf(hwOpt)}" type="button" aria-pressed="${options.indexOf(hwOpt) === chosen}">${icon('road', { size: 13 })} Without highways · ${fmtDuration(hwOpt.duration)} · ${fmtDistance(hwOpt.distance)} · ${hwOpt.cameras === 0 ? '0 cameras' : hwOpt.cameras + ' camera' + (hwOpt.cameras === 1 ? '' : 's')}</button>`
-    : '';
-
-  // Item (10): the "+X min vs fastest" detour warning is gone — per-option
-  // time/distance are visible on each button and the map shows routes side by
-  // side, so the card-level complaint was noise.
+  const optHtml = options.map((o) => optBtn(o, options.indexOf(o))).join('');
 
   const steps = sel.instructions || [];
   const stepHtml = steps
@@ -345,7 +336,7 @@ function renderEngineCard(app, card, result) {
         ? `${icon('shield', { size: 15 })} Fully clear of known cameras`
         : `${icon('shield', { size: 15 })} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
     }</div>
-    <div class="route-options">${optHtml}</div>${modifierHtml ? `\n    <div class="route-modifiers">${modifierHtml}</div>` : ''}
+    <div class="route-options">${optHtml}</div>
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : ''}
   `;
@@ -353,7 +344,7 @@ function renderEngineCard(app, card, result) {
 
   const edit = $('#editRouteBtn');
   if (edit) edit.addEventListener('click', () => expandSearch(app));
-  card.querySelectorAll('.route-opt, .route-opt-mod').forEach((b) =>
+  card.querySelectorAll('.route-opt').forEach((b) =>
     b.addEventListener('click', () => app.selectOption(Number(b.dataset.opt)))
   );
   const sn = $('#startNavBtn');
@@ -361,7 +352,7 @@ function renderEngineCard(app, card, result) {
 }
 
 function modeEmoji(mode) {
-  return { strict: icon('glasses', { size: 15 }), moderate: icon('shield', { size: 15 }), off: icon('rocket', { size: 15 }), no_highways: icon('road', { size: 15 }) }[mode] || icon('shield', { size: 15 });
+  return { strict: icon('glasses', { size: 15 }), moderate: icon('shield', { size: 15 }), off: icon('rocket', { size: 15 }) }[mode] || icon('shield', { size: 15 });
 }
 
 function renderLegacyCard(app, card, result) {

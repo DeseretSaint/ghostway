@@ -19,9 +19,8 @@ const app = {
   state: {
     from: null, // {coords, label}
     to: null,
-    mode: localStorage.getItem('gw-mode') || 'moderate', // strict | moderate | off
+    mode: localStorage.getItem('gw-mode') || 'strict', // strict | moderate | off — STRICT DEFAULT (camera avoidance IS the mission)
     avoid: true, // derived from mode !== 'off' (kept for legacy path)
-    avoidHighways: localStorage.getItem('gw-avoid-hw') === '1', // prefer surface streets
     compactBanner: localStorage.getItem('gw-compact') === '1',
     route: null,
     options: [], // engine route options
@@ -316,15 +315,6 @@ function wireApp() {
 
   $('#camInfoBtn').addEventListener('click', openWhyModal);
 
-  // Avoid-highways preference: adds a "No highways" route option and, when
-  // active, prefers it. Persisted like the avoidance mode.
-  $('#avoidHwBtn').addEventListener('click', () => {
-    app.state.avoidHighways = !app.state.avoidHighways;
-    localStorage.setItem('gw-avoid-hw', app.state.avoidHighways ? '1' : '0');
-    applyModeUI();
-    if (app.state.from && app.state.to) onRoute();
-  });
-
   // Drawer actions.
   $('#drawer').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
@@ -345,11 +335,6 @@ function applyModeUI() {
     b.classList.toggle('active', b.dataset.mode === mode);
     b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false');
   });
-  const hwBtn = $('#avoidHwBtn');
-  if (hwBtn) {
-    hwBtn.classList.toggle('on', !!app.state.avoidHighways);
-    hwBtn.setAttribute('aria-pressed', app.state.avoidHighways ? 'true' : 'false');
-  }
 }
 
 function setEndpoints(from, to) {
@@ -431,6 +416,39 @@ function onLocationFix(coords) {
     app.state.from.coords = coords;
     if (!app.state.navigating && moved > 40) maybeAutoRoute();
   }
+  // Live ETA without active navigation (Keaton report 2026-08-27): after a
+  // route exists, keep the distance/ETA readout current as the user drives —
+  // without forcing a re-route. Throttled: only recompute after ≥100 m of
+  // movement AND ≥30 s since the last update.
+  if (!app.state.navigating && app.state.route && app.state.to) {
+    const now = Date.now();
+    app._etaState = app._etaState || { lastPos: coords, lastT: 0 };
+    const st = app._etaState;
+    const sinceMove = distM(st.lastPos || coords, coords);
+    if (sinceMove >= 100 && now - st.lastT >= 30000) {
+      st.lastPos = coords; st.lastT = now;
+      updateLiveEta(coords);
+    }
+  }
+}
+
+// Recompute a lightweight time estimate from the current position to the
+// destination and refresh the route card headline — no full re-route.
+async function updateLiveEta(fromC) {
+  try {
+    const to = app.state.to;
+    if (!to || !to.coords) return;
+    // Prefer the local engine (same data the route was built from); fail soft.
+    const { options } = await planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
+    const pick = pickOptionForMode(options);
+    const o = options[pick];
+    if (!o) return;
+    // Update the stored route so re-renders (units toggle etc.) stay current.
+    app.state.options = options;
+    app.state.chosen = pick;
+    app.state.route = { engine: true, options, chosen: pick };
+    if (!app.state.navigating) renderRouteCard(app, app.state.route);
+  } catch { /* ETA update is best-effort; never disrupt the UI */ }
 }
 
 async function useMyLocation() {
@@ -496,25 +514,16 @@ async function nationalClosures(fromC, toC) {
 }
 
 function pickOptionForMode(options) {
-  // Smart default for camera-avoidance users: rank options by what the user
-  // actually wants — FEWEST cameras first, then FEWEST freeway kilometers, then
-  // SHORTEST distance. This is the combined objective: "the shortest route that
-  // also avoids cameras and the highway." A single-axis mode (strict/moderate)
-  // can't express that, so we score across all generated options instead of
-  // blindly trusting one mode's route. Off (fastest) users still get Fastest.
-  if (app.state.mode === 'off' || !app.state.avoid) {
-    const f = options.findIndex((o) => o.mode === 'off');
-    return f === -1 ? 0 : f;
-  }
-  let best = -1, bestScore = Infinity;
-  options.forEach((o, i) => {
-    // Weighted lexicographic score: cameras dominate, then highway km, then distance.
-    // Cameras are discrete counts; highwayKm and distance are meters. Normalize
-    // so cameras (×1) outrank any plausible highway/distance delta.
-    const score = o.cameras * 1e7 + (o.highwayKm || 0) * 1000 + o.distance;
-    if (score < bestScore) { bestScore = score; best = i; }
-  });
-  return best === -1 ? 0 : best;
+  // Honor the user's selected mode — the picker at search time IS the choice,
+  // and the route card shows that mode's route (Keaton: "why choose a setting
+  // if I scroll to choose the setting again?"). No cross-mode scoring.
+  const byMode = { strict: 'strict', moderate: 'moderate', off: 'off' }[app.state.mode] || 'moderate';
+  const i = options.findIndex((o) => o.mode === byMode);
+  if (i !== -1) return i;
+  // Requested mode unavailable (e.g. walled/budget fallback): prefer the
+  // camera-avoiding option over Fastest so avoidance intent is preserved.
+  const alt = options.findIndex((o) => o.mode !== 'off');
+  return alt === -1 ? 0 : alt;
 }
 
 async function onRoute() {
@@ -558,7 +567,7 @@ async function routeWithFallbacks(from, to) {
       } else {
       try {
         const t0 = performance.now();
-        const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams(), avoidHighways: app.state.avoidHighways });
+        const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
         const ms = Math.round(performance.now() - t0);
         app.state.options = options;
         // Default pick: closest to the user's mode preference.
@@ -585,7 +594,7 @@ async function routeWithFallbacks(from, to) {
     const t0 = performance.now();
     const mode = app.state.avoid ? (app.state.mode || 'moderate') : 'off';
     const closures = await nationalClosures(from.coords, to.coords);
-    const { options } = await valhallaPlanRoutes(from.coords, to.coords, app.cameras, { mode, closures, avoidHighways: app.state.avoidHighways });
+    const { options } = await valhallaPlanRoutes(from.coords, to.coords, app.cameras, { mode, closures });
     const ms = Math.round(performance.now() - t0);
     app.state.options = options;
     const chosen = pickOptionForMode(options);

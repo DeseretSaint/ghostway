@@ -119,15 +119,12 @@
 
         <div id="avoid-toggle" class="avoid-toggle" hidden>
           <div id="modeSwitch" class="mode-switch" role="radiogroup" aria-label="Camera avoidance level">
-            <button class="mode-btn" data-mode="strict" aria-pressed="false">Strict</button>
-            <button class="mode-btn active" data-mode="moderate" aria-pressed="true">Moderate</button>
-            <button class="mode-btn" data-mode="off" aria-pressed="false">Off</button>
+            <button class="mode-btn active" data-mode="strict" aria-pressed="true">Strict</button>
+            <button class="mode-btn" data-mode="moderate" aria-pressed="false">Balanced</button>
+            <button class="mode-btn" data-mode="off" aria-pressed="false">Fastest</button>
           </div>
           <span class="switch-label">Camera avoidance</span>
           <button id="camInfoBtn" class="text-link" title="What is this?">why?</button>
-          <button id="avoidHwBtn" class="chip-toggle" type="button" aria-pressed="false" title="Prefer surface streets over freeways">
-            Avoid highways
-          </button>
         </div>
         <div id="engineStatus" class="engine-status" role="status" hidden></div>
 

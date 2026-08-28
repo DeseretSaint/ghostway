@@ -119,8 +119,9 @@ export function valhallaInstructions(maneuvers) {
 
 // Full avoidance pipeline. Mirrors the own-graph engine's return shape closely
 // enough for the UI: { options: [{ mode, label, route: {coords,...}, instructions, cameras, distance, duration, delay }] }.
-export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'moderate', closures = [], avoidHighways = false } = {}) {
-  const baseline = await valhallaRoute(from, to, null, { useHighways: !avoidHighways });
+export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'moderate', closures = [] } = {}) {
+  // Avoid-highways retired (addendum 3): engine decides highway tradeoffs.
+  const baseline = await valhallaRoute(from, to, null);
 
   if (mode === 'off') {
     const opt = {
@@ -161,7 +162,7 @@ export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'modera
     if (seed.length) {
       excludes = excludes.concat(seed);
       try {
-        const rerouted = await valhallaRoute(from, to, excludes, { useHighways: !avoidHighways });
+        const rerouted = await valhallaRoute(from, to, excludes);
         if (rerouted) current = rerouted;
       } catch (e) { /* keep baseline */ }
     }
@@ -180,7 +181,7 @@ export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'modera
     excludes = excludes.concat(add);
     let next;
     try {
-      next = await valhallaRoute(from, to, excludes, { useHighways: !avoidHighways });
+      next = await valhallaRoute(from, to, excludes);
     } catch (e) {
       break; // server cap / timeout — keep the best route we have
     }
