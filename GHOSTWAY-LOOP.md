@@ -402,10 +402,15 @@ from this queue first when it's non-empty.
       geocoding, brouter/osrm/valhalla routing, UDOT arcgis traffic, OSM notes
       + overpass (camera reports). All documented open-data sources; zero
       telemetry; geolocation used locally only. Live site 200 in 0.66s.
-- [ ] Data freshness 2026-08-26: camera snapshot asOf 2026-08-15 (11 days old,
+- [x] Data freshness 2026-08-26: camera snapshot asOf 2026-08-15 (11 days old,
       fine); camera-refresh.yml next fires Sep 1 13:40 UTC. Still only
       refreshes public/cameras/cameras.geojson, not graph cam bytes (see
-      existing queue item re: monthly rebuild CI hook).
+      existing queue item re: monthly rebuild CI hook). RESOLVED 2026-09-03
+      (ghostway-coder tick): graph-refresh.yml (2nd of month) already runs
+      `node scripts/fetch-cameras.mjs` BEFORE graph rebuild, refreshing
+      public/cameras/cameras.geojson AND engine/data/cameras-usa.geojson.
+      Shipped snapshot asOf 2026-08-27T01:14Z (7 days, within monthly window).
+      Build + dot-feeds-check PASS. Item retired.
 - [x] Ops (found 2026-08-26 18:45 MST): 16-file lazy-engine changeset —
       RESOLVED 2026-08-27 02:05 MDT (slot-A round 48): evaluated full diff,
       verified (build exit 0; engine-check + snap-dist-check + engine-e2e PASS,
