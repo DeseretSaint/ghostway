@@ -1,8 +1,8 @@
-// Hermetic nav camera-chip E2E (slot-B): drive a real route with mocked GPS and
-// assert the live #camChip reports passed/total and tick the actual count up as
-// the drive progresses. Also asserts app._camPassed (the value the arrival
-// screen now uses) is tracked. Spawns its own preview (round-23 pattern) so it
-// runs standalone with no orphan vite servers.
+// Hermetic nav camera-chip E2E (C12 #126): the camera chip is the MISSION
+// SIGNAL — the only data element the compact banner's side column carries.
+// On a camera-free route it renders "Clear" (shieldCheck + green, the payoff);
+// on a camera-bearing route it shows the live passed/total count. Either way
+// app._camPassed must be a real number and the chip must reflect reality.
 import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -78,24 +78,27 @@ const chip = await p.evaluate(() => {
   const el = document.querySelector('#camChip');
   const passed = window.__gw._camPassed;
   const pts = (window.__gw._camPts || []).length;
-  return { text: el ? el.innerText : '', passed, pts, hasSlash: el ? el.innerText.includes('/') : false };
+  return {
+    text: el ? el.innerText.trim() : '',
+    passed,
+    pts,
+    hasSlash: el ? el.innerText.includes('/') : false,
+    // "Clear" state: the chip carries a .cam-clear-ic span (shieldCheck icon)
+    // and the visible text reads "Clear".
+    hasClearIc: !!el?.querySelector('.cam-clear-ic'),
+    hasClearText: (el ? el.innerText : '').includes('Clear'),
+  };
 });
 console.log('cam chip:', JSON.stringify(chip));
 
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 4));
 try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
-// A camera-free route legitimately renders the chip as "0" (no slash) — the
-// engine rebuild made PG→Costco camera-free, so the live count is 0 and that
-// is the HONEST product behavior. A camera-bearing route must instead tick the
-// live passed count up and show passed/total (slash form). Either way
-// app._camPassed must be a real number and the chip must reflect reality.
 const pass =
-  // Camera-free route: chip honestly renders "0" and never sets _camPassed
-  // (updateCamChip returns early) — that is correct product behavior.
-  (chip.pts === 0 && chip.text.trim() === '0') ||
+  // Camera-free route: chip honestly renders "Clear" (shieldCheck + green).
+  (chip.pts === 0 && chip.hasClearIc && chip.hasClearText) ||
   // Camera-bearing route: live count ticks and chip shows passed/total.
   (typeof chip.passed === 'number' && chip.hasSlash && chip.passed >= 1);
-console.log(pass ? '\nNAV-CAMCHIP PASS ✅ — chip shows passed/total, live count tracked' : '\nNAV-CAMCHIP FAIL ❌');
+console.log(pass ? '\nNAV-CAMCHIP PASS ✅ — Clear chip for camera-free route (or passed/total for camera route)' : '\nNAV-CAMCHIP FAIL ❌');
 pv.kill();
 process.exit(pass ? 0 : 1);

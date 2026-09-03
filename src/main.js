@@ -926,23 +926,28 @@ function updateSpeed(pos) {
   app._navLastT = now;
   const chip = $('#speedChip');
   if (chip) {
+    // C12 #126: speed chip is over-speed-only during nav. While moving under
+    // the limit the driver has no business looking at it. checkOverSpeed()
+    // sets the `.over` class; visibility tracks that, NOT just speed presence.
+    const over = checkOverSpeed();
     chip.textContent = fmtSpeed(app._navSpeed);
-    chip.hidden = app._navSpeed == null;
-    checkOverSpeed();
+    chip.hidden = app._navSpeed == null || !over;
   }
 }
 
 // Over-speed alert (Workstream C): compare smoothed GPS speed against the
 // current step's posted limit. Visual: red chip. Voice: at most once/minute.
+// Returns true when the driver is over the limit so callers can gate visibility
+// (C12 #126: speed chip renders ONLY in this state).
 function checkOverSpeed() {
   const chip = $('#speedChip');
-  if (!chip || !app.state.navigating || app._navSpeed == null) return;
+  if (!chip || !app.state.navigating || app._navSpeed == null) return false;
   const steps = app._navSteps || [];
   const step = steps[Math.min(app.state.stepIndex, steps.length - 1)];
   const limitKmh = step && step.speedLimit;
   if (!limitKmh) {
     chip.classList.remove('over');
-    return;
+    return false;
   }
   const speedKmh = app._navSpeed * 3.6;
   const over = speedKmh > limitKmh + 8; // tolerance ~5 mph
@@ -1188,16 +1193,14 @@ function announceNav(text) {
   requestAnimationFrame(() => { el.textContent = text; });
 }
 function updateEta(traveled) {
+  // C12 #126: arrival clock removed from the active-nav banner — ETA is the
+  // one time signal. The arrival clock still lives in the steps list / arrival
+  // screen for users who want it.
   const etaEl = $('#navEta');
   if (!etaEl || !app._totalDuration) return;
   const frac = Math.min(1, Math.max(0, traveled / (app._routeTotal || 1)));
   const remain = app._totalDuration * (1 - frac);
   etaEl.textContent = fmtDuration(remain);
-  // Maps parity: show the arrival clock too — remaining time answers "how
-  // long", the arrival time answers "when". Recomputed every tick so it
-  // tracks real progress, not the estimate at nav start.
-  const arriveEl = $('#navArrive');
-  if (arriveEl) arriveEl.textContent = 'Arrive ' + fmtArrive(remain);
 }
 
 // Thin route-progress bar along the banner's bottom edge (Maps parity):
@@ -1211,15 +1214,23 @@ function updateProgress(traveled) {
 
 // Live camera accounting during navigation: counts camera clusters already
 // passed and flags the next one within 250 m as "ahead" (mission visibility).
+// Camera chip = the mission signal (Workstream C12 #126). Three states:
+//   - empty route (zero cameras): shieldCheck + "Clear" (green, prominent) —
+//     this is the payoff, the whole reason Ghostway exists.
+//   - camera ahead (≤250 m): warning + "Cam {d}" (amber, pulsing).
+//   - passed some, none ahead: camera icon + "passed/total" (muted).
+// In compact mode the chip is the ONLY data element in the side column; the
+// speed chip demotes to over-speed-only and ETA is the only time signal.
 function updateCamChip(traveled) {
   const chip = $('#camChip');
   const pts = app._camPts || [];
   if (!chip) return;
-  const camIc = icon('camera', { size: 14 });
   if (!pts.length) {
-    chip.innerHTML = `${camIc} 0`;
+    chip.innerHTML = `<span class="cam-clear-ic">${icon('shieldCheck', { size: 16 })}</span> Clear`;
     chip.classList.remove('ahead', 'passed');
+    chip.classList.add('clear');
     chip.title = 'This route passes zero known cameras';
+    app._camPassed = 0;
     return;
   }
   let passed = 0;
@@ -1230,12 +1241,13 @@ function updateCamChip(traveled) {
   }
   const ahead = nextCam && nextCam.at - traveled <= 250;
   const total = pts.length;
+  chip.classList.remove('clear');
   if (ahead) {
     const d = fmtNavDistance(Math.max(0, nextCam.at - traveled));
-    chip.innerHTML = `<span class="cam-ahead-ic">${icon('warning', { size: 14 })}</span> Cam ${d}`;
+    chip.innerHTML = `<span class="cam-ahead-ic">${icon('warning', { size: 16 })}</span> Cam ${d}`;
     chip.title = `Camera ${d} ahead · ${passed}/${total} passed on this route`;
   } else {
-    chip.innerHTML = `${camIc} ${passed}/${total}`;
+    chip.innerHTML = `${icon('camera', { size: 16 })} ${passed}/${total}`;
     chip.title = `${passed} of ${total} camera${total === 1 ? '' : 's'} passed on this route`;
   }
   chip.classList.toggle('ahead', !!ahead);
@@ -1265,11 +1277,16 @@ function renderNavStep() {
   const dir = next ? next.instruction : step.instruction;
   const road = next && next.name ? ` onto <b>${escHtml(next.name)}</b>` : next && step.name ? ` onto <b>${escHtml(step.name)}</b>` : '';
   const maneuverIcon = next ? stepIcon(next.modifier) : stepIcon(step.modifier);
-  const limit = (next && next.speedLimit) || step.speedLimit;
-  const limitMph = limit ? Math.round(limit * 0.621371 / 5) * 5 : null;
   const eta = app._totalDuration ? fmtDuration(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0]))) : '';
   const voiceOn = voiceEnabled();
   const compact = app.state.compactBanner;
+  // C12 #126: compact banner is the active-nav default (driver safety). It
+  // strips the banner to 6 elements: stop / icon / distance+direction cluster /
+  // voice / ETA / camera chip. The "then" preview, speed-limit badge, progress
+  // bar, arrival clock, and density toggle are all demoted — they're either
+  // available in the steps list (then / arrival) or in the planning panel
+  // (density) where the user is stationary. Full mode is still reachable via
+  // the toggle in the route card before nav starts.
 
   $('#navBanner').innerHTML = `
     <button id="navStop" class="nav-stop" aria-label="Stop navigation">${icon('close', { size: 18 })}</button>
@@ -1277,18 +1294,15 @@ function renderNavStep() {
     <div class="nav-step">
       <div class="nav-dist" id="navDist">${dist}</div>
       <div class="nav-dir">${escHtml(dir)}${road}</div>
-      ${next ? `<div class="nav-then">then ${stepIcon(step.modifier)} ${escHtml(lower(step.instruction))}${step.name ? ` · ${escHtml(step.name)}` : ''}</div>` : ''}
+      ${!compact && next ? `<div class="nav-then">then ${stepIcon(step.modifier)} ${escHtml(lower(step.instruction))}${step.name ? ` · ${escHtml(step.name)}` : ''}</div>` : ''}
     </div>
     <div class="nav-side">
       <div class="nav-side-row">
         <button id="voiceBtn" class="nav-voice ${voiceOn ? 'on' : ''}" aria-label="Toggle voice" aria-pressed="${voiceOn}" title="Voice guidance">${icon(voiceOn ? 'volume' : 'volumeOff', { size: 16 })}</button>
-        <button id="densityBtn" class="nav-voice" aria-label="Toggle banner density" aria-pressed="${!!compact}" title="Compact / full banner">${icon(compact ? 'densityFull' : 'densityCompact', { size: 16 })}</button>
       </div>
-      ${limitMph ? `<div class="speed-limit"><span class="sl-num">${limitMph}</span><span class="sl-lbl">MAX</span></div>` : ''}
       <div id="speedChip" class="speed-chip" hidden></div>
-      <div id="camChip" class="cam-chip" title="Cameras passed / ahead on this route">${icon('camera', { size: 14 })} 0</div>
+      <div id="camChip" class="cam-chip mission-signal" title="Cameras passed / ahead on this route">${icon('shieldCheck', { size: 16 })} Clear</div>
       <div class="nav-eta" id="navEta">${eta}</div>
-      <div class="nav-arrive" id="navArrive">${eta ? 'Arrive ' + fmtArrive(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0]))) : ''}</div>
     </div>
     <div class="nav-progress" aria-hidden="true"><div class="nav-progress-fill" id="navProgressFill"></div></div>`;
   $('#navBanner').classList.toggle('compact', !!compact);
@@ -1298,12 +1312,6 @@ function renderNavStep() {
     $('#voiceBtn').classList.toggle('on', on);
     $('#voiceBtn').setAttribute('aria-pressed', on ? 'true' : 'false');
     if (on) speak('Voice guidance on.');
-  });
-  $('#densityBtn').addEventListener('click', () => {
-    app.state.compactBanner = !app.state.compactBanner;
-    localStorage.setItem('gw-compact', app.state.compactBanner ? '1' : '0');
-    $('#densityBtn').setAttribute('aria-pressed', app.state.compactBanner ? 'true' : 'false');
-    renderNavStep();
   });
   // Initialize the camera chip + progress bar from the real progress, not a hardcoded 0.
   updateCamChip(traveled);

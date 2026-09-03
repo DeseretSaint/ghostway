@@ -1146,6 +1146,18 @@ details summary {
   padding: 0 8px;
   font-size: 13px;
 }
+/* C12 #126: density toggle moved to the planning panel. Subdued link under
+   the Start button — visible only at planning time (not while driving). */
+.rc-density {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  min-height: 36px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
 
 /* ---- Iteration 2: upgraded nav banner ---- */
 .nav-banner {
@@ -1499,12 +1511,16 @@ details summary {
 @keyframes slide-up { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
-/* Live camera counter in the nav banner */
+/* Live camera counter in the nav banner. C12 #126: this is the MISSION SIGNAL
+   for Ghostway — the whole reason the app exists. The default (no cameras)
+   gets the loudest treatment: green check + "Clear". When a camera is within
+   250 m ahead, the chip turns amber + pulsing. When the driver has passed
+   some, the chip goes muted but still present. */
 .cam-chip {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-size: 13px;
   font-weight: 700;
   padding: 3px 8px;
@@ -1514,8 +1530,18 @@ details summary {
   border: 1px solid var(--line);
   white-space: nowrap;
 }
+.cam-chip.mission-signal {
+  /* Banner compact mode = default; this is the prominent mission readout */
+  font-size: 14px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(63, 185, 130, 0.12);
+  border-color: rgba(63, 185, 130, 0.45);
+  color: #3fb982;
+}
+.cam-chip .cam-clear-ic { display: inline-flex; color: #3fb982; }
 .cam-chip .cam-ahead-ic { display: inline-flex; }
-.cam-chip.passed { color: var(--muted); }
+.cam-chip.passed { color: var(--muted); background: var(--bg-2); border-color: var(--line); }
 .cam-chip.ahead {
   color: #fff;
   background: var(--danger-strong);
@@ -1548,7 +1574,11 @@ select.rp-input {
 .drawer-item.accent { color: var(--accent); font-weight: 600; }
 .lg-dot.report { background: #c77dff; }
 
-/* Compact banner density (iteration 15) */
+/* Compact banner density (C12 #126). Default during active nav. Strips the
+   banner to the minimum glance set: stop / icon / distance / direction / voice
+   / ETA / camera chip. The "then" preview, speed-limit badge, progress bar,
+   arrival clock, and density toggle are all hidden here — they belong in the
+   route card / steps list, not the safety-critical surface. */
 .nav-side-row { display: flex; gap: 5px; }
 .nav-banner.compact { padding: 8px 10px; gap: 8px; }
 .nav-banner.compact .nav-icon { width: 38px; height: 38px; font-size: 22px; border-radius: 9px; }
@@ -1558,8 +1588,11 @@ select.rp-input {
 .nav-banner.compact .speed-limit { display: none; }
 .nav-banner.compact .nav-eta { font-size: 12px; }
 .nav-banner.compact .nav-arrive { display: none; }
+.nav-banner.compact .nav-progress { display: none; }
 .nav-banner.compact .speed-chip { font-size: 12px; padding: 1px 7px; }
-.nav-banner.compact .cam-chip { font-size: 12px; padding: 1px 7px; }
+/* Camera chip stays prominent in compact — it's the only data element the
+   side column carries, and it's the mission signal. */
+.nav-banner.compact .cam-chip { font-size: 13px; padding: 4px 9px; }
 
 /* Maneuver-approach emphasis (slot-B round 65): within ~220 m of the next
    turn the banner goes urgent — warm distance number + softly pulsing

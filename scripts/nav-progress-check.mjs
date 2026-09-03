@@ -1,7 +1,9 @@
-// Hermetic nav progress-bar E2E (slot-B round 63): drive a real route with
-// mocked GPS and assert the new #navProgressFill bar fills left→right with
-// actual route progress (Maps parity). Spawns its own preview (round-23
-// pattern) so it runs standalone with no orphan vite servers.
+// Hermetic nav progress-bar E2E (C12 #126): drive a real route with mocked
+// GPS and assert the banner is in compact mode by default (safety-first glance
+// density), the progress bar fills left→right with real progress, ETA counts
+// down live, the camera chip shows "Clear" for a camera-free route, and the
+// approach emphasis fires near turns. Spawns its own preview so it runs
+// standalone with no orphan vite servers.
 import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -80,29 +82,31 @@ const etaMin = () => p.evaluate(() => {
   if (!m && !h) return null;
   return (h ? parseInt(h[1], 10) * 60 : 0) + (m ? parseInt(m[1], 10) : 0);
 });
-// Round 66: arrival clock in the nav banner — "Arrive H:MM AM/PM", recomputed
-// every tick. Parse to minutes-of-day so we can assert it moves EARLIER as the
-// simulated drive eats remaining time.
-const arriveTxt = () => p.evaluate(() => {
-  const el = document.querySelector('#navArrive');
-  return el ? el.textContent : null;
+const camChip = () => p.evaluate(() => {
+  const el = document.querySelector('#camChip');
+  return el ? el.textContent.trim() : null;
 });
-const arriveMin = (t) => {
-  if (!t) return null;
-  const m = t.match(/Arrive\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-  if (!m) return null;
-  let h = parseInt(m[1], 10) % 12;
-  if (/PM/i.test(m[3] || '')) h += 12;
-  return h * 60 + parseInt(m[2], 10);
-};
+const bannerState = () => p.evaluate(() => {
+  const banner = document.querySelector('#navBanner');
+  if (!banner) return null;
+  const elHidden = (sel) => {
+    const el = banner.querySelector(sel);
+    return !el || el.getClientRects().length === 0;
+  };
+  return {
+    compact: banner.classList.contains('compact'),
+    thenHidden: elHidden('.nav-then'),
+    progressHidden: elHidden('.nav-progress'),
+    arriveHidden: elHidden('.nav-arrive'),
+    densityInBanner: !!banner.querySelector('#densityBtn'),
+  };
+});
 
 const w0 = await fillPct();
 const e0 = await etaMin();
-const a0txt = await arriveTxt();
-const a0 = arriveMin(a0txt);
-// Round 68: ARIA live-region mirror of voice guidance. The first maneuver
-// phrase is announced at startNav — it must land in #navLive (visually
-// hidden, role=status) so SR users get it even with voice toggled off.
+const cam0 = await camChip();
+const state0 = await bannerState();
+// Round 68: ARIA live-region mirror of voice guidance.
 const live0 = await p.evaluate(() => {
   const el = document.querySelector('#navLive');
   if (!el) return null;
@@ -114,9 +118,8 @@ const live0 = await p.evaluate(() => {
     hiddenW: cs.width,
   };
 });
-console.log('fill at nav start:', w0, '| eta:', e0, '| arrive:', a0txt, '| live:', JSON.stringify(live0));
-// Watch the live region for the rest of the drive (step-change + camera
-// announcements must keep landing there).
+console.log('nav start — fill:', w0, '| eta:', e0, '| cam:', cam0, '| banner:', JSON.stringify(state0), '| live:', JSON.stringify(live0));
+
 await p.evaluate(() => {
   window.__liveSeen = [];
   const el = document.querySelector('#navLive');
@@ -128,19 +131,15 @@ await drive(0, 0.45, 25);
 await wait(800);
 const w1 = await fillPct();
 const e1 = await etaMin();
-console.log('fill at ~45% drive:', w1, '| eta:', e1);
+console.log('~45% drive — fill:', w1, '| eta:', e1);
 await drive(0.45, 0.9, 25);
 await wait(800);
 const w2 = await fillPct();
 const e2 = await etaMin();
-const a2txt = await arriveTxt();
-const a2 = arriveMin(a2txt);
-console.log('fill at ~90% drive:', w2, '| eta:', e2, '| arrive:', a2txt);
+const cam2 = await camChip();
+console.log('~90% drive — fill:', w2, '| eta:', e2, '| cam:', cam2);
 
-// Round 65: maneuver-approach emphasis — re-scan the route sampling the
-// banner's .approach class; both states must occur (near a turn = urgent,
-// mid-block = normal) and the urgent state must carry the bundled CSS
-// (pulse animation name + warm distance color).
+// Round 65: maneuver-approach emphasis.
 const appr = await p.evaluate(async () => {
   const coords = window.__ghostwayNavCoords;
   const seen = { t: false, f: false, animOk: false, distColor: null };
@@ -177,27 +176,26 @@ console.log('live-region announcements during drive:', liveSeen.length, liveSeen
 console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 4));
 try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
-// Bar must exist, start near 0, and grow monotonically with real progress,
-// reaching a large fill by ~90% of the route. ETA must count DOWN live
-// (round 64: it was only re-rendered on step changes → stale on long steps).
+// C12 #126: banner defaults to compact (safety-first). The "then" preview,
+// progress bar, arrival clock, and density toggle are all hidden. The camera
+// chip shows "Clear" for a camera-free route (the mission payoff).
 const pass =
-  w0 !== null &&
-  w0 < 10 &&
-  w1 > w0 + 10 &&
-  w2 > w1 + 10 &&
-  w2 > 60 &&
-  e0 !== null &&
-  e1 !== null && e1 < e0 &&
-  e2 !== null && e2 < e1 &&
-  a0 !== null && a2 !== null &&
-  (a2 <= a0 || a2 >= a0 + 700) && // arrival clock moves earlier (midnight-wrap tolerated)
+  // Compact by default.
+  state0.compact && state0.thenHidden && state0.progressHidden && state0.arriveHidden && !state0.densityInBanner &&
+  // Camera chip shows "Clear" for a camera-free route.
+  cam0 === 'Clear' &&
+  // Progress bar fills monotonically.
+  w0 !== null && w0 < 10 &&
+  w1 > w0 + 10 && w2 > w1 + 10 && w2 > 60 &&
+  // ETA counts down live.
+  e0 !== null && e1 !== null && e1 < e0 && e2 !== null && e2 < e1 &&
+  // Approach emphasis fires near turns.
   appr.t && appr.f && appr.animOk && appr.distColor === 'rgb(255, 170, 64)' &&
-  live0 !== null &&
-  live0.role === 'status' &&
-  live0.live === 'polite' &&
-  live0.hiddenW === '1px' &&
-  (live0.text || '').length > 3 &&
+  // SR live region announces.
+  live0 !== null && live0.role === 'status' && live0.live === 'polite' &&
+  live0.hiddenW === '1px' && (live0.text || '').length > 3 &&
   liveSeen.length >= 1;
-console.log(pass ? '\nNAV-PROGRESS PASS ✅ — bar fills + ETA counts down + arrival clock live + approach emphasis fires near turns + SR live region announces' : '\nNAV-PROGRESS FAIL ❌');
+
+console.log(pass ? '\nNAV-PROGRESS PASS ✅ — compact default + Clear chip + bar fills + ETA counts down + approach emphasis + SR live region' : '\nNAV-PROGRESS FAIL ❌');
 pv.kill();
 process.exit(pass ? 0 : 1);

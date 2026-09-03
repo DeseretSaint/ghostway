@@ -68,26 +68,25 @@ async function main() {
     await wait(1400);
     await capture(page, vp, 'routecard');
 
-    // 3) Nav banner: inject a representative banner for a static capture.
+    // 3) Nav banner: inject a representative COMPACT banner (C12 #126 default).
     await page.evaluate(() => {
       const b = document.querySelector('#navBanner');
       b.hidden = false;
+      b.classList.add('compact');
       b.innerHTML = `
         <button id="navStop" class="nav-stop" aria-label="Stop navigation">✕</button>
         <div class="nav-icon" aria-hidden="true">↱</div>
         <div class="nav-step">
           <div class="nav-dist" id="navDist">0.4 mi</div>
           <div class="nav-dir">Turn right onto <b>State St</b></div>
-          <div class="nav-then">then ↑ continue · Main St</div>
         </div>
         <div class="nav-side">
           <div class="nav-side-row">
             <button id="voiceBtn" class="nav-voice on" aria-label="Toggle voice">🔊</button>
-            <button id="densityBtn" class="nav-voice" aria-label="Toggle density">▤</button>
           </div>
-          <div class="speed-limit"><span class="sl-num">35</span><span class="sl-lbl">MAX</span></div>
-          <div id="camChip" class="cam-chip">📷 2</div>
-          <div class="nav-eta">12 min</div>
+          <div id="speedChip" class="speed-chip" hidden></div>
+          <div id="camChip" class="cam-chip mission-signal">✓ Clear</div>
+          <div class="nav-eta" id="navEta">12 min</div>
         </div>`;
     });
     await wait(300);

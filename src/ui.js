@@ -338,6 +338,7 @@ function renderEngineCard(app, card, result) {
     }</div>
     <div class="route-options">${optHtml}</div>
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
+    <button id="densityBtn" class="text-link rc-density" type="button" aria-pressed="${!!app.state.compactBanner}" title="Toggle the active-nav banner density (compact = fewer glance elements)">${icon(app.state.compactBanner ? 'densityFull' : 'densityCompact', { size: 14 })} ${app.state.compactBanner ? 'Compact banner' : 'Full banner'}</button>
     ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : ''}
   `;
   card.hidden = false;
@@ -349,6 +350,17 @@ function renderEngineCard(app, card, result) {
   );
   const sn = $('#startNavBtn');
   if (sn) sn.addEventListener('click', () => app.startNav());
+  // C12 #126: density lives in the planning panel (where the user is
+  // stationary), not the active-nav banner (where the user is driving).
+  const density = $('#densityBtn');
+  if (density) {
+    density.addEventListener('click', () => {
+      app.state.compactBanner = !app.state.compactBanner;
+      localStorage.setItem('gw-compact', app.state.compactBanner ? '1' : '0');
+      density.setAttribute('aria-pressed', app.state.compactBanner ? 'true' : 'false');
+      density.innerHTML = `${icon(app.state.compactBanner ? 'densityFull' : 'densityCompact', { size: 14 })} ${app.state.compactBanner ? 'Compact banner' : 'Full banner'}`;
+    });
+  }
 }
 
 function modeEmoji(mode) {
