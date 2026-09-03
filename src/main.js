@@ -1458,6 +1458,7 @@ function clearRoute() {
   $('#route-actions').hidden = true;
   $('#avoid-toggle').hidden = true;
   $('#route-card').hidden = true;
+  $('#panel').classList.remove('panel--expanded');
   app.map.setRoute([]);
   app.map.setEndpoints([]);
   clearStatus();

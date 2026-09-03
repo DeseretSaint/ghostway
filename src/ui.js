@@ -276,6 +276,9 @@ export function renderRouteCard(app, result) {
   $('#search').hidden = true;
   $('#route-actions').hidden = true;
   $('#avoid-toggle').hidden = true;
+  // Expand the panel so the route card (headline + badge + options + Start)
+  // fits without vertical scrolling — zero-scroll on nav/route card.
+  $('#panel').classList.add('panel--expanded');
   if (result.engine) {
     renderEngineCard(app, card, result);
     return;
@@ -287,6 +290,8 @@ export function expandSearch(app) {
   $('#search').hidden = false;
   $('#route-actions').hidden = false;
   $('#avoid-toggle').hidden = false;
+  // Restore the panel to its normal max-height when the search form is shown.
+  $('#panel').classList.remove('panel--expanded');
 }
 
 function renderEngineCard(app, card, result) {
@@ -373,7 +378,6 @@ function renderEngineCard(app, card, result) {
     <div class="route-options">${optHtml}</div>
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     <button id="densityBtn" class="text-link rc-density" type="button" aria-pressed="${!!app.state.compactBanner}" title="Toggle the active-nav banner density (compact = fewer glance elements)">${icon(app.state.compactBanner ? 'densityFull' : 'densityCompact', { size: 14 })} ${app.state.compactBanner ? 'Compact banner' : 'Full banner'}</button>
-    ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : ''}
   `;
   card.hidden = false;
 

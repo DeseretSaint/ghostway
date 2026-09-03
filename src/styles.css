@@ -242,6 +242,7 @@ body {
   color: var(--muted);
 }
 
+
 /* Panel */
 .panel {
   position: absolute;
@@ -260,6 +261,12 @@ body {
   max-height: 52vh;
   overflow-y: auto;
 }
+/* When the route card is shown (search hidden), expand the panel to fit
+   the card without scrolling — the route card is the primary surface now. */
+.panel--expanded {
+  max-height: 80vh;
+}
+
 .field {
   display: flex;
   align-items: center;
@@ -497,9 +504,9 @@ body {
 }
 
 .route-card {
-  margin-top: 10px;
+  margin-top: 6px;
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 6px;
 }
 .rc-head {
   display: flex;
@@ -507,24 +514,24 @@ body {
   gap: 12px;
 }
 .rc-time {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.5px;
   line-height: 1.1;
 }
 .rc-dist {
-  font-size: 16px;
+  font-size: 14px;
   color: var(--muted);
 }
 .rc-arrive {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--accent);
   align-self: center;
 }
 .rc-badge {
-  margin-top: 8px;
-  font-size: 14px;
+  margin-top: 6px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--accent);
 }
@@ -1000,21 +1007,21 @@ details summary {
 .route-options {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 10px 0;
+  gap: 4px;
+  margin: 6px 0;
 }
 .route-opt {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px 8px;
   width: 100%;
-  min-height: 48px;
+  min-height: 44px;
   background: var(--bg-2);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
-  padding: 10px 12px;
+  padding: 8px 10px;
   cursor: pointer;
   text-align: left;
   color: var(--ink);
