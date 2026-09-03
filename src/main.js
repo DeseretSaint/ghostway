@@ -21,7 +21,7 @@ const app = {
     to: null,
     mode: localStorage.getItem('gw-mode') || 'strict', // strict | moderate | off — STRICT DEFAULT (camera avoidance IS the mission)
     avoid: true, // derived from mode !== 'off' (kept for legacy path)
-    compactBanner: localStorage.getItem('gw-compact') === '1',
+    compactBanner: localStorage.getItem('gw-compact') !== '0',
     route: null,
     options: [], // engine route options
     chosen: 0,
