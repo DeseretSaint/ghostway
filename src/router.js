@@ -27,6 +27,11 @@ let loadPromise = null;
 // (not just the first) — otherwise a concurrent route started while a load is
 // in flight shows no stage feedback (stuck on "Downloading map data…").
 let loadProgressCbs = [];
+// Test/diagnostic: records progress events + timing for hermetic speed-check.
+let graphStats = { progressEvents: [], loadStart: 0, loadEnd: 0 };
+
+export function getGraphStats() { return graphStats; }
+export function resetGraphStats() { graphStats = { progressEvents: [], loadStart: 0, loadEnd: 0 }; }
 
 export function graphStatus() {
   return graph ? 'ready' : loadPromise ? 'loading' : 'idle';
@@ -53,17 +58,53 @@ function regionFor(lon, lat) {
 
 // Load the graph for the region covering (lon,lat) — or pass a region object
 // directly. Caches the promise/result; one region loads per session.
+// Progress callbacks (optional) receive either a string stage ('parse') or
+// an object {loaded, total, stage} where stage is 'download' | 'parse'.
+// Callbacks added while a load is in flight receive that load's events.
 export async function loadGraph(lon, lat, onProgress) {
   const region = (lon && typeof lon === 'object' ? lon : regionFor(lon, lat)) || CONFIG.engineRegions[0];
   if (!region) throw new Error('no engine region configured');
   if (graph && loadedRegionId === region.id) return graph;
   if (onProgress) loadProgressCbs.push(onProgress);
-  const fireProgress = (stage) => { for (const cb of loadProgressCbs) { try { cb(stage); } catch { /* ignore */ } } };
+  const fireProgress = (payload) => {
+    for (const cb of loadProgressCbs) {
+      try { cb(payload); } catch { /* ignore */ }
+    }
+  };
   if (loadPromise) return loadPromise;
+  graphStats = { progressEvents: [], loadStart: Date.now(), loadEnd: 0 };
   loadPromise = (async () => {
     const res = await fetch(region.url);
     if (!res.ok) throw new Error(`graph fetch ${res.status}`);
-    const buf = await res.arrayBuffer();
+    const total = res.headers ? Number(res.headers.get('content-length') || 0) : 0;
+    // Stream the response body so we can surface byte-level download
+    // progress. Each chunk fires {loaded, total, stage:'download'} so the
+    // UI can show "Downloading map data… (N.N MB / M.MM MB)".
+    let buf;
+    if (res.body && typeof res.body.getReader === 'function') {
+      const reader = res.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.byteLength;
+        const ev = { loaded, total, stage: 'download' };
+        graphStats.progressEvents.push(ev);
+        fireProgress(ev);
+      }
+      // Reassemble chunks into a single ArrayBuffer.
+      buf = new Uint8Array(loaded);
+      let o = 0;
+      for (const c of chunks) { buf.set(c, o); o += c.byteLength; }
+      buf = buf.buffer;
+    } else {
+      buf = await res.arrayBuffer();
+      const ev = { loaded: buf.byteLength, total, stage: 'download' };
+      graphStats.progressEvents.push(ev);
+      fireProgress(ev);
+    }
     // Some hosts (GitHub Pages, vite preview) serve .gz with Content-Encoding:
     // gzip, so the browser already inflated the response. Sniff the magic to
     // tell whether we still hold gzip bytes (1f 8b) or the raw graph (GWR1).
@@ -77,9 +118,11 @@ export async function loadGraph(lon, lat, onProgress) {
       raw = buf;
     }
     fireProgress('parse');
+    graphStats.progressEvents.push('parse');
     graph = parseGraph(raw);
     loadedRegionId = region.id;
     loadProgressCbs = [];
+    graphStats.loadEnd = Date.now();
     return graph;
   })();
   loadPromise.catch(() => { loadPromise = null; loadProgressCbs = []; });

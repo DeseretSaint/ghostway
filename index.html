@@ -43,7 +43,7 @@
 
       <div id="navBanner" class="nav-banner" hidden></div>
       <div id="navLive" class="sr-only" role="status" aria-live="polite"></div>
-      <div id="offlineBanner" class="offline-banner" role="status" hidden>You’re offline — routes use the on-device map; live traffic and search may not work.</div>
+      <div id="offlineBanner" class="offline-banner" role="status" hidden>You’re offline — routes still work on-device. Search and live traffic need a connection.</div>
 
       <!-- Tap-the-banner turn-by-turn directions (Maps parity) -->
       <div id="stepsScrim" class="steps-scrim" hidden></div>
@@ -128,6 +128,7 @@
         </div>
         <div id="engineStatus" class="engine-status" role="status" hidden></div>
 
+        <div id="mapLoading" class="map-loading" role="status" hidden>Loading map…</div>
         <div id="route-card" class="route-card" hidden></div>
 
         <div id="status" class="status" role="status" hidden></div>
@@ -196,6 +197,7 @@
           <div class="splash-name">Ghostway</div>
           <div class="splash-tag">Navigate beyond surveillance</div>
           <div class="splash-load" role="status" aria-live="polite"><span></span><span></span><span></span></div>
+          <span class="splash-text" id="splashText">Loading your map…</span>
         </div>
       </div>
 

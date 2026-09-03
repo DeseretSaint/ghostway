@@ -4,11 +4,11 @@ import { MapView } from './map-view.js';
 import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
-import { planRoutes, loadGraph, regionCovers, graphStatus, endpointsConnected } from './router.js';
+import { planRoutes, loadGraph, regionCovers, graphStatus, endpointsConnected, getGraphStats, resetGraphStats } from './router.js';
 import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
 import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, fmtArrive, haversine, haptic, pointToSegmentM, getUnits, setUnits } from './utils.js';
-import { buildPanel, renderRouteCard, showStatus, clearStatus } from './ui.js';
+import { buildPanel, renderRouteCard, showStatus, clearStatus, showStatusWithRetry } from './ui.js';
 import { icon, stepIconSvg } from './icons.js';
 import { registerSW } from './pwa.js';
 import { speak, phraseManeuver, phraseArrival, cancel as cancelVoice, toggleVoice, voiceEnabled, setVoiceEnabled } from './voice.js';
@@ -32,6 +32,13 @@ const app = {
   },
 };
 
+// F1: Splash progress text — occupy the wait (Maister: unoccupied time feels longer).
+// Update the splash text as boot stages progress so the user always knows what's happening.
+function setSplashText(msg) {
+  const el = document.getElementById('splashText');
+  if (el) el.textContent = msg;
+}
+
 async function init() {
   app.map = new MapView('map');
   app.cameras = new CameraStore();
@@ -45,6 +52,7 @@ async function init() {
   buildPanel(app);
   wireApp();
   await app.map.ready();
+  setSplashText('Map ready — loading your route engine…');
   // Apply a saved basemap preference (light/dark) before the splash clears.
   const savedBase = localStorage.getItem('gw-basemap');
   if (savedBase && savedBase !== 'standard' && CONFIG.basemaps[savedBase]) {
@@ -60,6 +68,7 @@ async function init() {
     ub0.setAttribute('aria-pressed', String(u0 === 'mi'));
   }
   window.__gw = app; // test/diagnostic hook
+  window.__gwRouter = { loadGraph, planRoutes, regionCovers, graphStatus, endpointsConnected, getGraphStats, resetGraphStats };
 
   // Open on the user's last-known position if we have one (feels personal);
   // otherwise the map keeps its neutral default view (CONFIG.mapCenter).
@@ -79,6 +88,24 @@ async function init() {
     };
     app.map.map.once('idle', hideSplash);
     setTimeout(hideSplash, 4000); // never trap the user behind a splash
+  }
+
+  // F6: Map tile loading feedback — if the splash hides but tiles aren't
+  // visually ready yet, show a subtle "Loading map…" so the user isn't
+  // staring at a gray void (perceived performance).
+  {
+    const mapLoading = $('#mapLoading');
+    if (mapLoading) {
+      setTimeout(() => {
+        if (window.__ghostwaySplash !== 'done') return; // splash still up
+        // Splash is gone; check if tiles are actually rendered
+        if (app.map.map.loaded() === 0) {
+          mapLoading.hidden = false;
+          app.map.map.once('load', () => { mapLoading.hidden = true; });
+          app.map.map.once('idle', () => { mapLoading.hidden = true; });
+        }
+      }, 4100);
+    }
   }
 
   // First-run onboarding (Workstream D).
@@ -167,10 +194,30 @@ async function ensureLocalEngine(fromC, toC) {
   // First route in a region downloads the ~6 MB graph — tell the user what
   // the wait is, instead of sitting on a static "Routing…".
   showStatus('Downloading map data…', 'info');
+  setSplashText('Downloading map data…');
   _localEngineLoading = (async () => {
     try {
-      const g = await loadGraph(fromC[0], fromC[1], (stage) => {
-        if (stage === 'parse') showStatus('Building route network…', 'info');
+      const g = await loadGraph(fromC[0], fromC[1], (payload) => {
+        // Backward-compat: string stage OR {loaded,total,stage} object.
+        if (typeof payload === 'string') {
+          if (payload === 'parse') {
+            showStatus('Building route network…', 'info');
+            setSplashText('Building route network…');
+          }
+          return;
+        }
+        if (payload.stage === 'parse') {
+          showStatus('Building route network…', 'info');
+          setSplashText('Building route network…');
+        } else if (payload.stage === 'download' && payload.total > 0) {
+          const got = (payload.loaded / 1048576).toFixed(1);
+          const tot = (payload.total / 1048576).toFixed(1);
+          showStatus(`Downloading map data… (${got} MB / ${tot} MB)`, 'info');
+          setSplashText(`Downloading map data… (${got} MB / ${tot} MB)`);
+        } else if (payload.stage === 'download') {
+          showStatus('Downloading map data…', 'info');
+          setSplashText('Downloading map data…');
+        }
       });
       app._engineReady = true;
       window.__ghostwayEngine = 'ready';
@@ -544,13 +591,28 @@ async function onRoute() {
 }
 
 // Visual loading state on the Route button so taps feel acknowledged.
+// F2: For long waits (>3s), add a subtle progress indicator to the button text
+// so the user knows the wait is expected (Nielsen / Harrison: known duration calms).
 function setGoLoading(on) {
   const btn = $('#goBtn');
   if (!btn) return;
   btn.classList.toggle('loading', on);
   btn.disabled = on;
-  if (on) btn.dataset.label = btn.textContent;
-  btn.textContent = on ? 'Routing…' : btn.dataset.label || 'Route me clear';
+  if (on) {
+    btn.dataset.label = btn.textContent;
+    btn.textContent = 'Routing…';
+    clearTimeout(btn._progressTimer);
+    btn._progressTimer = setTimeout(() => {
+      if (btn.disabled) btn.textContent = 'Routing… (almost there)';
+    }, 3000);
+    btn._progressTimer2 = setTimeout(() => {
+      if (btn.disabled) btn.textContent = 'Routing… (this route takes longer)';
+    }, 10000);
+  } else {
+    clearTimeout(btn._progressTimer);
+    clearTimeout(btn._progressTimer2);
+    btn.textContent = btn.dataset.label || 'Route me clear';
+  }
 }
 
 async function routeWithFallbacks(from, to) {
@@ -622,7 +684,16 @@ async function routeWithFallbacks(from, to) {
     clearStatus();
   } catch (err) {
     console.error(err);
-    showStatus('Routing failed: ' + err.message, 'warn');
+    // F3: Recovery path, not a dead end. Explain what happened and offer
+    // a clear next step so the user isn't left guessing (NN/g error recovery).
+    showStatusWithRetry(
+      'Routing failed — check your start and destination, or try a different route.',
+      'warn',
+      () => {
+        clearStatus();
+        onRoute();
+      }
+    );
   }
 }
 

@@ -105,9 +105,21 @@ export function buildPanel(app) {
       ])
     );
     box.hidden = false;
-    const places = await searchPlaces(q, 6, near).catch(() => []);
+    let searchErr = null;
+    const places = await searchPlaces(q, 6, near).catch((e) => { searchErr = e; return []; });
     if (mySeq !== reqSeq) return; // a newer query is in flight — drop stale reply
     box.innerHTML = '';
+    if (searchErr) {
+      // F3: Network error — distinguish from empty results. Show recovery
+      // with a retry path (don't lie "No results" when it's actually offline).
+      box.hidden = true;
+      showStatusWithRetry(
+        'Search needs a connection — try again when online.',
+        'warn',
+        () => { clearStatus(); render(q, which); }
+      );
+      return;
+    }
     if (!places.length) {
       // Maps-parity empty state: tell the user the query matched nothing
       // instead of silently vanishing the panel.
@@ -232,6 +244,28 @@ export function buildPanel(app) {
       legendBtn.setAttribute('aria-expanded', String(open));
     });
   }
+
+  // F4: Empty route card invitation — when no route is selected, show a calm
+  // prompt instead of a hidden card (activation research: guided first action).
+  renderEmptyRouteCard();
+}
+
+// F4: Calm empty-state in the route-card slot — tells the user what to do
+// first. Hidden automatically when a route is rendered (renderRouteCard unsets hidden).
+function renderEmptyRouteCard() {
+  const card = $('#route-card');
+  if (!card) return;
+  // Only render if the card is currently empty (no route rendered yet).
+  if (card.children.length > 0) return;
+  card.innerHTML = `
+    <div class="rc-empty" role="status">
+      <div class="rc-empty-icon">${icon('search', { size: 20 })}</div>
+      <div class="rc-empty-title">Where to?</div>
+      <div class="rc-empty-sub">Search a destination above to see your options.</div>
+      <div class="rc-empty-note">Routes avoid ALPR cameras by default.</div>
+    </div>
+  `;
+  card.hidden = false;
 }
 
 // ---- Route card: engine options (Clearest/Balanced/Fastest) or legacy single ----
@@ -441,4 +475,28 @@ export function clearStatus() {
   const s = $('#status');
   s.hidden = true;
   s.textContent = '';
+  s.innerHTML = '';
+}
+
+// F3: Show a status message with a Retry button so the user always has a
+// clear next step (NN/g error recovery: never leave the user stranded).
+export function showStatusWithRetry(msg, kind, onRetry) {
+  const s = $('#status');
+  s.className = 'status ' + kind;
+  s.hidden = false;
+  s.innerHTML = '';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  s.appendChild(text);
+  if (onRetry) {
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'status-retry';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', () => {
+      clearStatus();
+      onRetry();
+    });
+    s.appendChild(retryBtn);
+  }
 }

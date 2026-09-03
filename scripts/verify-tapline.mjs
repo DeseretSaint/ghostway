@@ -1,0 +1,49 @@
+import puppeteer from 'puppeteer-core';
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+setTimeout(() => { console.error('WATCHDOG 150s'); process.exit(2); }, 150000).unref();
+const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
+const p = await b.newPage();
+await p.setViewport({ width: 390, height: 844, isMobile: true });
+const errs = []; p.on('pageerror', (e) => errs.push(String(e.message)));
+await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded','1'); localStorage.setItem('gw-mode','moderate'); });
+await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
+async function setField(sel, q) {
+  await p.focus(sel);
+  await p.keyboard.down('Control'); await p.keyboard.press('KeyA'); await p.keyboard.up('Control');
+  await p.keyboard.press('Backspace');
+  await p.type(sel, q, { delay: 20 });
+  await p.waitForSelector('#suggestions .sugg', { timeout: 8000 });
+  const items = await p.$$('#suggestions .sugg');
+  for (const it of items) { const t = await p.evaluate(e=>e.textContent, it); if (t.toLowerCase().includes(q.toLowerCase())) { await it.click(); break; } }
+  await wait(600);
+}
+await setField('#toInput', 'Costco Lehi');
+await wait(300);
+await setField('#fromInput', 'Pleasant Grove');
+await wait(500);
+const goVisible = await p.$eval('#goBtn', e => { const r = e.getBoundingClientRect(); return r.width>0 && r.height>0; });
+if (goVisible) await p.click('#goBtn');
+await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 40000 });
+await wait(1500);
+// Find an alt route line coordinate on screen and tap it
+const tap = await p.evaluate(() => {
+  const m = window.__gw.map.map;
+  const a = window.__gw;
+  // pick a non-chosen option's midpoint coordinate
+  const altIdx = a.state.chosen === 0 ? 1 : 0;
+  const alt = a.state.options[altIdx];
+  const mid = alt.coords[Math.floor(alt.coords.length/2)];
+  const px = m.project(mid);
+  return { altIdx, px: { x: px.x, y: px.y }, chosenBefore: a.state.chosen };
+});
+console.log('tapping alt option', tap.altIdx, 'at', JSON.stringify(tap.px), '| chosenBefore=', tap.chosenBefore);
+await p.mouse.click(tap.px.x, tap.px.y);
+await wait(800);
+const after = await p.evaluate(() => ({ chosen: window.__gw.state.chosen, label: window.__gw.state.options?.[window.__gw.state.chosen]?.label }));
+console.log('chosenAfter tap:', after.chosen, '|', after.label);
+console.log('TAP-TO-SELECT:', after.chosen === tap.altIdx ? 'PASS ✅' : 'FAIL ❌');
+console.log('ERRORS:', errs.slice(0,3));
+try { await Promise.race([b.close(), wait(5000)]); } catch {}
+process.exit(0);
