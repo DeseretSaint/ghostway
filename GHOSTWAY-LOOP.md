@@ -283,7 +283,18 @@ from this queue first when it's non-empty.
       DP invariant on 9 real routes (5 corridors × modes): every raw point ≤3 m
       from the drawn line (worst 2.99 m), endpoints kept, 18-43% of points kept.
       Red test: tol=100 m drops a 90° corner → metric flags 67.5 m deviation.
-- [ ] Speed: chunk the graph load / show progress; measure on throttled connection
+- [x] Speed: chunk the graph load / show progress; measure on throttled connection
+      — LANDED 2026-09-03 (slot-A, ghostway-coder). router.js loadGraph now
+      streams response.body.getReader() and fires {loaded,total,stage:'download'}
+      on each chunk + 'parse' before parseGraph (already implemented earlier —
+      verified present); main.js ensureLocalEngine renders "Downloading map
+      data… (N.N MB / M.MM MB)" then "Building route network…"; speed-check.mjs
+      now throttles via CDP Network.emulateNetworkConditions (750 Kbps / 100 ms
+      RTT) before the route request and asserts ≥3 download progress events
+      fire during the download, parse stage fires, route card renders, 0 page
+      errors. speed-check PASS, graphload-status-check PASS, engine-check PASS,
+      snap-dist-check PASS, floor-audit PASS, avoidance-audit-random PASS,
+      npm run build clean.
 - [x] Test infra: interact-check menuHit/gpsHit return {} (elementFromPoint hits
       SVG child; SVG className is SVGAnimatedString, not string) → false FAIL
       risk; also add watchdog to every puppeteer suite (browser.close() hangs
