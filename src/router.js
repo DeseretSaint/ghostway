@@ -236,13 +236,28 @@ function parseGraph(raw) {
     }
   }
 
+  // Largest connected component (by node count). When a sampled origin and
+  // destination snap into DIFFERENT components (a known data gap — e.g. new
+  // subdivisions, graph edges not yet joined in OSM), we re-snap both to the
+  // largest component so A* always has a connected path to find instead of
+  // throwing 'No route found'. ~tens of ms, one-time.
+  const compSizes = new Map();
+  for (let n = 0; n < nodeCount; n++) {
+    const c = comp[n];
+    compSizes.set(c, (compSizes.get(c) || 0) + 1);
+  }
+  let largestComponent = 1, largestSize = 0;
+  for (const [c, size] of compSizes) {
+    if (size > largestSize) { largestSize = size; largestComponent = c; }
+  }
+
   return {
     nodeCount, edgeCount, bbox, names,
     nodeLon, nodeLat,
     ea, eB, eLen, eSpd, eCam, eOw, eName,
     outStart, arcTo, arcEdge, arcRev,
     nodeDeg,
-    comp,
+    comp, largestComponent,
     grid, CELL,
   };
 }
@@ -320,6 +335,34 @@ export function nearestCandidates(lon, lat, minCandidates = 1) {
 export function nearestNode(lon, lat) {
   const c = nearestCandidates(lon, lat);
   return c.length ? { node: c[0].node, dist: c[0].dist } : { node: -1, dist: Infinity };
+}
+
+// Snap to the nearest node that is in the SAME component as `targetComp`
+// (defaults to the graph's largest component). Used when origin and
+// destination land in different connected graph components — re-snap both
+// to the largest component so A* always has a connected path.
+export function nearestNodeInComponent(lon, lat, targetComp) {
+  if (!graph) return { node: -1, dist: Infinity };
+  const target = targetComp || graph.largestComponent;
+  const candidates = nearestCandidates(lon, lat);
+  // Filter to nodes in the target component; nearestCandidates returns by
+  // score (dist + degree penalty), so the first in-component node is the best snap.
+  const inComp = candidates.filter((c) => graph.comp[c.node] === target);
+  if (inComp.length) return { node: inComp[0].node, dist: inComp[0].dist };
+
+  // Brute-force fallback: the ring scan didn't reach the target component
+  // (e.g. a tiny isolated subgraph far from the main mesh). Linear scan
+  // of all nodes in the target component — ~tens of ms for the largest.
+  let best = -1, bestD = Infinity;
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  for (let n = 0; n < graph.nodeCount; n++) {
+    if (graph.comp[n] !== target) continue;
+    const dLon = (graph.nodeLon[n] / 1e6 - lon) * 111320 * cosLat;
+    const dLat = (graph.nodeLat[n] / 1e6 - lat) * 111320;
+    const d = Math.sqrt(dLon * dLon + dLat * dLat);
+    if (d < bestD) { bestD = d; best = n; }
+  }
+  return best >= 0 ? { node: best, dist: bestD } : { node: -1, dist: Infinity };
 }
 
 // ---- Cost modes ----
@@ -792,10 +835,29 @@ function clearTailTo(idx, tNode) {
 // ---- Public planning API: returns up to 3 options ----
 export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [] } = {}) {
   const g = await loadGraph();
-  const s = nearestNode(from[0], from[1]);
-  const t = nearestNode(to[0], to[1]);
+  let s = nearestNode(from[0], from[1]);
+  let t = nearestNode(to[0], to[1]);
   if (s.node === -1 || t.node === -1) throw new Error('Outside the coverage area');
-  if (s.dist > 1200 || t.dist > 1200) throw new Error('Start or destination is too far from a road in the coverage area');
+
+  // Re-snap to the largest component when origin and destination land in
+  // different connected graph components. The Wasatch graph has gaps (new
+  // subdivisions, OSM edges not yet joined) — a random sample can hit one.
+  // Without this re-snap, A* returns null and planRoutes throws 'No route
+  // found' even though a perfectly good route exists inside the main mesh.
+  // Both endpoints snap to the largest component so A* always has a path.
+  let componentMismatch = false;
+  if (g.comp[s.node] !== g.comp[t.node]) {
+    s = nearestNodeInComponent(from[0], from[1], g.largestComponent);
+    t = nearestNodeInComponent(to[0], to[1], g.largestComponent);
+    if (s.node === -1 || t.node === -1) throw new Error('Outside the coverage area');
+    componentMismatch = true;
+  }
+
+  // The >1200 m guard prevents snapping to a far-away road when the user's
+  // actual location is between roads. But when the original snap was in a
+  // disconnected component, the "true" destination is unreachable anyway —
+  // better to route from the nearest main-mesh node than to fail entirely.
+  if (!componentMismatch && (s.dist > 1200 || t.dist > 1200)) throw new Error('Start or destination is too far from a road in the coverage area');
 
   // Community camera reports: bake user-reported cameras into the edge
   // exposure (same radius/weighting as the graph builder), so routes react
@@ -1043,7 +1105,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     }
   }
 
-  return { options: uniq, graph: g, snapFrom: s, snapTo: t, trafficLive: !!(traffic && traffic.ok && traffic.events.length) };
+  return { options: uniq, graph: g, snapFrom: s, snapTo: t, trafficLive: !!(traffic && traffic.ok && traffic.events.length), componentMismatch };
 }
 
 function similar(a, b) {
