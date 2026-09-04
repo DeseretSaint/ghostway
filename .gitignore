@@ -36,3 +36,8 @@ android/local.properties
 android/.gradle/
 android/build/
 android/app/src/main/assets/
+android/app/build/intermediates/
+android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/debug/output-metadata.json
+android/app/build/outputs/logs/
+android/app/build/tmp/
