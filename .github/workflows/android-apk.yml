@@ -3,7 +3,9 @@ name: android-apk
 on:
   push:
     branches: [main]
-    paths: ['android/**', '.github/workflows/android-apk.yml']
+    paths: ['android/**', 'src/**', 'dist/**', '.github/workflows/android-apk.yml']
+  schedule:
+    - cron: '0 4 * * *'  # nightly 04:00 UTC — catches any missed src/dist changes
   workflow_dispatch:
 
 permissions:
