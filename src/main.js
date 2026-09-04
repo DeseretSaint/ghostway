@@ -50,6 +50,13 @@ async function init() {
   app.cameras = new CameraStore();
   await app.cameras.loadFallback();
 
+  // Rehydrate camera-layer toggle from localStorage (default ON).
+  try {
+    const saved = localStorage.getItem('gw-cam-layer');
+    app._camLayerOn = saved === null ? true : saved === '1';
+  } catch { app._camLayerOn = true; }
+  app.map._camVisible = app._camLayerOn;
+
   // Expose nav controls to the UI module.
   app.startNav = startNav;
   app.stopNav = stopNav;
@@ -58,6 +65,9 @@ async function init() {
   buildPanel(app);
   wireApp();
   await app.map.ready();
+  // Apply the rehydrated camera-layer state now that the source is ready.
+  app.map.setCameraLayerVisible(app._camLayerOn);
+  $('#camLayerBtn').classList.toggle('off', !app._camLayerOn);
   setSplashText('Map ready — loading your route engine…');
   // Apply a saved basemap preference (light/dark) before the splash clears.
   const savedBase = localStorage.getItem('gw-basemap');
@@ -328,6 +338,7 @@ function wireApp() {
     app._camLayerOn = !(app._camLayerOn ?? true);
     app.map.setCameraLayerVisible(app._camLayerOn);
     $('#camLayerBtn').classList.toggle('off', !app._camLayerOn);
+    try { localStorage.setItem('gw-cam-layer', app._camLayerOn ? '1' : '0'); } catch {}
   });
 
   // Maps-parity basemap switcher (light/dark). Same open provider — no new
