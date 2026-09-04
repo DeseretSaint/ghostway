@@ -25,7 +25,7 @@ free, privacy-first.
 - [ ] ETA accuracy: junction penalties, live traffic, measured-speed gaps
 - [ ] Navigation UX: follow mode, voice, waypoint drag, compact banner, alerts
 - [ ] Search: location bias, POI entrance resolution (airport/campus), ranking
-- [ ] Speed: graph load time, route compute, bundle size, lazy loading
+- [x] Speed: graph load time, route compute, bundle size, lazy loading — LANDED 2026-09-03 (speed, commit 2cf0816) + 2026-09-04 (lazy engine chunk, commit 9f955ef). main chunk 247.7 KB gz (was 254.3 KB gz); engine chunk 6.5 KB gz lazy-fetched on first route calc. bundle-size-check.mjs verifies.
 - [ ] Privacy/security: no leaks, no third-party calls w/o consent, data handling
 - [ ] Data freshness: camera snapshot, traffic, WZDx — CI refresh robustness
 - [ ] Coverage: graph region expansion, national fallback (Valhalla) resilience
