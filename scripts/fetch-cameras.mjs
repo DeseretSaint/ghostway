@@ -24,9 +24,28 @@ async function main() {
   console.log('Fetching', URL);
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 300000);
-  const res = await fetch(URL, { signal: ctrl.signal });
+  // Upstream (Cloudflare) 403s bare Node fetch — send a UA + accept headers.
+  // Retry with backoff: transient edge blocks happen on CI runner egress IPs.
+  let res;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      res = await fetch(URL, {
+        signal: ctrl.signal,
+        headers: {
+          'User-Agent': 'ghostway-ci/1.0 (+https://github.com/DeseretSaint/ghostway) Mozilla/5.0',
+          'Accept': 'application/geo+json, application/json, */*',
+          'Accept-Encoding': 'gzip, identity',
+        },
+      });
+      if (res.ok) break;
+      console.warn(`attempt ${attempt}: HTTP ${res.status}`);
+    } catch (e) {
+      console.warn(`attempt ${attempt}: ${e.message}`);
+    }
+    if (attempt < 4) await new Promise((r) => setTimeout(r, 2000 * attempt));
+  }
   clearTimeout(t);
-  if (!res.ok) throw new Error('fetch failed ' + res.status);
+  if (!res || !res.ok) throw new Error('fetch failed ' + (res && res.status));
   const buf = Buffer.from(await res.arrayBuffer());
   // Upstream serves plain GeoJSON despite the .gz name; handle both.
   let text;
