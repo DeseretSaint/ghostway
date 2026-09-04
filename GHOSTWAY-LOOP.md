@@ -24,7 +24,7 @@ free, privacy-first.
       weighting; community reports feed routing
 - [ ] ETA accuracy: junction penalties, live traffic, measured-speed gaps
 - [ ] Navigation UX: follow mode, voice, waypoint drag, compact banner, alerts
-- [ ] Search: location bias, POI entrance resolution (airport/campus), ranking
+- [x] Search: location bias, POI entrance resolution (airport/campus), ranking — LANDED (iterations 18-19: Photon lat/lon bias + 3x pool + distance sort; isAreaPoi/findEntrance for aerodrome/campus/golf_course; search-bias-check.mjs + field-fix-check.mjs verify)
 - [x] Speed: graph load time, route compute, bundle size, lazy loading — LANDED 2026-09-03 (speed, commit 2cf0816) + 2026-09-04 (lazy engine chunk, commit 9f955ef). main chunk 247.7 KB gz (was 254.3 KB gz); engine chunk 6.5 KB gz lazy-fetched on first route calc. bundle-size-check.mjs verifies.
 - [ ] Privacy/security: no leaks, no third-party calls w/o consent, data handling
 - [ ] Data freshness: camera snapshot, traffic, WZDx — CI refresh robustness
