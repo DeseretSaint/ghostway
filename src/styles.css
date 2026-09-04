@@ -1729,6 +1729,18 @@ select.rp-input {
     color: #475569;
   }
 
+  /* Camera chip: default accent #0d9488 on white bg = 3.74:1 FAIL (fire #7).
+     Darken to #1a5c4a for ≥7:1 AA on light bg. */
+  .cam-chip {
+    color: #1a5c4a;
+  }
+
+  /* Mission-signal chip: green #3fb982 on translucent green bg composites
+     to ~2:1 on light banner — FAIL. Darken to #1a5c4a for ≥5.8:1 AA. */
+  .cam-chip.mission-signal {
+    color: #1a5c4a;
+  }
+
   /* MapLibre control icons: invert filter tuned for dark bg looks wrong on
      light — dial back to neutral dark icons. */
   .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
