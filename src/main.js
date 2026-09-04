@@ -85,6 +85,14 @@ async function init() {
     ub0.setAttribute('aria-pressed', String(u0 === 'mi'));
   }
   window.__gw = app; // test/diagnostic hook
+  // Test hook — force a live-ETA recompute from arbitrary coords without
+  // waiting for the 30 s GPS throttle. Production code path is unchanged;
+  // the throttle in onLocationFix() still gates real GPS-driven updates.
+  // (scripts/eta-recompute-check.mjs exercises this.)
+  app.__gwForceLiveEta = (coords) => {
+    app.state.userLoc = coords;
+    return updateLiveEta(coords);
+  };
   // window.__gwRouter is exposed lazily on first route calc by loadEngine(app)
   // (see src/engine-loader.js). Speed-check.mjs reads it for graphStats.
 
@@ -517,11 +525,127 @@ async function updateLiveEta(fromC) {
     const o = options[pick];
     if (!o) return;
     // Update the stored route so re-renders (units toggle etc.) stay current.
+    const prevOptions = app.state.options;
+    const prevChosen = app.state.chosen;
     app.state.options = options;
     app.state.chosen = pick;
     app.state.route = { engine: true, options, chosen: pick };
-    if (!app.state.navigating) renderRouteCard(app, app.state.route);
+    if (!app.state.navigating) {
+      // Soft update: keep the option-list buttons (and any DOM the user might
+      // be hovering / has focus on) stable. Re-render only when the option
+      // SET changed (different count, different mode order) — those are real
+      // "the route changed" signals worth a full re-render. If only numbers
+      // shifted (car drove 200 m → ETA goes from 12 min to 11 min), patch the
+      // existing nodes in place so the card body keeps its identity.
+      const full = !prevOptions || prevOptions.length !== options.length || shouldFullReroute(prevOptions, options);
+      if (full) {
+        renderRouteCard(app, app.state.route);
+      } else {
+        updateRouteCardInPlace(app, prevOptions, prevChosen, options, pick);
+      }
+    }
   } catch { /* ETA update is best-effort; never disrupt the UI */ }
+}
+
+// Decide whether the option list changed enough to warrant a full re-render.
+// Full re-render if the OPTION SET changed (mode added/dropped, or option
+// count differs). Pure duration / distance / camera-count drift is the soft
+// case — the spec calls out "without forced re-route" as the point: even if the
+// engine learns of one more camera 1 km ahead, the option LIST is still the
+// same set of buttons (we'll update their chips / badges inline).
+function shouldFullReroute(prev, next) {
+  if (!prev || prev.length !== next.length) return true;
+  const byModePrev = new Map(prev.map((o) => [o.mode, o]));
+  const byModeNext = new Map(next.map((o) => [o.mode, o]));
+  if (byModePrev.size !== byModeNext.size) return true;
+  for (const mode of byModePrev.keys()) {
+    if (!byModeNext.has(mode)) return true;
+  }
+  return false;
+}
+
+// Patch the existing route-card DOM in place so .route-opt button nodes keep
+// their identity. Only ETA/distance/badge text and the camera-free badge flip
+// can change; everything else (mode, option order, camera counts per option)
+// is structurally identical and stays put.
+function updateRouteCardInPlace(app, prevOptions, prevChosen, nextOptions, nextChosen) {
+  const card = document.querySelector('#route-card');
+  if (!card || card.hidden) return;
+  const sel = nextOptions[nextChosen];
+  if (!sel) return;
+  // Update the headline block.
+  const timeEl = card.querySelector('.rc-time');
+  const arriveEl = card.querySelector('.rc-arrive');
+  const distEl = card.querySelector('.rc-dist');
+  const badgeEl = card.querySelector('.rc-badge');
+  const fmtDur = sel.duration; const fmtDist = sel.distance;
+  const durMin = Math.round(fmtDur / 60);
+  const distKm = fmtDist / 1000;
+  if (timeEl) timeEl.textContent = durMin < 60 ? `${durMin} min` : `${Math.floor(durMin / 60)} h ${durMin % 60} min`;
+  if (arriveEl) {
+    const eta = new Date(Date.now() + fmtDur * 1000);
+    const hh = eta.getHours(); const mm = eta.getMinutes();
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = ((hh + 11) % 12) + 1;
+    arriveEl.textContent = `Arrive ${h12}:${mm.toString().padStart(2, '0')} ${ampm}`;
+  }
+  if (distEl) {
+    distEl.textContent = distKm < 1 ? `${Math.round(fmtDist)} m` : `${distKm.toFixed(1)} km`;
+  }
+  if (badgeEl) {
+    badgeEl.innerHTML = sel.cameras === 0
+      ? `${window.__gwIcon ? window.__gwIcon('shield', { size: 15 }) : '🛡️'} Fully clear of known cameras`
+      : `${window.__gwIcon ? window.__gwIcon('shield', { size: 15 }) : '🛡️'} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`;
+  }
+  // Update each option button's meta line + camera-free badge. The button
+  // node identity is preserved; only inner text changes.
+  const fastest = nextOptions.find((o) => o.mode === 'off') || nextOptions[0];
+  for (let i = 0; i < nextOptions.length; i++) {
+    const btn = card.querySelector(`.route-opt[data-opt="${i}"]`);
+    if (!btn) continue;
+    const o = nextOptions[i];
+    // Camera-free badge: add / remove.
+    let badge = btn.querySelector('.opt-clear-badge');
+    if (o.cameras === 0 && !badge) {
+      const span = document.createElement('span');
+      span.className = 'opt-clear-badge';
+      span.textContent = '🛡️ Camera-free route';
+      // Place after .opt-label.
+      const label = btn.querySelector('.opt-label');
+      if (label && label.nextSibling) btn.insertBefore(span, label.nextSibling);
+      else btn.appendChild(span);
+    } else if (o.cameras !== 0 && badge) {
+      badge.remove();
+    }
+    // Camera-count chip: always present, update its number.
+    let cams = btn.querySelector('.opt-cams');
+    const camText = o.cameras === 0 ? '0 cameras' : `${o.cameras} camera${o.cameras === 1 ? '' : 's'}`;
+    if (!cams) {
+      cams = document.createElement('span');
+      cams.className = 'opt-cams';
+      btn.appendChild(cams);
+    }
+    cams.className = o.cameras === 0 ? 'opt-cams clear' : 'opt-cams';
+    cams.textContent = camText;
+    // opt-meta suffix: rebuild the line (duration · distance · cams · hw · delay).
+    const meta = btn.querySelector('.opt-meta');
+    const distNum = o.distance;
+    const durMin2 = Math.round(o.duration / 60);
+    const distKm2 = distNum / 1000;
+    const distStr = distKm2 < 1 ? `${Math.round(distNum)} m` : `${distKm2.toFixed(1)} km`;
+    const durStr = durMin2 < 60 ? `${durMin2} min` : `${Math.floor(durMin2 / 60)} h ${durMin2 % 60} min`;
+    if (meta) {
+      meta.textContent = `${durStr} · ${distStr} · ${camText}`;
+    }
+    // Selected state.
+    if (i === nextChosen) {
+      btn.classList.add('chosen');
+      btn.setAttribute('aria-pressed', 'true');
+    } else {
+      btn.classList.remove('chosen');
+      btn.setAttribute('aria-pressed', 'false');
+    }
+  }
 }
 
 async function useMyLocation() {
