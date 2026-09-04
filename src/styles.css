@@ -1623,7 +1623,7 @@ details summary {
 }
 .cam-chip .cam-clear-ic { display: inline-flex; color: #3fb982; }
 .cam-chip .cam-ahead-ic { display: inline-flex; }
-.cam-chip.passed { color: var(--muted); background: var(--bg-2); border-color: var(--line); }
+.cam-chip.passed { color: rgb(168,188,216); background: var(--bg-2); border-color: var(--line); }
 .cam-chip.ahead {
   color: #fff;
   background: var(--danger-strong);
@@ -1689,4 +1689,49 @@ select.rp-input {
 @keyframes approach-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.06); }
+}
+
+/* Light theme: respect OS prefers-color-scheme. The hardcoded dark theme is
+   the safer default for night driving (no blinding white at night), but a
+   light-mode OS setting at night shows a dark banner on a light map — a
+   mismatch the user cannot control. This block flips the page chrome
+   (banner, panel, fields, drawer, modals) to light variants. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f0f4f8;
+    --bg-2: #ffffff;
+    --panel: rgba(255, 255, 255, 0.92);
+    --panel-solid: #ffffff;
+    --ink: #1a202c;
+    --muted: #5a6b7f;
+    --line: #cbd5e0;
+    --line-strong: #94a3b8;
+    --accent: #0d9488;
+    --accent-2: #d97706;
+    --danger: #dc2626;
+    --danger-strong: #b91c1c;
+  }
+
+  /* Nav banner: hardcoded dark gradient → light gradient */
+  .nav-banner {
+    background: linear-gradient(135deg, #e0f2f1, #f8f9fa);
+    border-color: rgba(13, 148, 136, 0.3);
+  }
+
+  .nav-banner.approach .nav-icon {
+    border-color: rgba(217, 119, 6, 0.55);
+    background: rgba(217, 119, 6, 0.14);
+  }
+
+  /* Camera chip passed state: the AAA text color rgb(168,188,216) is designed
+     for dark chip bg — on a white chip bg it would be invisible. Darken it. */
+  .cam-chip.passed {
+    color: #475569;
+  }
+
+  /* MapLibre control icons: invert filter tuned for dark bg looks wrong on
+     light — dial back to neutral dark icons. */
+  .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+    filter: none;
+  }
 }
