@@ -8,6 +8,15 @@ import { pointToSegmentM } from './utils.js';
 // Strategy: fetch a camera pool for a bbox once (cached), then the router
 // iterates — re-routing around the cameras that are still on the path until it
 // converges. This avoids hammering Overpass on every iteration.
+//
+// Persistence: the camera pool is also cached in localStorage (gw-cam-cache)
+// so it survives reloads. On construction, the store rehydrates from disk;
+// on every successful fetch, it writes back. A 7-day TTL staleness check
+// ensures fresh data without hammering Overpass on every session.
+
+const CACHE_KEY = 'gw-cam-cache';
+const CACHE_TTL_MS = 7 * 24 * 3600 * 1000; // 7 days
+const CACHE_VERSION = 1;
 
 // Cameras from an in-memory list within `corridorM` of a route polyline.
 // Exported so the Valhalla fallback engine can share the exact same detection
@@ -28,6 +37,63 @@ export class CameraStore {
     this._cache = new Map(); // bbox key -> features (overpass or fallback)
     this._geojson = null; // bundled fallback
     this._poolCache = new Map(); // bbox key -> features (deduped pool)
+    this._persistEnabled = true;
+    this._rehydrated = false;
+  }
+
+  // Rehydrate the in-memory pool from localStorage. Called once on construction
+  // (or explicitly before first use). Returns the number of cached pools loaded.
+  rehydrate() {
+    if (this._rehydrated) return 0;
+    this._rehydrated = true;
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return 0;
+      const data = JSON.parse(raw);
+      if (data.version !== CACHE_VERSION) return 0;
+      if (Date.now() - data.ts > CACHE_TTL_MS) {
+        // Stale — clear and start fresh
+        localStorage.removeItem(CACHE_KEY);
+        return 0;
+      }
+      let count = 0;
+      if (data.pools) {
+        for (const [key, feats] of Object.entries(data.pools)) {
+          this._poolCache.set(key, feats);
+          count++;
+        }
+      }
+      // Also rehydrate the bundled fallback snapshot if persisted
+      if (data.fallback) {
+        this._geojson = data.fallback;
+      }
+      return count;
+    } catch {
+      return 0;
+    }
+  }
+
+  // Persist the current in-memory pool + fallback snapshot to localStorage.
+  _persist() {
+    if (!this._persistEnabled) return;
+    try {
+      const pools = {};
+      for (const [key, feats] of this._poolCache.entries()) {
+        pools[key] = feats;
+      }
+      const data = {
+        version: CACHE_VERSION,
+        ts: Date.now(),
+        pools,
+      };
+      // Only persist the fallback if it's loaded (saves ~120KB localStorage)
+      if (this._geojson) {
+        data.fallback = this._geojson;
+      }
+      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    } catch {
+      // localStorage full or unavailable — degrade gracefully
+    }
   }
 
   async loadFallback() {
@@ -92,11 +158,13 @@ export class CameraStore {
   }
 
   // Returns the (cached) camera pool for a bbox, used by the iterative router.
+  // Checks in-memory → localStorage → network (overpass/fallback) in order.
   async getCameras(bbox) {
     const key = bbox.join(',');
     if (this._poolCache.has(key)) return this._poolCache.get(key);
     const feats = await this._overpass(bbox);
     this._poolCache.set(key, feats);
+    this._persist(); // persist after every new fetch
     return feats;
   }
 

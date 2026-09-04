@@ -48,6 +48,7 @@ function setSplashText(msg) {
 async function init() {
   app.map = new MapView('map');
   app.cameras = new CameraStore();
+  app.cameras.rehydrate(); // rehydrate camera pool from localStorage (persistent cache)
   await app.cameras.loadFallback();
 
   // Rehydrate camera-layer toggle from localStorage (default ON).
