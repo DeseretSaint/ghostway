@@ -1974,5 +1974,9 @@ select.rp-input {
   .battery-hint {
     background: #fff7e6;
     border-color: rgba(217, 119, 6, 0.4);
+    color: #78350f;
+  }
+  .battery-dismiss {
+    color: #78350f;
   }
 }
