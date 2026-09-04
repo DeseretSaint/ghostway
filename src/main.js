@@ -1904,6 +1904,10 @@ function handleDrawer(action) {
     openReportModal();
     return;
   }
+  if (action === 'tour') {
+    startOnboarding();
+    return;
+  }
   if (action === 'about') {
     openModal(`
       <h3>${CONFIG.about.name}</h3><p class="tag">${CONFIG.about.tagline}</p><p>${CONFIG.about.body}</p>
