@@ -1903,10 +1903,25 @@ select.rp-input {
     color: #1a5c4a;
   }
 
+  /* Onboarding card: dark gradient top (rgba(24,32,50,0.98)) is NOT
+     overridden in light mode, so the Skip link sits on dark blue. Flip the
+     card to a light gradient so the #475569 skip text gets ≥4.5:1 AA. */
+  .ob-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, var(--panel) 100%);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(13, 148, 136, 0.1);
+  }
+
   /* Skip link: #b7c3d4 is tuned for dark card bg — on white card bg it
      would be invisible. Darken to #475569 for ≥5.5:1 AA on light bg. */
   .ob-skip {
     color: #475569;
+  }
+
+  /* Skip link hover: light theme — use a subtle ink-tinted hover, not the
+     white-on-dark rgba(255,255,255,0.06) default. */
+  .ob-skip:hover {
+    background: rgba(0, 0, 0, 0.06);
   }
 
   /* MapLibre control icons: invert filter tuned for dark bg looks wrong on
