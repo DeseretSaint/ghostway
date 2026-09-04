@@ -17,7 +17,7 @@ const ENGINE_OUT = join(__dirname, '..', 'engine', 'data');
 const URL = 'https://data.dontgetflocked.com/cameras.geojson.gz';
 
 // Coverage region = the shipped road graph bbox (see engine/build-graph.mjs).
-const BBOX = { w: -112.12, s: 39.95, e: -111.33, n: 40.86 };
+const BBOX = { w: -114.0, s: 37.0, e: -109.0, n: 42.0 };
 
 async function main() {
   await mkdir(PUBLIC_OUT, { recursive: true });

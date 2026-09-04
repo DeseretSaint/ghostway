@@ -23,7 +23,7 @@ jobs:
         run: node scripts/fetch-cameras.mjs
       - name: Download Utah OSM extract (Geofabrik)
         run: curl -sL --retry 3 --max-time 600 -o /tmp/utah-latest.osm.pbf https://download.geofabrik.de/north-america/us/utah-latest.osm.pbf
-      - name: Extract Wasatch roads window
+      - name: Extract Utah roads window
         run: |
           # Same pipeline as engine/prepare-roads.mjs header. osmium extract
           # keeps complete ways touching the bbox, and build-graph.mjs clips
@@ -31,7 +31,7 @@ jobs:
           osmium tags-filter /tmp/utah-latest.osm.pbf \
             "w/highway=motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,living_street,road" \
             -o /tmp/wasatch-roads.osm.pbf
-          osmium extract -b -112.12,39.95,-111.33,40.86 /tmp/wasatch-roads.osm.pbf -o /tmp/wasatch.osm.pbf
+          osmium extract -b -114.0,37.0,-109.0,42.0 /tmp/wasatch-roads.osm.pbf -o /tmp/wasatch.osm.pbf
           mkdir -p engine/data
           osmium export /tmp/wasatch.osm.pbf -f geojson --overwrite -o engine/data/wasatch-roads.geojson
       - name: Rebuild graph

@@ -88,7 +88,7 @@ export const CONFIG = {
   engineRegions: [
     {
       id: 'wasatch-front',
-      bbox: [-112.12, 39.95, -111.33, 40.86], // [w, s, e, n]
+      bbox: [-114.0, 37.0, -109.0, 42.0], // [w, s, e, n]
       url: 'graph/wasatch-graph.bin.gz',
     },
   ],

@@ -27,9 +27,9 @@ const DIR = dirname(fileURLToPath(import.meta.url));
 const DATA = join(DIR, 'data');
 const OUT = join(DIR, '..', 'public', 'graph');
 
-// Shipping region: Salt Lake City → Provo/Utah Valley (where users test first).
-// North edge covers SLC International Airport (40.7884°N) with margin.
-const BBOX = { w: -112.12, s: 39.95, e: -111.33, n: 40.86 };
+// Shipping region: full state of Utah (where users test first in the Wasatch
+// front, then statewide — St. George, Cedar City, Ogden, Park City, SLC, Provo).
+const BBOX = { w: -114.0, s: 37.0, e: -109.0, n: 42.0 };
 
 const SPEED = {
   motorway: 110, motorway_link: 70,

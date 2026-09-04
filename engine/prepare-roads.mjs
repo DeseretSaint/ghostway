@@ -4,13 +4,13 @@
 // REGENERABLE ARTIFACT and stays gitignored (engine/data/*.geojson) — too
 // heavy for git; rerun this script whenever the OSM export changes.
 //
-// The full Wasatch roads export (engine/data/wasatch-roads.geojson, ~60 MB,
-// gitignored) comes from osmium:
+// The full Utah roads export (engine/data/wasatch-roads.geojson, gitignored)
+// comes from osmium:
 //   osmium tags-filter utah-latest.osm.pbf \
 //     "w/highway=motorway,motorway_link,trunk,trunk_link,primary,primary_link,\
 // secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,\
 // living_street,road" -o wasatch-roads.osm.pbf
-//   osmium extract -b -112.12,39.95,-111.33,40.86 wasatch-roads.osm.pbf -o wasatch.osm.pbf
+//   osmium extract -b -114.0,37.0,-109.0,42.0 wasatch-roads.osm.pbf -o wasatch.osm.pbf
 //   osmium export wasatch.osm.pbf -f geojson -o wasatch-roads.geojson
 //
 // build-graph.mjs only consumes drivable LineStrings and reads exactly five
@@ -31,7 +31,7 @@ const SRC = join(DATA, 'wasatch-roads.geojson');      // full osmium export (git
 const OUT = join(DATA, 'wasatch-roads.build.geojson'); // committed build-input
 
 // Must match build-graph.mjs exactly.
-const BBOX = { w: -112.12, s: 39.95, e: -111.33, n: 40.86 };
+const BBOX = { w: -114.0, s: 37.0, e: -109.0, n: 42.0 };
 const DRIVABLE = new Set([
   'motorway', 'motorway_link', 'trunk', 'trunk_link',
   'primary', 'primary_link', 'secondary', 'secondary_link',
