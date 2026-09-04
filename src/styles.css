@@ -1622,7 +1622,7 @@ details summary {
   right: 8px;
   background: none;
   border: none;
-  color: var(--muted);
+  color: #b7c3d4;
   font-size: 13px;
   cursor: pointer;
   padding: 10px 14px;
@@ -1901,6 +1901,12 @@ select.rp-input {
      to ~2:1 on light banner — FAIL. Darken to #1a5c4a for ≥5.8:1 AA. */
   .cam-chip.mission-signal {
     color: #1a5c4a;
+  }
+
+  /* Skip link: #b7c3d4 is tuned for dark card bg — on white card bg it
+     would be invisible. Darken to #475569 for ≥5.5:1 AA on light bg. */
+  .ob-skip {
+    color: #475569;
   }
 
   /* MapLibre control icons: invert filter tuned for dark bg looks wrong on
