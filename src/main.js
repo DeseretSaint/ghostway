@@ -776,13 +776,7 @@ async function routeWithFallbacks(from, to) {
     // app._engine after first call.
     const ok = await ensureLocalEngine(from.coords, to.coords);
     if (ok) {
-      // Disconnected graph components (a known data gap) can't be routed locally.
-      // Detect it up front and fall back to Valhalla cleanly instead of throwing
-      // 'No route found' and relying on the catch.
       const engine = app._engine;
-      if (!engine.endpointsConnected(from.coords, to.coords)) {
-        console.warn('local graph endpoints in different components — falling back to Valhalla');
-      } else {
       try {
         const t0 = performance.now();
         const { options } = await engine.planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
@@ -800,7 +794,6 @@ async function routeWithFallbacks(from, to) {
         return;
       } catch (e) {
         console.warn('engine route failed, falling back', e);
-      }
       }
     }
     // Engine unavailable or failed → fall through to Valhalla below.
