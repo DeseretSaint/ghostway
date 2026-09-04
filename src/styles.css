@@ -1592,6 +1592,8 @@ details summary {
 }
 
 /* ---- First-run onboarding (Workstream D) ---- */
+/* Visual polish: blurred backdrop, larger icon circles, stronger typography,
+   prominent CTA, clear step dots, smooth step transitions. */
 .onboarding {
   position: fixed;
   inset: 0;
@@ -1599,36 +1601,159 @@ details summary {
   display: grid;
   place-items: end center;
   padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
-  background: linear-gradient(180deg, rgba(11, 15, 23, 0.25) 0%, rgba(11, 15, 23, 0.85) 60%);
-  animation: fade-in 0.35s ease;
+  background: rgba(8, 11, 17, 0.72);
+  backdrop-filter: blur(16px) saturate(0.5);
+  -webkit-backdrop-filter: blur(16px) saturate(0.5);
+  animation: fade-in 0.3s ease;
 }
 .ob-card {
-  width: min(420px, 100%);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  padding: 16px 20px;
-  box-shadow: var(--shadow-3);
-  animation: slide-up 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  width: min(440px, 100%);
+  background: linear-gradient(180deg, rgba(24, 32, 50, 0.98) 0%, var(--panel) 100%);
+  border: 1px solid rgba(85, 101, 127, 0.5);
+  border-radius: 20px;
+  padding: 28px 24px 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(58, 214, 197, 0.08);
+  animation: slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
 }
 .ob-skip {
-  position: absolute; top: 4px; right: 4px;
-  background: none; border: none; color: var(--muted);
-  font-size: 13px; cursor: pointer; padding: 12px;
-  min-height: 44px; min-width: 44px;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 10px 14px;
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: var(--r-sm);
+  transition: color 0.15s, background 0.15s;
 }
-.ob-step { text-align: center; height: 170px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
-.ob-icon { font-size: 44px; }
-.ob-step h3 { font-size: 19px; color: #e8eef7; margin: 4px 0 2px; }
-.ob-step p { font-size: 14px; color: #b7c3d4; line-height: 1.45; }
-.ob-dots { display: flex; justify-content: center; gap: 8px; margin: 12px 0 16px; }
-.ob-dot { width: 8px; height: 8px; border-radius: 50%; background: #5b6b85; transition: all 0.2s; }
-.ob-dot.on { background: var(--accent); transform: scale(1.25); }
-.ob-actions { display: flex; gap: 10px; justify-content: center; }
-.ob-actions .primary-btn { min-width: 150px; }
-@keyframes slide-up { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.ob-skip:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+.ob-step {
+  text-align: center;
+  height: 210px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding-top: 4px;
+}
+/* Smooth step-to-step transition: re-animate children on each render() */
+.ob-step > * {
+  animation: step-enter 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Icon circle: 88px container with teal-tinted gradient — the visual anchor */
+.ob-icon {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(58, 214, 197, 0.2), rgba(58, 214, 197, 0.04) 70%);
+  border: 1px solid rgba(58, 214, 197, 0.22);
+  box-shadow: 0 0 30px rgba(58, 214, 197, 0.08);
+}
+.ob-icon svg {
+  width: 48px;
+  height: 48px;
+  color: var(--accent);
+}
+/* Typography: larger headings, tighter line-height, stronger hierarchy */
+.ob-step h3 {
+  font-size: 23px;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: #f0f5fb;
+  margin: 0;
+  font-weight: 700;
+}
+.ob-step p {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* Progress dots: larger with active glow */
+.ob-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 22px;
+}
+.ob-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4a5a72;
+  transition: all 0.25s ease;
+}
+.ob-dot.on {
+  background: var(--accent);
+  transform: scale(1.35);
+  box-shadow: 0 0 12px rgba(58, 214, 197, 0.6);
+}
+/* CTA button: prominent, glowing shadow */
+.ob-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+}
+.ob-actions .primary-btn {
+  min-width: 180px;
+  height: 52px;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(58, 214, 197, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.ob-actions .primary-btn:hover {
+  filter: brightness(1.12);
+  box-shadow: 0 8px 30px rgba(58, 214, 197, 0.38);
+  transform: translateY(-1px);
+}
+.ob-actions .primary-btn:active {
+  transform: scale(0.97);
+}
+/* Back button: match CTA height for visual balance */
+.ob-actions .ghost-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  font-size: 20px;
+}
+@keyframes slide-up {
+  from { transform: translateY(28px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes step-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-step > *,
+  .ob-card,
+  .onboarding {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
+}
 
 /* Live camera counter in the nav banner. C12 #126: this is the MISSION SIGNAL
    for Ghostway — the whole reason the app exists. The default (no cameras)
