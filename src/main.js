@@ -4,7 +4,13 @@ import { MapView } from './map-view.js';
 import { CameraStore } from './camera-store.js';
 import { searchPlaces, reverseGeocode } from './search.js';
 import { planRoute } from './routing.js';
-import { planRoutes, loadGraph, regionCovers, graphStatus, endpointsConnected, getGraphStats, resetGraphStats } from './router.js';
+// Engine (router.js) is lazy-loaded: see src/engine-loader.js. The full
+// ~6 MB-graph parse + A*/camera-cost code doesn't ship in the boot chunk;
+// it loads on first route calc, gated by the user's first "Calculate".
+import { loadEngine } from './engine-loader.js';
+// Sync coverage check stays out of the engine chunk so `engineCovers` is
+// still synchronous (no async-await chain to thread through callers).
+import { regionCovers } from './engine-region.js';
 import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
 import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, fmtArrive, haversine, haptic, pointToSegmentM, getUnits, setUnits } from './utils.js';
@@ -68,7 +74,8 @@ async function init() {
     ub0.setAttribute('aria-pressed', String(u0 === 'mi'));
   }
   window.__gw = app; // test/diagnostic hook
-  window.__gwRouter = { loadGraph, planRoutes, regionCovers, graphStatus, endpointsConnected, getGraphStats, resetGraphStats };
+  // window.__gwRouter is exposed lazily on first route calc by loadEngine(app)
+  // (see src/engine-loader.js). Speed-check.mjs reads it for graphStats.
 
   // Open on the user's last-known position if we have one (feels personal);
   // otherwise the map keeps its neutral default view (CONFIG.mapCenter).
@@ -197,7 +204,11 @@ async function ensureLocalEngine(fromC, toC) {
   setSplashText('Downloading map data…');
   _localEngineLoading = (async () => {
     try {
-      const g = await loadGraph(fromC[0], fromC[1], (payload) => {
+      // Lazy engine chunk (router.js) — first call fetches it, subsequent
+      // calls hit the cached namespace on app._engine. This is what splits
+      // the engine out of the boot bundle (PR3 bundle-size item).
+      const engine = await loadEngine(app);
+      const g = await engine.loadGraph(fromC[0], fromC[1], (payload) => {
         // Backward-compat: string stage OR {loaded,total,stage} object.
         if (typeof payload === 'string') {
           if (payload === 'parse') {
@@ -486,7 +497,10 @@ async function updateLiveEta(fromC) {
     const to = app.state.to;
     if (!to || !to.coords) return;
     // Prefer the local engine (same data the route was built from); fail soft.
-    const { options } = await planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
+    // Engine chunk is fetched lazily here too — first live-ETA tick after
+    // boot pays the engine-chunk cost (one-time, cached for the session).
+    const engine = await loadEngine(app);
+    const { options } = await engine.planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
     const pick = pickOptionForMode(options);
     const o = options[pick];
     if (!o) return;
@@ -531,10 +545,13 @@ function maybeAutoRoute() {
 }
 
 function engineCovers(fromC, toC) {
-  // Local engine is available for a corridor once it's loaded, OR (cheaper) we
-  // can decide up-front using the configured coverage box — no download needed
-  // to know *whether* the on-device graph would apply. The actual graph bytes
-  // load lazily inside routeWithFallbacks before we call planRoutes().
+  // Local engine is available for a corridor once the engine chunk has
+  // loaded, OR (cheaper) we can decide up-front using the configured
+  // coverage box — no download needed to know *whether* the on-device graph
+  // would apply. The actual graph bytes still load lazily inside
+  // ensureLocalEngine before we call planRoutes(). The bbox check itself
+  // stays sync (engine-region.js) so this function doesn't trigger the
+  // engine chunk fetch.
   return regionCovers(fromC[0], fromC[1]) && regionCovers(toC[0], toC[1]);
 }
 
@@ -618,18 +635,21 @@ function setGoLoading(on) {
 async function routeWithFallbacks(from, to) {
   // --- Ghostway's own camera-aware engine (in coverage) ---
   if (engineCovers(from.coords, to.coords)) {
-    // Lazy-load the on-device graph for this region (no-op if already loaded).
+    // Lazy-load the engine chunk + the on-device graph for this region
+    // (no-op if already loaded). One chunk fetch per session, cached on
+    // app._engine after first call.
     const ok = await ensureLocalEngine(from.coords, to.coords);
     if (ok) {
       // Disconnected graph components (a known data gap) can't be routed locally.
       // Detect it up front and fall back to Valhalla cleanly instead of throwing
       // 'No route found' and relying on the catch.
-      if (!endpointsConnected(from.coords, to.coords)) {
+      const engine = app._engine;
+      if (!engine.endpointsConnected(from.coords, to.coords)) {
         console.warn('local graph endpoints in different components — falling back to Valhalla');
       } else {
       try {
         const t0 = performance.now();
-        const { options } = await planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
+        const { options } = await engine.planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
         const ms = Math.round(performance.now() - t0);
         app.state.options = options;
         // Default pick: closest to the user's mode preference.
@@ -1110,7 +1130,8 @@ async function reRoute(fromC) {
   }
   try {
     if (engineCovers(fromC, to.coords) && (await ensureLocalEngine(fromC, to.coords))) {
-      const { options } = await planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
+      const engine = app._engine;
+      const { options } = await engine.planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
       app.state.options = options;
       app.state.chosen = pickOptionForMode(options);
       app.state.route = { engine: true, options, chosen: app.state.chosen };

@@ -10,8 +10,14 @@
 //
 // planRoutes() always returns up to 3 options (Clearest / Balanced / Fastest)
 // with per-option ETA and camera count so the user picks BEFORE driving.
+//
+// Loaded LAZILY (see engine-loader.js): main.js only imports this module
+// dynamically on the first route calc. The sync coverage bbox check lives
+// in engine-region.js so callers don't have to await the engine chunk to
+// decide whether the local engine applies.
 
 import { CONFIG } from './config.js';
+import { regionCovers as _regionCovers } from './engine-region.js';
 
 // Region-aware graph loading. Ghostway may ship several prebuilt road graphs
 // (one per coverage region, see CONFIG.engineRegions). A graph is fetched
@@ -41,19 +47,13 @@ export function loadedRegion() {
   return loadedRegionId;
 }
 
-function inBox(lon, lat, [w, s, e, n]) {
-  return lon >= w && lon <= e && lat >= s && lat <= n;
-}
-
-// True when a coordinate falls inside any shipped graph's coverage box.
-// Does NOT require the graph to be downloaded — used to decide whether to use
-// the local engine at all (vs Valhalla), and to trigger a lazy load.
-export function regionCovers(lon, lat) {
-  return CONFIG.engineRegions.some((r) => inBox(lon, lat, r.bbox));
-}
+// Re-export the sync coverage check from engine-region.js so the
+// engine-loader.js → router.js dynamic import chain still exposes it (for
+// tests/diagnostics on __gwRouter).
+export const regionCovers = _regionCovers;
 
 function regionFor(lon, lat) {
-  return CONFIG.engineRegions.find((r) => inBox(lon, lat, r.bbox)) || null;
+  return CONFIG.engineRegions.find((r) => _regionCovers(lon, lat)) || null;
 }
 
 // Load the graph for the region covering (lon,lat) — or pass a region object
