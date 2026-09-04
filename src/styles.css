@@ -605,6 +605,43 @@ body {
   pointer-events: none;
 }
 
+/* Stale camera-data warning: non-blocking, dismissible, re-shows after 24h.
+   Sits just below the offline banner (or in the same slot when online). */
+.stale-banner {
+  position: absolute;
+  top: calc(max(10px, env(safe-area-inset-top)) + 60px);
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 9;
+  padding: 8px 12px;
+  padding-right: 36px;
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+  border: 1px solid var(--accent-2);
+  color: var(--accent-2);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+}
+.stale-dismiss {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  color: var(--accent-2);
+  font-size: 18px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+}
+.stale-dismiss:hover {
+  color: var(--ink);
+}
+
 /* Drawer */
 .scrim {
   position: absolute;
@@ -1745,5 +1782,10 @@ select.rp-input {
      light — dial back to neutral dark icons. */
   .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
     filter: none;
+  }
+
+  .stale-banner {
+    background: #fff7e6;
+    border-color: rgba(217, 119, 6, 0.4);
   }
 }

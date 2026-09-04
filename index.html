@@ -44,6 +44,10 @@
       <div id="navBanner" class="nav-banner" hidden></div>
       <div id="navLive" class="sr-only" role="status" aria-live="polite"></div>
       <div id="offlineBanner" class="offline-banner" role="status" hidden>You’re offline — routes still work on-device. Search and live traffic need a connection.</div>
+      <div id="staleBanner" class="stale-banner" role="status" hidden>
+        <span id="staleMsg"></span>
+        <button id="staleDismiss" class="stale-dismiss" aria-label="Dismiss stale data warning">×</button>
+      </div>
 
       <!-- Tap-the-banner turn-by-turn directions (Maps parity) -->
       <div id="stepsScrim" class="steps-scrim" hidden></div>

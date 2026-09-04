@@ -196,6 +196,7 @@ async function init() {
   registerSW();
   applyModeUI();
   wireOfflineBanner();
+  checkCameraStale();
 }
 
 // Maps-parity offline banner: the app still routes on-device when the network
@@ -208,6 +209,54 @@ function wireOfflineBanner() {
   window.addEventListener('online', update);
   window.addEventListener('offline', update);
   update();
+}
+
+// Camera-data staleness warning: the graph-refresh.yml workflow fetches fresh
+// camera data monthly. If it fails silently, the app keeps routing against a
+// stale snapshot — users might navigate with decommissioned cameras or miss
+// new ones. On boot, read the shipped snapshot's asOf age; if >7 days, show a
+// dismissible non-blocking banner. Dismissal persists 24h via localStorage.
+const STALE_KEY = 'gw-stale-dismissed';
+const STALE_MAX_DAYS = 7;
+const STALE_MAX_MS = STALE_MAX_DAYS * 24 * 60 * 60 * 1000;
+const DISMISS_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+async function checkCameraStale() {
+  const banner = $('#staleBanner');
+  const msg = $('#staleMsg');
+  const dismiss = $('#staleDismiss');
+  if (!banner || !msg || !dismiss) return;
+
+  // Respect a recent dismissal (24h).
+  try {
+    const dismissedAt = localStorage.getItem(STALE_KEY);
+    if (dismissedAt && Date.now() - parseInt(dismissedAt, 10) < DISMISS_TTL_MS) {
+      return;
+    }
+  } catch { /* localStorage unavailable — show the banner */ }
+
+  // Derive asOf from the shipped fallback snapshot.
+  let ageDays = null;
+  try {
+    const r = await fetch(CONFIG.cameraGeojson + '?t=' + Date.now(), { cache: 'no-store' });
+    if (r.ok) {
+      const data = await r.json();
+      const asOf = data._meta?.asOf || data.asOf;
+      if (asOf) {
+        const ageMs = Date.now() - new Date(asOf).getTime();
+        ageDays = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+      }
+    }
+  } catch { /* offline / missing — can't determine staleness, stay silent */ }
+
+  if (ageDays !== null && ageDays > STALE_MAX_DAYS) {
+    msg.textContent = `Camera data is ${ageDays} days old — refresh pending.`;
+    banner.hidden = false;
+    dismiss.addEventListener('click', () => {
+      banner.hidden = true;
+      try { localStorage.setItem(STALE_KEY, String(Date.now())); } catch {}
+    }, { once: true });
+  }
 }
 
 // Lazily fetch the on-device road graph for the region a route enters — so a
