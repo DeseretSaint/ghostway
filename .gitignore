@@ -32,3 +32,7 @@ banner-compact.png
 
 # UX polish loop working screenshots (regenerate via scripts/ux-shots.mjs)
 ux-shots/
+android/local.properties
+android/.gradle/
+android/build/
+android/app/src/main/assets/
