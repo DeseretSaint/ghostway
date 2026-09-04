@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Ghostway" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Ghostway" parent="Theme.AppCompat.NoActionBar">
         <item name="android:statusBarColor">#0b0f17</item>
         <item name="android:windowBackground">#0b0f17</item>
     </style>
