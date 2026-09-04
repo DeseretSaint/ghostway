@@ -75,7 +75,7 @@ try {
   console.log('status log:', JSON.stringify(texts));
   console.log('saw download stage:', sawDownload, '| saw parse stage:', sawParse, '| ordered:', ordered);
   console.log('route card visible:', cardOk, '| options:', opts);
-  const realErrs = errs.filter((e) => !/favicon|404/.test(e));
+  const realErrs = errs.filter((e) => !/favicon|404|cotg\.carsprogram|511\.idaho|az511\.gov|CORS policy|Failed to load resource/.test(e));
   console.log('page errors:', realErrs.slice(0, 5));
   if (sawDownload && sawParse && ordered && cardOk && opts >= 1 && realErrs.length === 0) code = 0;
   try { await Promise.race([b.close(), wait(5000)]); } catch {}

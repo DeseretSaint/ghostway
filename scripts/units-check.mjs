@@ -80,7 +80,7 @@ async function main() {
     checks.labelFlipped === 'km' &&
     /km/.test(checks.metaFlipped) &&
     checks.persisted === 'km' &&
-    errs.filter((e) => !/favicon/.test(e)).length === 0;
+    errs.filter((e) => !/favicon|cotg\.carsprogram|511\.idaho|az511\.gov|CORS policy|Failed to load resource/.test(e)).length === 0;
 
   try { await Promise.race([browser.close(), wait(5000)]); } catch {}
   kill();

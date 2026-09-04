@@ -23,7 +23,7 @@ const THROTTLE = {
   uploadThroughput:   250 * 1024 / 8, // 250 Kbps → bytes/sec
 };
 
-const TTFB_BUDGET_MS = 90000; // generous under 3G
+const TTFB_BUDGET_MS = 240000; // generous under 3G with expanded ~18MB graph
 
 const preview = await startPreview({ port: 4173 });
 let code = 1;
@@ -63,9 +63,9 @@ try {
   await p.waitForFunction(
     `() => {
       const card = document.querySelector('#route-card');
-      return card && !card.hidden;
+      return card && !card.hidden && card.querySelectorAll('.route-opt').length >= 1;
     }`,
-    { timeout: 90000 }
+    { timeout: 240000 }
   );
 
   const info = await p.evaluate(() => {

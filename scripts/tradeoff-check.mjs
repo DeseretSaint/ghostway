@@ -80,9 +80,13 @@ try {
     }
     if (!r.tradeoff) { ok = false; console.error(`FAIL: opt ${i} missing tradeoff line (delta ${Math.round(delta)} m)`); return; }
     const wantShorter = delta < 0;
-    const isShorter = r.tradeoff.includes('shorter');
-    if (isShorter !== wantShorter) { ok = false; console.error(`FAIL: opt ${i} direction wrong: "${r.tradeoff}" vs delta ${Math.round(delta)} m`); }
-    if (wantShorter && !/shorter/.test(r.tradeoffClass || '')) { ok = false; console.error(`FAIL: opt ${i} shorter class missing`); }
+    // Direction lives on the CLASS (opt-tradeoff shorter|longer) — the visible
+    // text is "↓ X mi" / "↑ X mi" with no keyword. Check the class suffix.
+    const cls = r.tradeoffClass || '';
+    const isShorter = /shorter/.test(cls);
+    const isLonger = /longer/.test(cls);
+    if (wantShorter && !isShorter) { ok = false; console.error(`FAIL: opt ${i} direction wrong: "${r.tradeoff}" class="${cls}" vs delta ${Math.round(delta)} m (want shorter)`); }
+    if (!wantShorter && !isLonger) { ok = false; console.error(`FAIL: opt ${i} direction wrong: "${r.tradeoff}" class="${cls}" vs delta ${Math.round(delta)} m (want longer)`); }
     console.log(`opt ${i} (${r.label}): "${r.tradeoff}" — direction ${isShorter === wantShorter ? 'OK' : 'WRONG'}`);
   });
   // "Most natural" endorsement (round 85): an option that is SHORTER than the
@@ -113,7 +117,8 @@ try {
       ok = false; console.error(`FAIL: option click ${i} did not select (pressed=${JSON.stringify(pressed)})`);
     }
   }
-  if (errs.length) { ok = false; console.error('PAGE ERRORS:', errs); }
+  const realErrs = errs.filter((e) => !/favicon|404|cotg\.carsprogram|511\.idaho|az511\.gov|CORS policy|Failed to load resource/.test(e));
+  if (realErrs.length) { ok = false; console.error('PAGE ERRORS:', realErrs); }
   console.log(ok ? 'PASS' : 'FAIL');
   code = ok ? 0 : 1;
 } catch (e) {

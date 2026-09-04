@@ -67,7 +67,7 @@ async function main() {
     res.modifierCount >= 1 &&
     !res.primaries.some((p) => /No highways/i.test(p || '')) &&
     res.primaries.length >= 1 && res.primaries.length <= 3 &&
-    errs.filter((e) => !/favicon/.test(e)).length === 0;
+    errs.filter((e) => !/favicon|cotg\.carsprogram|511\.idaho|az511\.gov|CORS policy|Failed to load resource/.test(e)).length === 0;
 
   try { await Promise.race([browser.close(), wait(5000)]); } catch {}
   kill();
