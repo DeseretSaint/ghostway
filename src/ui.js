@@ -365,7 +365,7 @@ function renderEngineCard(app, card, result) {
 
   card.innerHTML = `
     <button id="editRouteBtn" class="text-link rc-edit" type="button">${icon('edit', { size: 14 })} Edit route</button>
-    <div class="rc-head">
+    <div class="rc-head" aria-live="polite" aria-atomic="true">
       <div class="rc-time">${fmtDuration(sel.duration)}</div>
       <div class="rc-arrive">Arrive ${fmtArrive(sel.duration)}</div>
       <div class="rc-dist">${fmtDistance(sel.distance)}</div>

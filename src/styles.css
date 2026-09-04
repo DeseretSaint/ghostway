@@ -642,6 +642,43 @@ body {
   color: var(--ink);
 }
 
+/* Battery-low affordance: same slot/positioning as stale banner but yellow.
+   Non-blocking hint; driver decides whether to plug in. */
+.battery-hint {
+  position: absolute;
+  top: calc(max(10px, env(safe-area-inset-top)) + 100px);
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 9;
+  padding: 8px 12px;
+  padding-right: 36px;
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+  border: 1px solid #d97706;
+  color: #d97706;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+}
+.battery-dismiss {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  color: #d97706;
+  font-size: 18px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+}
+.battery-dismiss:hover {
+  color: var(--ink);
+}
+
 /* Drawer */
 .scrim {
   position: absolute;
@@ -1931,6 +1968,10 @@ select.rp-input {
   }
 
   .stale-banner {
+    background: #fff7e6;
+    border-color: rgba(217, 119, 6, 0.4);
+  }
+  .battery-hint {
     background: #fff7e6;
     border-color: rgba(217, 119, 6, 0.4);
   }

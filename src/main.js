@@ -197,6 +197,7 @@ async function init() {
   applyModeUI();
   wireOfflineBanner();
   checkCameraStale();
+  wireBatteryHint();
 }
 
 // Maps-parity offline banner: the app still routes on-device when the network
@@ -220,6 +221,56 @@ const STALE_KEY = 'gw-stale-dismissed';
 const STALE_MAX_DAYS = 7;
 const STALE_MAX_MS = STALE_MAX_DAYS * 24 * 60 * 60 * 1000;
 const DISMISS_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+// Battery-low affordance during nav: a driver whose phone is dying mid-route
+// needs a non-blocking signal to plug in. navigator.getBattery() is
+// non-standard but Chrome/Safari/iOS-Safari all support it on HTTPS or
+// localhost — fall back to a no-op when absent. Same dismissal pattern as
+// stale banner: 24h localStorage TTL, respects prior dismissal.
+const BATTERY_KEY = 'gw-battery-dismissed';
+const BATTERY_THRESHOLD = 0.2; // 20%
+
+async function wireBatteryHint() {
+  const banner = $('#batteryHint');
+  const msg = $('#batteryMsg');
+  const dismiss = $('#batteryDismiss');
+  if (!banner || !msg || !dismiss) return;
+
+  // Respect a recent dismissal (24h, same TTL as stale banner).
+  try {
+    const dismissedAt = localStorage.getItem(BATTERY_KEY);
+    if (dismissedAt && Date.now() - parseInt(dismissedAt, 10) < DISMISS_TTL_MS) {
+      return;
+    }
+  } catch { /* localStorage unavailable — show the hint */ }
+
+  let bat = null;
+  try {
+    if (typeof navigator.getBattery === 'function') {
+      bat = await navigator.getBattery();
+    }
+  } catch { /* getBattery unsupported (e.g. iOS WebView older) — stay silent */ }
+  if (!bat) return;
+
+  const show = (level, charging) => {
+    if (charging || level > BATTERY_THRESHOLD) {
+      banner.hidden = true;
+      return;
+    }
+    const pct = Math.round(level * 100);
+    msg.textContent = `Battery low (${pct}%) — keep phone plugged in for nav.`;
+    banner.hidden = false;
+  };
+
+  show(bat.level, bat.charging);
+  bat.addEventListener('levelchange', () => show(bat.level, bat.charging));
+  bat.addEventListener('chargingchange', () => show(bat.level, bat.charging));
+
+  dismiss.addEventListener('click', () => {
+    banner.hidden = true;
+    try { localStorage.setItem(BATTERY_KEY, String(Date.now())); } catch {}
+  }, { once: true });
+}
 
 async function checkCameraStale() {
   const banner = $('#staleBanner');

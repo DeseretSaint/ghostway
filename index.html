@@ -48,6 +48,10 @@
         <span id="staleMsg"></span>
         <button id="staleDismiss" class="stale-dismiss" aria-label="Dismiss stale data warning">×</button>
       </div>
+      <div id="batteryHint" class="battery-hint" role="status" hidden>
+        <span id="batteryMsg"></span>
+        <button id="batteryDismiss" class="battery-dismiss" aria-label="Dismiss battery warning">×</button>
+      </div>
 
       <!-- Tap-the-banner turn-by-turn directions (Maps parity) -->
       <div id="stepsScrim" class="steps-scrim" hidden></div>
@@ -133,7 +137,7 @@
         <div id="engineStatus" class="engine-status" role="status" hidden></div>
 
         <div id="mapLoading" class="map-loading" role="status" hidden>Loading map…</div>
-        <div id="route-card" class="route-card" hidden></div>
+        <div id="route-card" class="route-card" role="region" aria-label="Route options" hidden></div>
 
         <div id="status" class="status" role="status" hidden></div>
       </section>
