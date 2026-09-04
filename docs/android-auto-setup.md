@@ -8,8 +8,9 @@ Details below.
 
 Android Auto does not require the Play Store. It runs **sideloaded APKs** once
 you turn on developer mode and allow unknown sources. Ghostway's Android app
-is built automatically on every push (workflow `android-apk.yml` → the
-`android-latest` release, refreshed automatically).
+is built automatically on every push to `src/`, `dist/`, or `android/` (workflow
+`android-apk.yml` → the `android-latest` release, refreshed automatically),
+plus a nightly 04:00 UTC build as a safety net.
 
 ## One-time setup (about 2 minutes)
 

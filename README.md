@@ -140,13 +140,15 @@ Everything swappable lives in `src/config.js`:
 ## Android Auto
 
 Ghostway ships an Android Auto-compatible Android app (`android/`), built
-automatically on every push (workflow `android-apk.yml` → artifact
-`ghostway-debug-apk`). Install it **without the Play Store**: sideload the APK,
-enable developer mode in the Android Auto app (tap the version number ~10×),
-and turn on "Unknown sources" — full steps in
-[docs/android-auto-setup.md](docs/android-auto-setup.md). v1 shows Ghostway on
-the head unit with the full phone app (routing, Strict camera avoidance, voice)
-running in the phone WebView; native turn-by-turn templates are next.
+automatically on every push to `src/`, `dist/`, or `android/` (workflow
+`android-apk.yml` → the `android-latest` release, refreshed automatically),
+plus a nightly 04:00 UTC build as a safety net. Install it **without the
+Play Store**: sideload the APK, enable developer mode in the Android Auto
+app (tap the version number ~10×), and turn on "Unknown sources" — full
+steps in [docs/android-auto-setup.md](docs/android-auto-setup.md). v1 shows
+Ghostway on the head unit with the full phone app (routing, Strict camera
+avoidance, voice) running in the phone WebView; native turn-by-turn
+templates are next.
 CarPlay (iPhone) requires Apple's `com.apple.developer.carplay-maps`
 entitlement — no sideload path exists; plan in `docs/android-auto-carplay.md`.
 
