@@ -2,7 +2,7 @@
 // Single browser, multiple pages (avoids repeated Chrome launch overhead).
 import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
-import { contrast } from './lib-contrast.mjs';
+import { contrast, parseRgb, compositeOver, getEffectiveBg, relativeLuminance, contrastRatio, samplePixel, verifyAtPixel, VIEWPORT_LADDER, THEMES, AA_THRESHOLD } from './lib-contrast.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -12,45 +12,6 @@ setTimeout(() => { console.error('WATCHDOG: 180s'); process.exit(2); }, 180000).
 
 const PAGE_BG_LIGHT = [240, 244, 248];
 const PAGE_BG_DARK  = [11, 15, 23];
-
-function compositeOver(rgbTop, a, rgbBg) {
-  return [
-    Math.round(rgbTop[0] * a + rgbBg[0] * (1 - a)),
-    Math.round(rgbTop[1] * a + rgbBg[1] * (1 - a)),
-    Math.round(rgbTop[2] * a + rgbBg[2] * (1 - a)),
-  ];
-}
-
-async function getEffectiveBg(page, handle) {
-  return await page.evaluate((el) => {
-    const RGB_RE = /rgba?\(([^)]+)\)/i;
-    function parseColor(str) {
-      const m = str.match(RGB_RE);
-      if (!m) return null;
-      const parts = m[1].split(',').map((s) => parseFloat(s.trim()));
-      return { r: parts[0], g: parts[1], b: parts[2], a: parts[3] == null ? 1 : parts[3] };
-    }
-    const GRAD_RE = /linear-gradient\s*\(\s*[^,]+\s*,\s*rgba?\([^)]+\)/i;
-    function firstGradColor(str) {
-      if (!str || !str.includes('linear-gradient')) return null;
-      // Extract the first color stop after the angle/direction.
-      const m = str.match(/linear-gradient\s*\([^,]*,\s*(rgba?\([^)]+\))/i) ||
-                str.match(/linear-gradient\s*\(\s*(rgba?\([^)]+\))/i);
-      return m ? parseColor(m[1]) : null;
-    }
-    let n = el;
-    while (n) {
-      const cs = getComputedStyle(n);
-      const bg = parseColor(cs.backgroundColor);
-      if (bg && bg.a > 0) return bg;
-      // Gradient backgrounds are fully opaque — use first stop as proxy.
-      const grad = firstGradColor(cs.backgroundImage) || firstGradColor(cs.background);
-      if (grad) return { r: grad.r, g: grad.g, b: grad.b, a: grad.a == null ? 1 : grad.a };
-      n = n.parentElement;
-    }
-    return null;
-  }, handle);
-}
 
 async function measureSelector(page, sel, pageBg) {
   const handle = await page.$(sel);

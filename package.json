@@ -15,6 +15,7 @@
   "devDependencies": {
     "@mapbox/vector-tile": "^3.0.0",
     "pbf": "^5.1.2",
+    "pngjs": "^7.0.0",
     "puppeteer-core": "^23.11.1",
     "vite": "^5.4.0"
   },

@@ -6,7 +6,7 @@
 // × light/dark, asserting AA contrast (≥4.5:1) on #camChip at every viewport.
 import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
-import { VIEWPORT_LADDER, THEMES, AA_THRESHOLD, contrast, parseRgb } from './lib-contrast.mjs';
+import { VIEWPORT_LADDER, THEMES, AA_THRESHOLD, contrast, parseRgb, compositeOver } from './lib-contrast.mjs';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -169,19 +169,14 @@ for (const vp of VIEWPORT_LADDER) {
         const textRgb = parseRgb(measurements.color);
         let bgRgb = parseRgb(measurements.bg);
 
-        // Composite translucent chip bg against nav-banner bg.
+        // Composite translucent chip bg against nav-banner bg via shared lib.
         const chipMatch = measurements.bg.match(/[\d.]+/g);
         if (chipMatch && chipMatch.length >= 4) {
           const chipAlpha = parseFloat(chipMatch[3]);
           if (chipAlpha < 1 && measurements.bannerBg) {
             const bannerRgb = parseRgb(measurements.bannerBg);
-            if (bannerRgb?.length === 3) {
-              bgRgb = [
-                Math.round(parseInt(chipMatch[0]) * chipAlpha + bannerRgb[0] * (1 - chipAlpha)),
-                Math.round(parseInt(chipMatch[1]) * chipAlpha + bannerRgb[1] * (1 - chipAlpha)),
-                Math.round(parseInt(chipMatch[2]) * chipAlpha + bannerRgb[2] * (1 - chipAlpha)),
-              ];
-            }
+            const chipRgb = [parseInt(chipMatch[0]), parseInt(chipMatch[1]), parseInt(chipMatch[2])];
+            if (bannerRgb?.length === 3) bgRgb = compositeOver(chipRgb, chipAlpha, bannerRgb);
           }
         }
 
