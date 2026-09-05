@@ -323,6 +323,97 @@ export class MapView {
     this._routeData = features;
     const src = this.map.getSource('route');
     if (src) src.setData({ type: 'FeatureCollection', features });
+    // Route-proximity camera emphasis: when a route is shown, dim camera
+    // markers that are NOT near the route line so the map agrees with the
+    // route card's camera count ("0 cameras" must not look like 2 cameras
+    // ON the road). Near-route markers keep full opacity; others fade.
+    this._applyCameraRouteFilter(features);
+    // Re-run the proximity pass as the viewport changes (projections shift).
+    if (!this._camMoveHooked) {
+      this._camMoveHooked = true;
+      this.map.on('moveend', () => {
+        if (this._routeData && this._routeData.length) {
+          this._applyCameraRouteFilter(this._routeData);
+        }
+      });
+    }
+  }
+
+  // Compute a screen-accurate proximity test using MapLibre's queryRendered
+  // geometry: project route coords to screen px and check each rendered
+  // camera point against a 24 px corridor (~matches the router's ~30 m
+  // exposure corridor at typical street zooms). Cheap and projection-safe.
+  _applyCameraRouteFilter(features) {
+    const hasRoute = Array.isArray(features) && features.length > 0;
+    if (!this.map.getLayer(CAMERA_LAYER.layerId)) return;
+    if (!hasRoute) {
+      this.map.setPaintProperty(CAMERA_LAYER.layerId, 'circle-opacity', 0.95);
+      return;
+    }
+    try {
+      // Collect route screen points.
+      const pts = [];
+      for (const f of features) {
+        const g = f.geometry;
+        const ring = g.type === 'LineString' ? g.coordinates
+          : (g.type === 'MultiLineString' ? g.coordinates.flat() : []);
+        for (const [lon, lat] of ring) {
+          const p = this.map.project([lon, lat]);
+          pts.push([p.x, p.y]);
+        }
+      }
+      if (!pts.length) return;
+      // Which rendered camera pixels fall INSIDE the route corridor?
+      const r = 24; // px corridor ≈ the visual width that reads as "passing it"
+      const near = this.map.queryRenderedFeatures(pts.map((p) => [
+        [p[0] - r, p[1] - r], [p[0] + r, p[1] + r],
+      ]).flat(), { layers: [CAMERA_LAYER.layerId] });
+      const nearKeys = new Set(
+        near.map((f) => `${f.geometry.coordinates[0]},${f.geometry.coordinates[1]}`)
+      );
+      const all = this.map.queryRenderedFeatures(undefined, {
+        layers: [CAMERA_LAYER.layerId],
+      });
+      this._camNearKeys = nearKeys;
+      this._renderNearRouteCameras(near, all.length);
+    } catch { /* projection not ready — leave markers as-is */ }
+  }
+
+  _renderNearRouteCameras(nearFeats, totalOnScreen) {
+    const near = {
+      type: 'FeatureCollection',
+      features: (nearFeats || []).map((f) => ({
+        type: 'Feature',
+        properties: f.properties,
+        geometry: f.geometry,
+      })),
+    };
+    if (!this.map.getSource('cam-near-route')) {
+      this._addSource('cam-near-route', {
+        type: 'geojson', data: near,
+      });
+      this._addLayer({
+        id: 'cam-near-route-dots',
+        type: 'circle',
+        source: 'cam-near-route',
+        minzoom: 11,
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 5, 14, 9],
+          'circle-color': '#ff4d6d',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#0b0f17',
+        },
+      });
+    } else {
+      this.map.getSource('cam-near-route').setData(near);
+    }
+    const hasRoute = !!(this._routeData && this._routeData.length);
+    // With a route active: base camera dots fade to 22% (ambient surveillance
+    // context), and ONLY near-route cameras render bright in the overlay —
+    // the map then visually matches the route card's camera count.
+    this.map.setPaintProperty(
+      CAMERA_LAYER.layerId, 'circle-opacity', hasRoute ? 0.22 : 0.95,
+    );
   }
 
   // Show/hide the camera heatmap + points (Workstream D: layer toggle).
