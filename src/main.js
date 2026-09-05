@@ -270,6 +270,18 @@ async function wireBatteryHint() {
     banner.hidden = true;
     try { localStorage.setItem(BATTERY_KEY, String(Date.now())); } catch {}
   }, { once: true });
+  // Keyboard accessibility (fire #21): pressing Escape on the battery hint
+  // should dismiss AND persist dismissal, matching the click handler. Without
+  // this, keyboard users had no way to silence the warning across page loads.
+  const onEsc = (e) => {
+    if (e.key !== 'Escape') return;
+    if (banner.hidden) return;
+    e.preventDefault();
+    banner.hidden = true;
+    try { localStorage.setItem(BATTERY_KEY, String(Date.now())); } catch {}
+    document.removeEventListener('keydown', onEsc);
+  };
+  document.addEventListener('keydown', onEsc);
 }
 
 async function checkCameraStale() {
@@ -1745,25 +1757,46 @@ function closeDrawer() {
   setTimeout(done, 260);
 }
 let modalReturnFocus = null;
-// Focus trap: while the modal is open, Tab / Shift+Tab cycle within the
+// Focus trap: while a modal/dialog is open, Tab / Shift+Tab cycle within the
 // dialog's focusable elements instead of escaping to the background page.
 // aria-modal="true" is a hint; without a real trap, keyboard users can still
-// tab out to controls behind the scrim.
+// tab out to controls behind the scrim. Handles BOTH the generic #modal
+// (trap from .modal-card) and the first-run #onboarding overlay (trap from
+// .ob-card inside #onboarding).
 function trapModalFocus(e) {
+  if (e.key !== 'Tab') return;
+  // Pick whichever dialog is currently visible. The onboarding overlay is a
+  // separate full-viewport dialog; the modal lives inside #modal.
+  const onb = $('#onboarding');
+  if (onb && !onb.hidden) {
+    const card = document.querySelector('.ob-card');
+    if (card) {
+      const list = focusableInside(card);
+      if (list.length === 0) { e.preventDefault(); return; }
+      cycleFocus(e, list, card);
+    }
+    return;
+  }
   const modal = $('#modal');
-  if (modal.hidden || e.key !== 'Tab') return;
+  if (modal.hidden) return;
   const card = document.querySelector('.modal-card');
   if (!card) return;
-  const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-  const list = Array.from(card.querySelectorAll(sel)).filter((el) => !el.hidden);
+  const list = focusableInside(card);
   if (list.length === 0) { e.preventDefault(); return; }
+  cycleFocus(e, list, card);
+}
+function focusableInside(root) {
+  const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  return Array.from(root.querySelectorAll(sel)).filter((el) => !el.hidden);
+}
+function cycleFocus(e, list, root) {
   const first = list[0];
   const last = list[list.length - 1];
   if (e.shiftKey) {
-    if (document.activeElement === first || !card.contains(document.activeElement)) {
+    if (document.activeElement === first || !root.contains(document.activeElement)) {
       e.preventDefault(); last.focus();
     }
-  } else if (document.activeElement === last || !card.contains(document.activeElement)) {
+  } else if (document.activeElement === last || !root.contains(document.activeElement)) {
     e.preventDefault(); first.focus();
   }
 }
@@ -2021,6 +2054,7 @@ function openDonate() {
 init();
 
 // ---- First-run onboarding (Workstream D) ----
+let onboardingReturnFocus = null;
 function startOnboarding() {
   const wrap = $('#onboarding');
   const stepEl = $('#obStep');
@@ -2057,7 +2091,28 @@ function startOnboarding() {
     localStorage.setItem('gw-onboarded', '1');
     wrap.hidden = true;
     window.__ghostwayOnboarded = 'done';
+    // Focus return (fire #21): if the tour was launched from a trigger button
+    // (e.g. the drawer's tour item), send focus back to it so keyboard users
+    // land somewhere sensible. The first-run path has no trigger — fall back
+    // to the menu button so a Tab press goes somewhere, not nowhere.
+    const ret = onboardingReturnFocus;
+    if (ret && typeof ret.focus === 'function') {
+      try { ret.focus(); } catch { /* detached */ }
+    } else {
+      const menu = $('#menuBtn');
+      if (menu) { try { menu.focus(); } catch { /* detached */ } }
+    }
+    onboardingReturnFocus = null;
   };
+
+  // Remember who opened the tour so we can return focus on close. If no live
+  // element triggered this, fall back to the menu button so focus has a home.
+  const active = document.activeElement;
+  if (active && active !== document.body && typeof active.focus === 'function') {
+    onboardingReturnFocus = active;
+  } else {
+    onboardingReturnFocus = $('#menuBtn');
+  }
 
   $('#obNext').addEventListener('click', () => {
     if (i < steps.length - 1) { i++; render(); }

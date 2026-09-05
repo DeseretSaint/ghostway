@@ -340,8 +340,17 @@ function renderEngineCard(app, card, result) {
         ? `<span class="opt-natural" title="Shorter and uses no more freeway than the fastest route -- the way a local would drive">${icon('leaf', { size: 13 })} Most natural</span>`
         : '';
     const hw = o.highwayKm && o.highwayKm >= 0.5 ? ` · ${o.highwayKm.toFixed(1)} km hwy` : '';
+    // Build a descriptive aria-label so keyboard/SR users hear the tradeoff
+    // (fire #21 BLOCK: route-opt was unreachable by keyboard because the
+    // visible text alone reads as a number — announce duration + cameras).
+    // Use the plain camera count (not the .opt-cams <span> markup) so the
+    // aria-label stays clean text for screen readers.
+    const camCount = o.cameras || 0;
+    const labelText =
+      `${o.label}, ${fmtDuration(o.duration)}, ${fmtDistance(o.distance)}, ` +
+      `${camCount} ${camCount === 1 ? 'camera' : 'cameras'}`;
     return `
-        <button class="route-opt ${idx === chosen ? 'chosen' : ''}" data-opt="${idx}" type="button" aria-pressed="${idx === chosen}">
+        <button class="route-opt ${idx === chosen ? 'chosen' : ''}" data-opt="${idx}" type="button" tabindex="0" role="button" aria-pressed="${idx === chosen}" aria-label="${escHtml(labelText)}">
           <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
           ${clearBadge}
           <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${hw}${delay}${bestEffort}</span>
