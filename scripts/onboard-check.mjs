@@ -11,14 +11,15 @@ import { VIEWPORT_LADDER, THEMES, AA_THRESHOLD, contrast, parseRgb } from './lib
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-setTimeout(() => { console.error('WATCHDOG: 300s timeout — force exit'); process.exit(2); }, 300000).unref();
+setTimeout(() => { console.error('WATCHDOG: 360s timeout — force exit'); process.exit(2); }, 360000).unref();
 
 const pv = await startPreview();
-const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
 
 // --- Phase 1: behavioral test at 375/390/1440 (original) ---
+const b1 = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+
 async function runViewport(width, height, isMobile) {
-  const p = await b.newPage();
+  const p = await b1.newPage();
   await p.setViewport({ width, height, isMobile, hasTouch: isMobile, deviceScaleFactor: isMobile ? 2 : 1 });
   const errs = [];
   p.on('pageerror', (e) => errs.push(String(e.message)));
@@ -66,7 +67,7 @@ async function runViewport(width, height, isMobile) {
 }
 
 async function runTourTrigger() {
-  const p = await b.newPage();
+  const p = await b1.newPage();
   await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   const errs = [];
   p.on('pageerror', (e) => errs.push(String(e.message)));
@@ -110,78 +111,88 @@ console.log(behavioralPass
   ? '\nBEHAVIORAL PASS ✅ — all viewports + drawer trigger work'
   : '\nBEHAVIORAL FAIL ❌');
 
+try { await Promise.race([b1.close(), wait(5000)]); } catch {}
+
 // --- Phase 2: multi-viewport contrast sweep for skip link ---
 console.log('\n=== MULTI-VIEWPORT CONTRAST PROBE (skip link) ===');
 
+const b2 = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const contrastResults = [];
 let contrastAllPass = true;
 
+// Use a single page, resize + reload + re-measure for each combo.
+const page = await b2.newPage();
+
 for (const vp of VIEWPORT_LADDER) {
   for (const theme of THEMES) {
-    const page = await b.newPage();
-    await page.setViewport({
-      width: vp.width,
-      height: vp.height,
-      isMobile: vp.isMobile,
-      hasTouch: vp.isMobile,
-      deviceScaleFactor: vp.isMobile ? 2 : 1,
-    });
-    await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
-    await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
-    await page.evaluate(() => localStorage.clear());
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
-    await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
-    await wait(800);
-
-    // Wait for onboarding to show
-    await page.waitForFunction(() => {
-      const ob = document.querySelector('#onboarding');
-      return ob && !ob.hidden;
-    }, { timeout: 10000 }).catch(() => {});
-
-    const measurements = await page.evaluate(() => {
-      const skip = document.querySelector('#obSkip');
-      const card = document.querySelector('.ob-card');
-      if (!skip || !card) return { error: 'elements missing' };
-      const skipStyle = getComputedStyle(skip);
-      const cardStyle = getComputedStyle(card);
-      return {
-        skipColor: skipStyle.color,
-        skipBg: skipStyle.backgroundColor,
-        cardBg: cardStyle.backgroundColor,
-        cardBgImage: cardStyle.backgroundImage,
-        skipText: skip.textContent.trim(),
-      };
-    });
-
-    await page.close();
-
     const label = `${vp.width}x${vp.height} ${theme}`;
-    const passEntries = [];
+    try {
+      await page.setViewport({
+        width: vp.width,
+        height: vp.height,
+        isMobile: vp.isMobile,
+        hasTouch: vp.isMobile,
+        deviceScaleFactor: vp.isMobile ? 2 : 1,
+      });
+      await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
+      await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.evaluate(() => localStorage.clear());
+      await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+      await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
+      await wait(800);
 
-    if (measurements.skipColor && measurements.cardBg) {
-      const textRgb = parseRgb(measurements.skipColor);
-      const bgRgb = parseRgb(measurements.cardBg);
-      if (textRgb?.length === 3 && bgRgb?.length === 3) {
-        const ratio = contrast(textRgb, bgRgb);
-        const pass = ratio >= AA_THRESHOLD;
-        if (!pass) contrastAllPass = false;
-        passEntries.push({ ratio: ratio.toFixed(2), pass });
-        console.log(`  ${pass ? 'PASS' : 'FAIL'} | ${label} | #obSkip: ${ratio.toFixed(2)}:1 text="${measurements.skipText}" (color=${measurements.skipColor} cardBg=${measurements.cardBg})`);
+      await page.waitForFunction(() => {
+        const ob = document.querySelector('#onboarding');
+        return ob && !ob.hidden;
+      }, { timeout: 10000 }).catch(() => {});
+
+      const measurements = await page.evaluate(() => {
+        const skip = document.querySelector('#obSkip');
+        const card = document.querySelector('.ob-card');
+        if (!skip || !card) return { error: 'elements missing' };
+        const skipStyle = getComputedStyle(skip);
+        const cardStyle = getComputedStyle(card);
+        let cardBg = cardStyle.backgroundColor;
+        if (!cardBg || cardBg === 'rgba(0, 0, 0, 0)') {
+          const gradMatch = cardStyle.backgroundImage.match(/(?:rgba?|hsla?)\([\d., ]+\)/);
+          if (gradMatch) cardBg = gradMatch[0];
+        }
+        return {
+          skipColor: skipStyle.color,
+          cardBg,
+          skipText: skip.textContent.trim(),
+        };
+      });
+
+      if (measurements.skipColor && measurements.cardBg) {
+        const textRgb = parseRgb(measurements.skipColor);
+        const bgRgb = parseRgb(measurements.cardBg);
+        if (textRgb?.length === 3 && bgRgb?.length === 3) {
+          const ratio = contrast(textRgb, bgRgb);
+          const pass = ratio >= AA_THRESHOLD;
+          if (!pass) contrastAllPass = false;
+          console.log(`  ${pass ? 'PASS' : 'FAIL'} | ${label} | #obSkip: ${ratio.toFixed(2)}:1 text="${measurements.skipText}" (color=${measurements.skipColor} cardBg=${measurements.cardBg})`);
+          contrastResults.push({ label, pass, ratio: ratio.toFixed(2) });
+        }
+      } else {
+        console.log(`  SKIP | ${label} | #obSkip: ${JSON.stringify(measurements)}`);
       }
-    } else {
-      console.log(`  SKIP | ${label} | #obSkip: no color/bg (${JSON.stringify(measurements)})`);
+    } catch (e) {
+      console.log(`  ERROR | ${label} | ${e.message}`);
+      contrastAllPass = false;
     }
-
-    contrastResults.push({ vp, theme, measurements, passEntries });
+    await wait(300);
   }
 }
+
+try { await page.goto('about:blank'); } catch {}
+try { await page.close(); } catch {}
 
 console.log(contrastAllPass
   ? `\nCONTRAST PASS ✅ — all ${contrastResults.length} viewport/theme combos ≥4.5:1 AA`
   : `\nCONTRAST FAIL ❌ — some viewport/theme combos below AA threshold`);
 
-try { await Promise.race([b.close(), wait(5000)]); } catch {}
+try { await Promise.race([b2.close(), wait(5000)]); } catch {}
 pv.kill();
 
 const overallPass = behavioralPass && contrastAllPass;

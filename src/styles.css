@@ -1932,12 +1932,24 @@ select.rp-input {
      Darken to #1a5c4a for ≥7:1 AA on light bg. */
   .cam-chip {
     color: #1a5c4a;
+    background: rgba(26, 92, 74, 0.10);
+    border-color: rgba(26, 92, 74, 0.45);
   }
 
   /* Mission-signal chip: green #3fb982 on translucent green bg composites
      to ~2:1 on light banner — FAIL. Darken to #1a5c4a for ≥5.8:1 AA. */
   .cam-chip.mission-signal {
     color: #1a5c4a;
+    background: rgba(26, 92, 74, 0.10);
+    border-color: rgba(26, 92, 74, 0.45);
+  }
+
+  /* Nav-banner: dark gradient (linear-gradient(135deg, #0e2a33, #0b0f17)) 
+     is designed for dark mode. In light mode, flip to a light background 
+     so the #1a5c4a chip text gets ≥4.5:1 AA. */
+  .nav-banner {
+    background: linear-gradient(135deg, #ffffff, #f0f4f8);
+    border-color: rgba(26, 92, 74, 0.25);
   }
 
   /* Onboarding card: dark gradient top (rgba(24,32,50,0.98)) is NOT

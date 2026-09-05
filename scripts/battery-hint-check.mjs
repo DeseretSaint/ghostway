@@ -160,12 +160,15 @@ async function measureBatteryContrast(browser, vp, theme) {
       if (!h || !d) return { error: 'elements missing' };
       const hStyle = getComputedStyle(h);
       const dStyle = getComputedStyle(d);
+      // Dismiss button has background:none → its effective bg is the parent (#batteryHint) bg.
+      const dEffectiveBg = dStyle.backgroundColor && dStyle.backgroundColor !== 'rgba(0, 0, 0, 0)'
+        ? dStyle.backgroundColor : hStyle.backgroundColor;
       return {
         hidden: h.hidden,
         hColor: hStyle.color,
         hBg: hStyle.backgroundColor,
         dColor: dStyle.color,
-        dBg: dStyle.backgroundColor,
+        dBg: dEffectiveBg,
       };
     });
 

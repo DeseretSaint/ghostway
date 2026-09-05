@@ -19,7 +19,8 @@ export function contrast(rgb1, rgb2) {
 export function parseRgb(s) {
   if (!s) return null;
   const m = s.match(/\d+/g);
-  return m ? m.map(Number) : null;
+  // Handle both rgb(r,g,b) and rgba(r,g,b,a) — take only first 3 channels.
+  return m ? m.slice(0, 3).map(Number) : null;
 }
 
 // Full viewport ladder from the fire #19 regression sweep.
