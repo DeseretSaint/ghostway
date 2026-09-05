@@ -39,6 +39,33 @@ Android Auto hides non-store apps by default. Unlock it:
 5. Connect the phone to your car (USB or wireless, as usual). Ghostway now
    appears in the **Android Auto app launcher** under navigation apps.
 
+### Ghostway doesn't appear in the car? Deep refresh (fixes 90% of cases)
+
+Android Auto caches the app list per-car. If Ghostway is installed and
+"Unknown sources" is ON but the launcher doesn't show it:
+
+1. **Check the toggle is still ON.** It RESETS when the Android Auto app
+   updates itself — re-check after any AA update.
+2. On the phone: **Android Auto → Previously connected cars → [your car] →
+   Forget car**.
+3. On the car's infotainment: delete/forget the phone from its device list.
+4. On the phone: **Settings → Apps → Android Auto → Storage → Clear cache**
+   (and **Clear data** if it still fails).
+5. Set **Android Auto → Battery → Unrestricted** (battery optimization
+   silently kills the connection on Samsung/Xiaomi/OnePlus).
+6. Reboot the phone, replug the cable (try a different USB cable —
+   charge-only cables are the #1 AA failure), and let the setup wizard
+   re-run. It rescans all installed car apps, including sideloaded ones.
+7. Samsung phones: also disable **Auto Blocker** (it blocks sideloaded
+   apps from being offered to AA).
+8. Some head units have their **own** developer menu (head-unit settings →
+   About → tap build number 10x) with a second "Unknown sources" toggle —
+   enable it there too if present.
+
+Still missing? Ghostway's car screen needs the phone's Android Auto host to
+be reasonably current — update the **Android Auto app itself** in the Play
+Store (it updates independently of the OS), then repeat steps 4–6.
+
 In the car, Ghostway shows the v1 car screen (status + tips). Full
 turn-by-turn on the car screen is the next iteration — routing, camera
 avoidance, and voice all run on the phone, which is the computer.
