@@ -41,3 +41,17 @@ android/app/build/outputs/apk/debug/app-debug.apk
 android/app/build/outputs/apk/debug/output-metadata.json
 android/app/build/outputs/logs/
 android/app/build/tmp/
+
+# Android build artifacts
+android/app/build/outputs/apk/
+android/app/build/outputs/sdk-dependencies/
+
+# Android intermediate build outputs (renamed copies are the artifacts)
+android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/debug/output-metadata.json
+android/app/build/outputs/apk/release/app-release.apk
+android/app/build/outputs/apk/release/output-metadata.json
+android/app/build/outputs/sdk-dependencies/
+
+# Android intermediate build outputs
+android/app/build/outputs/

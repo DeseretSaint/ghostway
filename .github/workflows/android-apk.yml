@@ -30,17 +30,27 @@ jobs:
           mkdir -p android/app/src/main/assets/www
           cp -r dist/* android/app/src/main/assets/www/
 
-      - name: Build debug APK
+      - name: Build release APK (signed) + debug APK (fallback)
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
           gradle wrapper --gradle-version 8.7 || true
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Checksums
-        working-directory: android/app/build/outputs/apk/debug
+          # Decode the release keystore from repo secrets
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > /tmp/ghostway-release.keystore
+          export GHOSTWAY_KEYSTORE_FILE=/tmp/ghostway-release.keystore
+          ./gradlew assembleRelease assembleDebug --no-daemon
+      - name: Verify release signature
         run: |
-          cp app-debug.apk ghostway-android.apk
-          sha256sum ghostway-android.apk > SHA256SUMS.txt
+          BT=$(ls /usr/local/lib/android/sdk/build-tools/ 2>/dev/null | sort -V | tail -1 || echo 34.0.0)
+          ${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/$BT/apksigner verify --print-certs android/app/build/outputs/apk/release/app-release.apk | head -3
+      - name: Checksums
+        working-directory: android/app/build/outputs/apk
+        run: |
+          cp release/app-release.apk release/ghostway-android.apk
+          cp debug/app-debug.apk debug/ghostway-android-debug.apk
+          sha256sum release/ghostway-android.apk debug/ghostway-android-debug.apk > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload artifact
@@ -48,8 +58,9 @@ jobs:
         with:
           name: ghostway-android-apk
           path: |
-            android/app/build/outputs/apk/debug/ghostway-android.apk
-            android/app/build/outputs/apk/debug/SHA256SUMS.txt
+            android/app/build/outputs/apk/release/ghostway-android.apk
+            android/app/build/outputs/apk/debug/ghostway-android-debug.apk
+            android/app/build/outputs/apk/SHA256SUMS.txt
 
       - name: Publish rolling release
         # Every green build updates the "android-latest" pre-release so GitHub's
@@ -63,5 +74,6 @@ jobs:
             --title "Ghostway for Android — download & install" \
             --notes-file .github/RELEASE-NOTES-android.md \
             --prerelease \
-            android/app/build/outputs/apk/debug/ghostway-android.apk \
-            android/app/build/outputs/apk/debug/SHA256SUMS.txt
+            android/app/build/outputs/apk/release/ghostway-android.apk \
+            android/app/build/outputs/apk/debug/ghostway-android-debug.apk \
+            android/app/build/outputs/apk/SHA256SUMS.txt

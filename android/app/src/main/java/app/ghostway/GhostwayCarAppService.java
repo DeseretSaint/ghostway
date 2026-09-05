@@ -25,8 +25,14 @@ import androidx.car.app.validation.HostValidator;
 public class GhostwayCarAppService extends CarAppService {
     @Override
     public HostValidator createHostValidator() {
-        // Accept any host (sideloaded/debug build; not for store release).
-        return HostValidator.ALLOW_ALL_HOSTS_VALIDATOR;
+        // Trust ONLY the official Android Auto host signatures (shipped in the
+        // androidx.car.app library's hosts_allowed resource). This makes the
+        // RELEASE build a first-class car app: AA accepts it without the
+        // debug-only "Unknown sources" dance, and the allowlist survives AA
+        // self-updates (unlike per-device dev toggles).
+        return new HostValidator.Builder(getApplicationContext())
+            .addAllowedHosts(R.array.hosts_allowed)
+            .build();
     }
 
     @Override
