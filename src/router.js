@@ -369,14 +369,21 @@ export function nearestNodeInComponent(lon, lat, targetComp) {
 // camWeight is in seconds per unit of camera exposure (0-255 per edge).
 // hardCam (strict only): edges whose exposure byte exceeds this are FORBIDDEN,
 // not just expensive. Derivation: the builder scores (1 - d/100m)·255 per
-// camera, sampling every ≤40 m along each edge. An edge whose true closest
-// approach is <30 m therefore samples ≥ (1 - √(30²+20²)/100)·255 ≈ 163 even
-// in the worst case (closest point midway between samples). Threshold 160
-// catches every sub-30 m pass with margin → strict can never route within
-// ALPR read range (~10-23 m at speed) plus buffer. Multiple cameras only add
-// exposure (safe direction); non-ALPR cameras weigh 0.5 and alone stay under
-// the floor, which is intended (they don't read plates).
-export const HARD_CAM_EXPOSURE = 160;
+// camera, sampling every ≤40 m along each edge.
+//
+// Threshold history: 160 (~30 m) matched the raw plate-read envelope, but
+// field testing (Keaton, 2026-09-06) showed strict routes passing 68 m from
+// confirmed Flock placements (State St PG / Home Depot Lehi) — at stop lines
+// and across intersections the effective read distance is far shorter than
+// the moving-pass envelope. Exposure byte 80 ⇒ 70 m: strict now refuses any
+// pass within ~70 m of a known camera while still leaving Balanced room to
+// route. ALPR read range (~10-23 m at speed) stays deeply inside this.
+// Multiple cameras only add exposure (safe direction); non-ALPR cameras weigh
+// 0.5 and alone stay under the floor (max (1-d/100)·255·0.5 = 127 at d=0 …
+// NOTE: at d<~69 m a single non-ALPR camera CAN now exceed 80 and be
+// strict-forbidden — intended: entrance/traffic non-readers still correlate
+// with ALPR placements and the detour budget handles walled cases).
+export const HARD_CAM_EXPOSURE = 76;
 // Generalized cost (engine-rebuild plan step 1): drivers do NOT minimize
 // time — distance carries independent disutility (fuel/wear/perceived effort,
 // Wardman 1985) and <50% of drivers take the fastest route (Ramming 2002).
@@ -490,8 +497,13 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
       if (closed[v]) continue;
       const e = g.arcEdge[p];
       // Strict safety floor: never traverse a high-exposure edge unless it is
-      // the first/last road of the trip (endpoint exemption).
-      if (hardFloor && g.eCam[e] > hardFloor && u !== startNode && v !== endNode) continue;
+      // the first/last road of the trip (endpoint exemption). >= (not >) so a
+      // byte exactly at the floor (e.g. 80 = 68.6 m) is also forbidden —
+      // field-verified 68 m passes must not squeak through on the boundary.
+// 76 (not 80): the 40 m builder sampling under-reads a 68 m pass by up to
+// ~6 bytes (sample falls up to 20 m past the closest point along-slope), so
+// the true-68 m edge can carry byte 76 — the floor must catch it.
+      if (hardFloor && g.eCam[e] >= hardFloor && u !== startNode && v !== endNode) continue;
       const len = g.eLen[e];
       const spd = g.eSpd[e];
       // Effective speed: posted speed derated for signals/urban friction.

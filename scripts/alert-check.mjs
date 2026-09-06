@@ -57,10 +57,11 @@ await pick('#toInput', 'Costco Lehi');
 await pick('#fromInput', 'Pleasant Grove Utah');
 await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 30000 });
 
-// Choose the Fastest option (has 1 camera) so the camera-ahead alert can fire.
+// Choose the Fastest mode (has 1 camera) so the camera-ahead alert can fire.
+// (#31: mode selection is the .mode-chip row on the route card.)
 const pickedFastest = await p.evaluate(() => {
-  const opts = [...document.querySelectorAll('.route-opt')];
-  const fast = opts.find((o) => o.textContent.includes('Fastest'));
+  const chips = [...document.querySelectorAll('.mode-chip')];
+  const fast = chips.find((o) => o.textContent.includes('Fastest'));
   if (fast) { fast.click(); return true; }
   return false;
 });

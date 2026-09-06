@@ -86,7 +86,7 @@ try {
   await p.click('#goBtn');
   await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 90000 });
   await p.waitForFunction(
-    "() => { const c = document.querySelector('#route-card'); return c && !c.hidden && c.querySelectorAll('.route-opt').length >= 2; }",
+    "() => { const c = document.querySelector('#route-card'); return c && !c.hidden && c.querySelectorAll('.mode-chip').length >= 2; }",
     { timeout: 60000 }
   );
   await wait(500);
@@ -94,13 +94,13 @@ try {
   // --- (a) sanity ---
   const sanity = await p.evaluate(() => {
     const card = document.querySelector('#route-card');
-    const opts = Array.from(card.querySelectorAll('.route-opt'));
+    const opts = Array.from(card.querySelectorAll('.mode-chip'));
     return {
       optCount: opts.length,
       hasTime: !!card.querySelector('.rc-time'),
       hasDist: !!card.querySelector('.rc-dist'),
       hasBadge: !!card.querySelector('.rc-badge'),
-      hasMeta: opts.every((o) => !!o.querySelector('.opt-meta')),
+      hasMeta: opts.every((o) => !!o.querySelector('.chip-meta')),
       initialTime: (card.querySelector('.rc-time')?.textContent || '').trim(),
       initialDist: (card.querySelector('.rc-dist')?.textContent || '').trim(),
     };
@@ -182,10 +182,9 @@ try {
 
   // --- (e) option SET change → full re-render path ---
   // Toggle mode to OFF and re-route. shouldFullReroute() should fire and the
-  // option buttons should be NEW DOM nodes (rebuild is correct here because
-  // the option set genuinely changed).
+  // card should be rebuilt (#31: the card's interactive row is .mode-chip).
   const beforeNodes2 = await p.evaluate(() => {
-    return Array.from(document.querySelectorAll('.route-opt')).map((n) => n);
+    return Array.from(document.querySelectorAll('.mode-chip')).map((n) => n);
   });
   await p.evaluate(() => {
     const app = window.__gw;
@@ -211,19 +210,19 @@ try {
   await p.click('#goBtn');
   await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 90000 });
   await p.waitForFunction(
-    "() => { const c = document.querySelector('#route-card'); return c && !c.hidden && c.querySelectorAll('.route-opt').length >= 2; }",
+    "() => { const c = document.querySelector('#route-card'); return c && !c.hidden && c.querySelectorAll('.mode-chip').length >= 2; }",
     { timeout: 60000 }
   );
   await wait(500);
   const afterNodes2 = await p.evaluate(() => {
-    return Array.from(document.querySelectorAll('.route-opt')).map((n) => n);
+    return Array.from(document.querySelectorAll('.mode-chip')).map((n) => n);
   });
   const totalBefore = beforeNodes2.length;
   const totalAfter = afterNodes2.length;
   // After a full reload, the entire page got new DOM, so every node is fresh
   // — that's not what we're proving here. What we prove: the reload-then-re-
-  // route produced a card with options rendered (sanity).
-  must(totalAfter >= 2, `(e) full re-render path: option buttons present (got ${totalAfter})`);
+  // route produced a card with the chip row rendered (sanity).
+  must(totalAfter >= 2, `(e) full re-render path: mode chips present (got ${totalAfter})`);
 
   if (errs.length) { fail = true; console.error('PAGE ERRORS:', errs); }
 

@@ -45,8 +45,9 @@ await pickRoute(p, '#fromInput', 'Pleasant Grove Utah');
 await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 40000 });
 
 await p.evaluate(() => {
-  const opts = [...document.querySelectorAll('.route-opt')];
-  const fast = opts.find((o) => o.textContent.includes('Fastest'));
+  // #31: mode selection is the .mode-chip row on the route card.
+  const chips = [...document.querySelectorAll('.mode-chip')];
+  const fast = chips.find((o) => o.textContent.includes('Fastest'));
   if (fast) fast.click();
 });
 await wait(600);
@@ -124,10 +125,10 @@ for (const vp of VIEWPORT_LADDER) {
       await pickRoute(page, '#fromInput', 'Pleasant Grove Utah');
       await page.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 40000 });
 
-      // Choose Fastest
+      // Choose Fastest (#31: mode chips on the route card)
       await page.evaluate(() => {
-        const opts = [...document.querySelectorAll('.route-opt')];
-        const fast = opts.find((o) => o.textContent.includes('Fastest'));
+        const chips = [...document.querySelectorAll('.mode-chip')];
+        const fast = chips.find((o) => o.textContent.includes('Fastest'));
         if (fast) fast.click();
       });
       await wait(600);

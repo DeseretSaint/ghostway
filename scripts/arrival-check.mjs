@@ -42,7 +42,7 @@ try {
   );
   const early = await p.evaluate(() => ({
     status: document.querySelector('#status')?.textContent?.slice(0, 120),
-    opts: document.querySelectorAll('.route-opt').length,
+    opts: document.querySelectorAll('.mode-chip').length,
     html: document.querySelector('#route-card')?.innerHTML?.slice(0, 500),
   }));
   console.log('EARLY status:', early.status, '| opts:', early.opts);
@@ -60,13 +60,13 @@ try {
   console.log('rc-arrive:', JSON.stringify(arrive.txt));
   console.log('card html:', arrive.html);
   const pressed = await p.evaluate(() => {
-    const opts = [...document.querySelectorAll('.route-opt')];
+    const opts = [...document.querySelectorAll('.mode-chip')];
     const chosen = opts.filter((o) => o.getAttribute('aria-pressed') === 'true');
     return { total: opts.length, pressedCount: chosen.length };
   });
-  console.log('route-opt aria-pressed:', JSON.stringify(pressed));
+  console.log('mode-chip aria-pressed:', JSON.stringify(pressed));
   const ariaOk = pressed.total >= 2 && pressed.pressedCount === 1;
-  console.log('exactly one route-opt aria-pressed=true:', ariaOk);
+  console.log('exactly one mode-chip aria-pressed=true:', ariaOk);
 
   const ok = !!arrive.txt && /Arrive\s+\d/.test(arrive.txt);
   console.log('arrival clock present:', ok);

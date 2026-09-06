@@ -1,5 +1,5 @@
 // Floor-regression guard for the strict-mode safety floor (round 21).
-// Claim under test: NO edge with cam byte <= 160 (i.e. strict-legal) may pass
+// Claim under test: NO edge with cam byte < 76 (i.e. strict-legal) may pass
 // within ~30 m of an ALPR camera. The builder scores exposure from samples
 // <=40 m apart, so a stale graph (built before dense sampling landed) or a
 // builder regression can silently ship strict-legal edges inside read range.
@@ -85,9 +85,9 @@ function minDistAlpr(lon, lat) {
   return best;
 }
 
-// Strict floor: cam byte <=160 edges must stay >=31.4 m from every ALPR cam
-// (30 m floor + tolerance for builder sample spacing).
-const FLOOR = 31.4;
+// Strict floor: cam byte <=80 edges must stay >=68.7 m from every ALPR cam
+// (HARD_CAM_EXPOSURE 80 ⇒ 100 m × (1-80/255) = 68.6 m + builder tolerance).
+const FLOOR = 67.4; // byte 76 ⇒ 70.2 m boundary minus ~2.8 m sample-spacing under-read
 let camPos = 0, audited = 0, forbidden = 0;
 const buckets = { '<20': 0, '20-25': 0, '25-30': 0, '30-40': 0, '40-60': 0, '60-100': 0 };
 const violations = [];
@@ -96,7 +96,7 @@ for (let e = 0; e < edgeCount; e++) {
   const cam = buf.readUInt8(offCam + e);
   if (cam === 0) continue; // byte 0 = builder proved >=100 m from every camera
   camPos++;
-  if (cam > 160) { forbidden++; continue; } // forbidden side; not a safety hole
+  if (cam >= 76) { forbidden++; continue; } // forbidden side; not a safety hole
   audited++;
   const a = buf.readUInt32LE(offA + e * 4), b = buf.readUInt32LE(offB + e * 4);
   const len = buf.readUInt16LE(offLen + e * 2);
@@ -117,7 +117,7 @@ for (let e = 0; e < edgeCount; e++) {
   else buckets['60-100']++;
   if (best < FLOOR) violations.push({ e, cam, d: +best.toFixed(1), lon: +bestLon.toFixed(6), lat: +bestLat.toFixed(6), len });
 }
-console.log(`edges: ${edgeCount}, cam>0: ${camPos}, strict-legal audited: ${audited}, forbidden(>160): ${forbidden}`);
+console.log(`edges: ${edgeCount}, cam>0: ${camPos}, strict-legal audited: ${audited}, forbidden(>=76): ${forbidden}`);
 console.log(`true min ALPR distance histogram (audited edges):`, buckets);
 console.log(`done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 if (violations.length) {
