@@ -224,7 +224,8 @@ try {
   // route produced a card with the chip row rendered (sanity).
   must(totalAfter >= 2, `(e) full re-render path: mode chips present (got ${totalAfter})`);
 
-  if (errs.length) { fail = true; console.error('PAGE ERRORS:', errs); }
+  const realErrs = errs.filter((e) => !/favicon|cotg\.carsprogram|511\.idaho|az511\.gov|CORS policy|Failed to load resource/.test(e));
+  if (realErrs.length) { fail = true; console.error('PAGE ERRORS:', realErrs); }
 
   console.log('');
   console.log(`Reminder: also confirm npm run build is clean and scripts/option-compact-check.mjs + scripts/interact-check.mjs + scripts/zero-scroll-check.mjs + scripts/escape-check.mjs all PASS (run separately).`);

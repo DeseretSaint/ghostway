@@ -1,10 +1,11 @@
-// A11y: cards-open ARIA hooks — verify #route-card has role/aria-label, each
-// .route-opt button toggles aria-pressed when selected, and .rc-head has
-// aria-live="polite" so screen readers announce ETA changes.
+// A11y: cards-open ARIA hooks — verify #route-card has role/aria-label, the
+// .mode-chip row uses role="radiogroup", each chip has aria-pressed, exactly
+// one chip is active, tapping a chip toggles aria-pressed to the new active
+// chip, and .rc-head has aria-live="polite" so screen readers announce ETA
+// changes.
 //
-// Round-23 ux item (manager round-23). Stubs geolocation like the other
-// route-driving suites so we can render a real route card and assert the
-// DOM contract.
+// Updated for #31 mode-chip UI (the old .route-opt chooser is gone — mode
+// switching is the chip row at the top of the card).
 import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -59,26 +60,39 @@ const regionMeta = await p.evaluate(() => {
   };
 });
 
-// 2) .route-opt buttons exist with aria-pressed.
-const initialBtns = await p.evaluate(() => {
-  const opts = [...document.querySelectorAll('.route-opt')];
-  return opts.map((b, i) => ({
-    i,
-    pressed: b.getAttribute('aria-pressed'),
-    chosen: b.classList.contains('chosen'),
-  }));
+// 2) .mode-chip buttons exist with aria-pressed in a radiogroup row.
+const initialChips = await p.evaluate(() => {
+  const chips = [...document.querySelectorAll('#route-card .mode-chip')];
+  const row = document.querySelector('#route-card .mode-chip-row');
+  return {
+    count: chips.length,
+    rowRole: row?.getAttribute('role') || null,
+    rowLabel: row?.getAttribute('aria-label') || null,
+    chips: chips.map((b, i) => ({
+      i,
+      pressed: b.getAttribute('aria-pressed'),
+      role: b.getAttribute('role'),
+      tabindex: b.getAttribute('tabindex'),
+      ariaLabel: b.getAttribute('aria-label'),
+      active: b.classList.contains('active'),
+    })),
+  };
 });
 
-// 3) Click a non-chosen option and verify aria-pressed toggles.
+// 3) Tap a non-active chip and verify aria-pressed toggles.
 const beforeClick = await p.evaluate(() => {
-  const opts = [...document.querySelectorAll('.route-opt')];
-  return opts.findIndex((b) => !b.classList.contains('chosen'));
+  const chips = [...document.querySelectorAll('#route-card .mode-chip')];
+  return chips.findIndex((b) => !b.classList.contains('active'));
 });
-await p.evaluate((i) => document.querySelectorAll('.route-opt')[i]?.click(), beforeClick);
-await wait(300);
+await p.evaluate((i) => document.querySelectorAll('#route-card .mode-chip')[i]?.click(), beforeClick);
+await wait(500);
 const afterClick = await p.evaluate(() => {
-  const opts = [...document.querySelectorAll('.route-opt')];
-  return opts.map((b, i) => ({ i, pressed: b.getAttribute('aria-pressed'), chosen: b.classList.contains('chosen') }));
+  const chips = [...document.querySelectorAll('#route-card .mode-chip')];
+  return chips.map((b, i) => ({
+    i,
+    pressed: b.getAttribute('aria-pressed'),
+    active: b.classList.contains('active'),
+  }));
 });
 
 // 4) .rc-head has aria-live="polite".
@@ -88,29 +102,30 @@ const headLive = await p.evaluate(() => {
 });
 
 console.log('region:', JSON.stringify(regionMeta));
-console.log('initial btns:', JSON.stringify(initialBtns));
+console.log('initial chips:', JSON.stringify(initialChips));
 console.log('clicked index:', beforeClick);
 console.log('after click:', JSON.stringify(afterClick));
 console.log('rc-head aria-live:', JSON.stringify(headLive));
-console.log('ERRORS', errs.filter((e) => !/favicon|404/.test(e)).slice(0, 3));
+console.log('ERRORS', errs.filter((e) => !/favicon|404|cotg|511|idaho|az511|CORS|Failed to load/.test(e)).slice(0, 3));
 try { await Promise.race([b.close(), wait(5000)]); } catch {}
 
-// Pass criteria: route-card has role=region + aria-label, ≥2 route-opts with
-// aria-pressed initially, exactly one is aria-pressed=true, clicking a
-// non-chosen option toggles aria-pressed to the new chosen index, and
-// .rc-head has aria-live=polite.
+// Pass criteria: route-card has role=region + aria-label, 3 mode chips in a
+// radiogroup row, exactly one chip is active, tapping a non-active chip
+// toggles the active chip, and .rc-head has aria-live=polite.
 const pass =
   regionMeta.exists &&
   regionMeta.role === 'region' &&
   typeof regionMeta.label === 'string' &&
   regionMeta.label.length > 0 &&
-  initialBtns.length >= 2 &&
-  initialBtns.filter((b) => b.pressed === 'true').length === 1 &&
-  afterClick.filter((b) => b.pressed === 'true').length === 1 &&
+  initialChips.count === 3 &&
+  initialChips.rowRole === 'radiogroup' &&
+  initialChips.chips.filter((c) => c.pressed === 'true').length === 1 &&
+  initialChips.chips.every((c) => c.role === 'button' && c.tabindex === '0' && !!c.ariaLabel) &&
+  afterClick.filter((c) => c.pressed === 'true').length === 1 &&
   afterClick[beforeClick].pressed === 'true' &&
   headLive.exists &&
   headLive.live === 'polite';
 
-console.log(pass ? '\nARIA-CARDS PASS ✅ — route card has region/aria-label, options toggle aria-pressed, rc-head is aria-live' : '\nARIA-CARDS FAIL ❌');
+console.log(pass ? '\nARIA-CARDS PASS ✅ — route card has region/aria-label, mode chips toggle aria-pressed in radiogroup, rc-head is aria-live' : '\nARIA-CARDS FAIL ❌');
 pv.kill();
 process.exit(pass ? 0 : 1);

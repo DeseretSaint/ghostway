@@ -383,7 +383,7 @@ export function nearestNodeInComponent(lon, lat, targetComp) {
 // NOTE: at d<~69 m a single non-ALPR camera CAN now exceed 80 and be
 // strict-forbidden — intended: entrance/traffic non-readers still correlate
 // with ALPR placements and the detour budget handles walled cases).
-export const HARD_CAM_EXPOSURE = 76;
+export const HARD_CAM_EXPOSURE = 74;
 // Generalized cost (engine-rebuild plan step 1): drivers do NOT minimize
 // time — distance carries independent disutility (fuel/wear/perceived effort,
 // Wardman 1985) and <50% of drivers take the fastest route (Ramming 2002).
@@ -500,9 +500,9 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
       // the first/last road of the trip (endpoint exemption). >= (not >) so a
       // byte exactly at the floor (e.g. 80 = 68.6 m) is also forbidden —
       // field-verified 68 m passes must not squeak through on the boundary.
-// 76 (not 80): the 40 m builder sampling under-reads a 68 m pass by up to
-// ~6 bytes (sample falls up to 20 m past the closest point along-slope), so
-// the true-68 m edge can carry byte 76 — the floor must catch it.
+// 74 (not 80): the 40 m builder sampling POINT-measures camera distance, so
+// a camera between samples reads up to ~sqrt(20²+d²) away — a true 68 m pass
+// can carry byte as low as 74. The floor must catch the under-read.
       if (hardFloor && g.eCam[e] >= hardFloor && u !== startNode && v !== endNode) continue;
       const len = g.eLen[e];
       const spd = g.eSpd[e];
@@ -845,7 +845,7 @@ function clearTailTo(idx, tNode) {
 }
 
 // ---- Public planning API: returns up to 3 options ----
-export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [] } = {}) {
+export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [], deflockCams = null } = {}) {
   const g = await loadGraph();
   let s = nearestNode(from[0], from[1]);
   let t = nearestNode(to[0], to[1]);
@@ -1066,6 +1066,88 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     largeDetour = capOnly;
     strictFallback = capOnly;
     overBudget = capOnly;
+  }
+  // ---- Post-route camera-corridor check (Keaton field report 2026-09-06) ----
+  // Edge-byte exposure only covers roads that RUN past a camera. A route that
+  // CROSSES the camera's street passes 60-90 m away at the intersection while
+  // every edge it uses carries byte 0 — edge thresholds cannot see it. When a
+  // camera list is supplied, measure each option's raw polyline against every
+  // camera and re-route strict with those cameras baked into the exposure
+  // field if the corridor clips one.
+  if (deflockCams && deflockCams.length && graph === g) {
+    const R2 = 75 * 75, rad = Math.PI / 180;
+    const cos0 = Math.cos(((from[1] + to[1]) / 2) * rad);
+    const kx = 111320 * cos0, ky = 110540;
+    const clipped = new Set();
+    const routeDists = (coords) => {
+      let best = Infinity;
+      for (const c of deflockCams) {
+        for (let i = 0; i < coords.length - 1; i++) {
+          const x0 = c.lon * kx, y0 = c.lat * ky;
+          const x1 = coords[i][0] * kx, y1 = coords[i][1] * ky;
+          const x2 = coords[i + 1][0] * kx, y2 = coords[i + 1][1] * ky;
+          const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+          let t = L2 ? ((x0 - x1) * dx + (y0 - y1) * dy) / L2 : 0;
+          t = Math.max(0, Math.min(1, t));
+          const d2 = (x0 - (x1 + t * dx)) ** 2 + (y0 - (y1 + t * dy)) ** 2;
+          if (d2 < best) best = d2;
+        }
+      }
+      return Math.sqrt(best);
+    };
+    const strictOpt = options.find((o) => o.mode === 'strict');
+    if (strictOpt && routeDists(strictOpt.route.coords) < 75) {
+      for (const c of deflockCams) {
+        // Only cameras near the strict route's bbox matter.
+        clipped.add(`${c.lon},${c.lat}`);
+      }
+      // Bake clipped-route cameras into the exposure field at FULL weight
+      // (the graph may already carry some of them — Math.max keeps the byte).
+      const merged2 = new Uint8Array(graph.eCam);
+      const CELL = 0.002;
+      const grid = new Map();
+      for (const c of deflockCams) {
+        const gx = Math.floor(c.lon / CELL);
+        const gy = Math.floor(c.lat / CELL);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            const k = gx + dx + ',' + (gy + dy);
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push({ lon: c.lon, lat: c.lat });
+          }
+        }
+      }
+      const R = 100;
+      for (let e = 0; e < g.edgeCount; e++) {
+        const a = g.ea[e], b = g.eB[e];
+        const pts = [
+          [g.nodeLon[a] / 1e6, g.nodeLat[a] / 1e6],
+          [(g.nodeLon[a] + g.nodeLon[b]) / 2e6, (g.nodeLat[a] + g.nodeLat[b]) / 2e6],
+          [g.nodeLon[b] / 1e6, g.nodeLat[b] / 1e6],
+        ];
+        let extra = 0;
+        for (const [plon, plat] of pts) {
+          const cell = grid.get(Math.floor(plon / CELL) + ',' + Math.floor(plat / CELL));
+          if (!cell) continue;
+          const cosLat = Math.cos((plat * Math.PI) / 180);
+          for (const c of cell) {
+            const dLon = (c.lon - plon) * 111320 * cosLat;
+            const dLat = (c.lat - plat) * 111320;
+            const d2 = dLon * dLon + dLat * dLat;
+            if (d2 <= R * R) extra = Math.max(extra, Math.round((1 - Math.sqrt(d2) / R) * 255));
+          }
+        }
+        if (extra) merged2[e] = Math.min(255, Math.max(merged2[e], extra));
+      }
+      const graph2 = { ...graph, eCam: merged2 };
+      const strictRetry = astar(graph2, s.node, t.node, 'strict', edgeFactor, edgeDelay, {});
+      const retryOk = strictRetry && strictRetry.distance <= fastest.distance * 4 &&
+        routeDists(strictRetry.coords) >= 75;
+      if (retryOk) {
+        clearest = strictRetry;
+        strictOpt.route = strictRetry;
+      }
+    }
   }
   if (clearest) clearest.strictFallback = strictFallback;
   if (clearest) clearest.overBudget = overBudget;

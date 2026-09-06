@@ -810,6 +810,30 @@ function communityCams() {
   return loadReports().map((r) => ({ lon: r.lon, lat: r.lat, kind: r.kind }));
 }
 
+// DeFlock camera list for the routing engine's post-route corridor check.
+// The shipped fallback snapshot covers the Wasatch box; caches after first
+// load. Fails soft to null (corridor check skipped, edge bytes still apply).
+let _deflockCamList = null;
+async function deflockCamsNear(fromC, toC) {
+  try {
+    if (!_deflockCamList) {
+      const r = await fetch(CONFIG.cameraGeojson, { cache: 'no-store' });
+      if (!r.ok) return null;
+      const data = await r.json();
+      _deflockCamList = (data.features || [])
+        .map((f) => ({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }))
+        .filter((c) => Number.isFinite(c.lon) && Number.isFinite(c.lat));
+    }
+    // Filter to the corridor bbox (small pad) so the per-segment scan stays cheap.
+    const pad = 0.05;
+    const w = Math.min(fromC[0], toC[0]) - pad, e = Math.max(fromC[0], toC[0]) + pad;
+    const s = Math.min(fromC[1], toC[1]) - pad, n = Math.max(fromC[1], toC[1]) + pad;
+    return _deflockCamList.filter((c) => c.lon >= w && c.lon <= e && c.lat >= s && c.lat <= n);
+  } catch {
+    return null;
+  }
+}
+
 // Hard road closures near a corridor from the national WZDx snapshot
 // (iteration 17 — nationwide traffic). Fails soft to [].
 async function nationalClosures(fromC, toC) {
@@ -893,7 +917,7 @@ async function routeWithFallbacks(from, to) {
       const engine = app._engine;
       try {
         const t0 = performance.now();
-        const { options } = await engine.planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
+        const { options } = await engine.planRoutes(from.coords, to.coords, { traffic: app.traffic || null, communityCams: communityCams(), deflockCams: await deflockCamsNear(from.coords, to.coords) });
         const ms = Math.round(performance.now() - t0);
         app.state.options = options;
         // Default pick: closest to the user's mode preference.
