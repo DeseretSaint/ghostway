@@ -1143,15 +1143,13 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   // ---- Strict camera-avoidance re-route (Keaton field report 2026-09-06) ----
   // When strict still passes corridor cameras after the hard-floor probe,
   // re-run A* with those cameras baked into the exposure field as a GRADIENT
-  // (high cost, not forbidden). A* then routes AROUND them — cutting through
+  // (high cost, not forbidden). A* routes AROUND them — cutting through
   // neighborhoods, crossing at perpendicular intersections — whatever path
-  // minimizes total camera exposure. This is what "strict" means: try HARD.
+  // minimizes total camera exposure.
   if (deflockCams && deflockCams.length && options.length) {
     const strictOpt = options.find((o) => o.mode === 'strict');
-    const corridorCams = (strictOpt?.corridorCameras || []).map((c) => ({
-      lon: c.lon, lat: c.lat, direction: c.direction ?? null,
-    }));
-    if (strictOpt && corridorCams.length) {
+    if (strictOpt && strictOpt.corridorCameras && strictOpt.corridorCameras.length) {
+      const corridorCams = strictOpt.corridorCameras;
       const CORR_R = 150;
       const merged = new Uint8Array(graph.eCam);
       const CELL = 0.002;
@@ -1188,11 +1186,8 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
         if (extra) merged[e] = Math.min(255, Math.max(merged[e], extra));
       }
       const graph2 = { ...graph, eCam: merged };
-      // Re-run strict with NO hard floor (softCam) and a relaxed budget —
-      // A* minimizes cumulative camera cost and routes around them.
-      const avoid = astar(graph2, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true, maxCost: fastest.duration * 2.5 + 240 });
+      const avoid = astar(graph2, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true, maxCost: fastest.duration * 3 + 300 });
       if (avoid) {
-        // Verify the avoidance route actually reduced corridor exposure
         const avoidCoords = avoid.coords;
         let stillNear = 0;
         const rad = Math.PI / 180;
@@ -1213,12 +1208,10 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
           }
           if (best < 75 * 75) stillNear++;
         }
-        // Only use the avoidance route if it actually reduced corridor exposure
-        // and isn't absurdly long (< 4x fastest)
-        if (stillNear < corridorCams.length && avoid.distance <= fastest.distance * 4) {
+        if (stillNear < corridorCams.length && avoid.distance <= fastest.distance * 5) {
           strictOpt.route = avoid;
-          strictOpt.cameras = avoid.cameras;
-          strictOpt.route.cameras = avoid.cameras;
+          strictOpt.cameras = stillNear;  // honest: count cameras STILL near after avoidance
+          strictOpt.route.cameras = stillNear;
           strictOpt.distance = avoid.distance;
           strictOpt.duration = avoid.duration;
           strictOpt.strictFallback = true;
