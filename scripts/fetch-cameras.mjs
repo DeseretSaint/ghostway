@@ -83,6 +83,7 @@ async function main() {
         operator: f.properties.operator || '',
         surveillanceZone: f.properties.surveillanceZone || '',
         osmId: f.properties.osmId,
+        direction: f.properties.direction ?? null, // degrees, 0=N, 90=E — for directional awareness
       },
     })),
   };

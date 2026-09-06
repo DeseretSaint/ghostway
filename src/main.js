@@ -821,7 +821,7 @@ async function deflockCamsNear(fromC, toC) {
       if (!r.ok) return null;
       const data = await r.json();
       _deflockCamList = (data.features || [])
-        .map((f) => ({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }))
+        .map((f) => ({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], direction: f.properties.direction ?? null }))
         .filter((c) => Number.isFinite(c.lon) && Number.isFinite(c.lat));
     }
     // Filter to the corridor bbox (small pad) so the per-segment scan stays cheap.
