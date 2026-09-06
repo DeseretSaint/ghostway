@@ -62,6 +62,8 @@ async function init() {
   app.startNav = startNav;
   app.stopNav = stopNav;
   app.selectOption = selectOption;
+  app.onRoute = onRoute;
+  app.applyModeUI = applyModeUI;
 
   buildPanel(app);
   wireApp();
@@ -971,27 +973,16 @@ function selectOption(i) {
 
 function drawEngineRoutes() {
   const { options, chosen } = app.state;
-  // Distinct colors per option so the user can tell the alternatives apart on
-  // the map and pick by sight (not just by the card). Chosen stays Ghostway-teal.
-  const ALT_COLORS = ['#f4a259', '#9b8cff', '#5b6b80', '#e0c341'];
-  const feats = [];
-  let altIdx = 0;
-  options.forEach((o, i) => {
-    if (i === chosen) return;
-    // optIndex lets a tap on the map line select this alternative.
-    feats.push({
-      type: 'Feature',
-      properties: { color: ALT_COLORS[altIdx % ALT_COLORS.length], optIndex: i },
-      geometry: { type: 'LineString', coordinates: o.coords },
-    });
-    altIdx++;
-  });
+  // #31 (SELECTED MODE = THE ROUTE): the map draws ONLY the chosen mode's
+  // route. Alternatives belong to the mode chips in the search panel —
+  // switching chips re-routes — not to a multi-line comparison the user
+  // must decode while driving-adjacent.
   const sel = options[chosen];
-  feats.push({
+  const feats = [{
     type: 'Feature',
     properties: { color: '#3ad6c5', optIndex: chosen },
     geometry: { type: 'LineString', coordinates: sel.coords },
-  });
+  }];
   app.map.setRoute(feats);
   app.map.setEndpoints([
     { type: 'Feature', properties: { color: '#3ad6c5' }, geometry: { type: 'Point', coordinates: sel.coords[0] } },

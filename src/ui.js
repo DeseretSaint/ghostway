@@ -297,69 +297,11 @@ export function expandSearch(app) {
 function renderEngineCard(app, card, result) {
   const { options, chosen } = result;
   const sel = options[chosen];
-  const fastest = options.find((o) => o.mode === 'off') || options[0];
 
-  // Always render three primary slots — Fastest / Balanced / Clearest. The
-  // avoid-highways option is fully retired (addendum 3): the engine decides
-  // highway tradeoffs via the generalized cost model, and the "Most natural"
-  // pill surfaces the win. Three primary options are geometry-deduped by the
-  // engine, and a 0-camera Fastest already shows the "Camera-free route"
-  // badge, so the "Clearest == Fastest" collapse needs no extra code here.
-  const optBtn = (o, idx) => {
-    const cams =
-      o.cameras === 0
-        ? `<span class="opt-cams clear">0 cameras</span>`
-        : `<span class="opt-cams">${o.cameras} camera${o.cameras === 1 ? '' : 's'}</span>`;
-    const clearBadge =
-      o.cameras === 0
-        ? `<span class="opt-clear-badge">${icon('shieldCheck', { size: 14 })} Camera-free route</span>`
-        : '';
-    const delay = o.delay && o.delay > 30 ? ` · <span class="opt-delay">+${Math.round(o.delay / 60)} min traffic</span>` : '';
-    // Keaton 2026-08-27 (item 10): drop the detour-complaint warnings
-    // ("best effort — camera-walled", "best effort — clear route too long",
-    // "costs extra time") — the map shows routes side by side and per-option
-    // time/distance is visible, so the warnings are noise. KEEP the honest
-    // gate-snap "clear to within ~N m" line: that is a real safety fact about
-    // the final approach, not a detour complaint.
-    const bestEffort =
-      o.strictFallback && o.clearToM
-        ? ` · <span class="opt-warn">${icon('warning', { size: 13 })} clear to within ~${fmtDistance(o.clearToM)}</span>`
-        : '';
-    const dKm = o.distance - fastest.distance;
-    // Distance tradeoff vs fastest: shown as a compact suffix in the meta line
-    // (Keaton feedback: the big standalone "↓ shorter / ↑ longer than fastest"
-    // tradeoff span spilled the card and duplicated what the map comparison
-    // already shows — keep the info, kill the noise).
-    const tradeoff =
-      fastest && o !== fastest && Math.abs(dKm) >= 100
-        ? ` · <span class="opt-tradeoff ${dKm < 0 ? 'shorter' : 'longer'}">${dKm < 0 ? '↓' : '↑'} ${fmtDistance(Math.abs(dKm))}</span>`
-        : '';
-    const natural =
-      fastest && o !== fastest && o.distance < fastest.distance &&
-      (o.highwayKm || 0) <= (fastest.highwayKm || 0) + 0.5
-        ? `<span class="opt-natural" title="Shorter and uses no more freeway than the fastest route -- the way a local would drive">${icon('leaf', { size: 13 })} Most natural</span>`
-        : '';
-    const hw = o.highwayKm && o.highwayKm >= 0.5 ? ` · ${o.highwayKm.toFixed(1)} km hwy` : '';
-    // Build a descriptive aria-label so keyboard/SR users hear the tradeoff
-    // (fire #21 BLOCK: route-opt was unreachable by keyboard because the
-    // visible text alone reads as a number — announce duration + cameras).
-    // Use the plain camera count (not the .opt-cams <span> markup) so the
-    // aria-label stays clean text for screen readers.
-    const camCount = o.cameras || 0;
-    const labelText =
-      `${o.label}, ${fmtDuration(o.duration)}, ${fmtDistance(o.distance)}, ` +
-      `${camCount} ${camCount === 1 ? 'camera' : 'cameras'}`;
-    return `
-        <button class="route-opt ${idx === chosen ? 'chosen' : ''}" data-opt="${idx}" type="button" tabindex="0" role="button" aria-pressed="${idx === chosen}" aria-label="${escHtml(labelText)}">
-          <span class="opt-label">${modeEmoji(o.mode)} ${o.label}</span>
-          ${clearBadge}
-          <span class="opt-meta">${fmtDuration(o.duration)} · ${fmtDistance(o.distance)} · ${cams}${hw}${delay}${bestEffort}</span>
-          ${tradeoff}
-          ${natural}
-        </button>`;
-  };
-
-  const optHtml = options.map((o) => optBtn(o, options.indexOf(o))).join('');
+  // #31 (SELECTED MODE = THE ROUTE): the card shows ONE route — the selected
+  // mode's. The three stacked option buttons are gone; mode switching is the
+  // chip row at the top (tap = re-route in that mode), persisted in
+  // localStorage (gw-mode), default Strict. No re-choice inside the card.
 
   const steps = sel.instructions || [];
   const stepHtml = steps
@@ -372,8 +314,17 @@ function renderEngineCard(app, card, result) {
     )
     .join('');
 
+  const chip = (mode) => {
+    const o = options.find((x) => x.mode === mode);
+    const active = sel.mode === mode;
+    const label = { strict: 'Clearest', moderate: 'Balanced', off: 'Fastest' }[mode] || mode;
+    const cams = o ? (o.cameras === 0 ? '0' : String(o.cameras)) : '—';
+    return `<button class="mode-chip ${active ? 'active' : ''}" data-mode="${mode}" type="button" role="button" tabindex="0" aria-pressed="${active}" aria-label="${escHtml(label + ': ' + (o ? fmtDuration(o.duration) + ', ' + cams + ' cameras' : 'unavailable'))}">${modeEmoji(mode)} ${label}<span class="chip-meta">${o ? fmtDuration(o.duration) + ' · ' + cams + ' cam' : 'n/a'}</span></button>`;
+  };
+
   card.innerHTML = `
     <button id="editRouteBtn" class="text-link rc-edit" type="button">${icon('edit', { size: 14 })} Edit route</button>
+    <div class="mode-chip-row" role="radiogroup" aria-label="Camera avoidance level">${chip('strict')}${chip('moderate')}${chip('off')}</div>
     <div class="rc-head" aria-live="polite" aria-atomic="true">
       <div class="rc-time">${fmtDuration(sel.duration)}</div>
       <div class="rc-arrive">Arrive ${fmtArrive(sel.duration)}</div>
@@ -384,7 +335,6 @@ function renderEngineCard(app, card, result) {
         ? `${icon('shield', { size: 15 })} Fully clear of known cameras`
         : `${icon('shield', { size: 15 })} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
     }</div>
-    <div class="route-options">${optHtml}</div>
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     <button id="densityBtn" class="text-link rc-density" type="button" aria-pressed="${!!app.state.compactBanner}" title="Toggle the active-nav banner density (compact = fewer glance elements)">${icon(app.state.compactBanner ? 'densityFull' : 'densityCompact', { size: 14 })} ${app.state.compactBanner ? 'Compact banner' : 'Full banner'}</button>
   `;
@@ -392,8 +342,20 @@ function renderEngineCard(app, card, result) {
 
   const edit = $('#editRouteBtn');
   if (edit) edit.addEventListener('click', () => expandSearch(app));
-  card.querySelectorAll('.route-opt').forEach((b) =>
-    b.addEventListener('click', () => app.selectOption(Number(b.dataset.opt)))
+  card.querySelectorAll('.mode-chip').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (b.dataset.mode === app.state.mode) return;
+      // Chip tap = mode switch → re-route. Mirrors the search-panel switch.
+      app.state.mode = b.dataset.mode;
+      localStorage.setItem('gw-mode', app.state.mode);
+      app.state.avoid = app.state.mode !== 'off';
+      app.applyModeUI();
+      // Optimistic swap: show the matching computed option NOW (no network
+      // wait), then re-route in the background to refresh traffic/etc.
+      const i = options.findIndex((o) => o.mode === app.state.mode);
+      if (i !== -1) app.selectOption(i);
+      app.onRoute();
+    })
   );
   const sn = $('#startNavBtn');
   if (sn) sn.addEventListener('click', () => app.startNav());
