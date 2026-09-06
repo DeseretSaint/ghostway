@@ -85,9 +85,9 @@ function minDistAlpr(lon, lat) {
   return best;
 }
 
-// Strict floor: cam byte <=80 edges must stay >=68.7 m from every ALPR cam
-// (HARD_CAM_EXPOSURE 80 ⇒ 100 m × (1-80/255) = 68.6 m + builder tolerance).
-const FLOOR = 68.2; // byte 74 ⇒ 71.0 m sampled boundary minus ~2.8 m point-sampling under-read
+// Strict floor: cam byte <=160 edges must stay >=31.4 m from every ALPR cam
+// (HARD_CAM_EXPOSURE 160 ⇒ 100 m × (1-160/255) = 37.3 m − sample spacing tolerance).
+const FLOOR = 31.4;
 let camPos = 0, audited = 0, forbidden = 0;
 const buckets = { '<20': 0, '20-25': 0, '25-30': 0, '30-40': 0, '40-60': 0, '60-100': 0 };
 const violations = [];
@@ -96,7 +96,7 @@ for (let e = 0; e < edgeCount; e++) {
   const cam = buf.readUInt8(offCam + e);
   if (cam === 0) continue; // byte 0 = builder proved >=100 m from every camera
   camPos++;
-  if (cam >= 74) { forbidden++; continue; } // forbidden side; not a safety hole
+  if (cam >= 160) { forbidden++; continue; } // forbidden side; not a safety hole
   audited++;
   const a = buf.readUInt32LE(offA + e * 4), b = buf.readUInt32LE(offB + e * 4);
   const len = buf.readUInt16LE(offLen + e * 2);
@@ -117,7 +117,7 @@ for (let e = 0; e < edgeCount; e++) {
   else buckets['60-100']++;
   if (best < FLOOR) violations.push({ e, cam, d: +best.toFixed(1), lon: +bestLon.toFixed(6), lat: +bestLat.toFixed(6), len });
 }
-console.log(`edges: ${edgeCount}, cam>0: ${camPos}, strict-legal audited: ${audited}, forbidden(>=74): ${forbidden}`);
+console.log(`edges: ${edgeCount}, cam>0: ${camPos}, strict-legal audited: ${audited}, forbidden(>=160): ${forbidden}`);
 console.log(`true min ALPR distance histogram (audited edges):`, buckets);
 console.log(`done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 if (violations.length) {

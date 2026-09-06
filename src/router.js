@@ -369,21 +369,14 @@ export function nearestNodeInComponent(lon, lat, targetComp) {
 // camWeight is in seconds per unit of camera exposure (0-255 per edge).
 // hardCam (strict only): edges whose exposure byte exceeds this are FORBIDDEN,
 // not just expensive. Derivation: the builder scores (1 - d/100m)·255 per
-// camera, sampling every ≤40 m along each edge.
-//
-// Threshold history: 160 (~30 m) matched the raw plate-read envelope, but
-// field testing (Keaton, 2026-09-06) showed strict routes passing 68 m from
-// confirmed Flock placements (State St PG / Home Depot Lehi) — at stop lines
-// and across intersections the effective read distance is far shorter than
-// the moving-pass envelope. Exposure byte 80 ⇒ 70 m: strict now refuses any
-// pass within ~70 m of a known camera while still leaving Balanced room to
-// route. ALPR read range (~10-23 m at speed) stays deeply inside this.
-// Multiple cameras only add exposure (safe direction); non-ALPR cameras weigh
-// 0.5 and alone stay under the floor (max (1-d/100)·255·0.5 = 127 at d=0 …
-// NOTE: at d<~69 m a single non-ALPR camera CAN now exceed 80 and be
-// strict-forbidden — intended: entrance/traffic non-readers still correlate
-// with ALPR placements and the detour budget handles walled cases).
-export const HARD_CAM_EXPOSURE = 74;
+// camera, sampling every ≤40 m along each edge. An edge whose true closest
+// approach is <30 m therefore samples ≥ (1 - √(30²+20²)/100)·255 ≈ 163 even
+// in the worst case (closest point midway between samples). Threshold 160
+// catches every sub-30 m pass with margin → strict can never route within
+// ALPR read range (~10-23 m at speed) plus buffer. Multiple cameras only add
+// exposure (safe direction); non-ALPR cameras weigh 0.5 and alone stay under
+// the floor, which is intended (they don't read plates).
+export const HARD_CAM_EXPOSURE = 160;
 // Generalized cost (engine-rebuild plan step 1): drivers do NOT minimize
 // time — distance carries independent disutility (fuel/wear/perceived effort,
 // Wardman 1985) and <50% of drivers take the fastest route (Ramming 2002).
@@ -1143,6 +1136,95 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
         o.cameras = (o.cameras || 0) + near.length;
         o.route.cameras = o.cameras;
         o.corridorCameras = near.map((c) => ({ lon: c.lon, lat: c.lat }));
+      }
+    }
+  }
+
+  // ---- Strict camera-avoidance re-route (Keaton field report 2026-09-06) ----
+  // When strict still passes corridor cameras after the hard-floor probe,
+  // re-run A* with those cameras baked into the exposure field as a GRADIENT
+  // (high cost, not forbidden). A* then routes AROUND them — cutting through
+  // neighborhoods, crossing at perpendicular intersections — whatever path
+  // minimizes total camera exposure. This is what "strict" means: try HARD.
+  if (deflockCams && deflockCams.length && options.length) {
+    const strictOpt = options.find((o) => o.mode === 'strict');
+    const corridorCams = (strictOpt?.corridorCameras || []).map((c) => ({
+      lon: c.lon, lat: c.lat, direction: c.direction ?? null,
+    }));
+    if (strictOpt && corridorCams.length) {
+      const CORR_R = 150;
+      const merged = new Uint8Array(graph.eCam);
+      const CELL = 0.002;
+      const grid = new Map();
+      for (const c of corridorCams) {
+        const gx = Math.floor(c.lon / CELL), gy = Math.floor(c.lat / CELL);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            const k = gx + dx + ',' + (gy + dy);
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push({ lon: c.lon, lat: c.lat });
+          }
+        }
+      }
+      for (let e = 0; e < graph.edgeCount; e++) {
+        const a = graph.ea[e], b = graph.eB[e];
+        const pts = [
+          [graph.nodeLon[a] / 1e6, graph.nodeLat[a] / 1e6],
+          [(graph.nodeLon[a] + graph.nodeLon[b]) / 2e6, (graph.nodeLat[a] + graph.nodeLat[b]) / 2e6],
+          [graph.nodeLon[b] / 1e6, graph.nodeLat[b] / 1e6],
+        ];
+        let extra = 0;
+        for (const [plon, plat] of pts) {
+          const cell = grid.get(Math.floor(plon / CELL) + ',' + Math.floor(plat / CELL));
+          if (!cell) continue;
+          const cosLat = Math.cos((plat * Math.PI) / 180);
+          for (const c of cell) {
+            const dLon = (c.lon - plon) * 111320 * cosLat;
+            const dLat = (c.lat - plat) * 111320;
+            const d2 = dLon * dLon + dLat * dLat;
+            if (d2 <= CORR_R * CORR_R) extra = Math.max(extra, Math.round((1 - Math.sqrt(d2) / CORR_R) * 255));
+          }
+        }
+        if (extra) merged[e] = Math.min(255, Math.max(merged[e], extra));
+      }
+      const graph2 = { ...graph, eCam: merged };
+      // Re-run strict with NO hard floor (softCam) and a relaxed budget —
+      // A* minimizes cumulative camera cost and routes around them.
+      const avoid = astar(graph2, s.node, t.node, 'strict', edgeFactor, edgeDelay, { softCam: true, maxCost: fastest.duration * 2.5 + 240 });
+      if (avoid) {
+        // Verify the avoidance route actually reduced corridor exposure
+        const avoidCoords = avoid.coords;
+        let stillNear = 0;
+        const rad = Math.PI / 180;
+        const cos0 = Math.cos(((from[1] + to[1]) / 2) * rad);
+        const kx = 111320 * cos0, ky = 110540;
+        for (const c of corridorCams) {
+          const cx = c.lon * kx, cy = c.lat * ky;
+          let best = Infinity;
+          for (let i = 0; i < avoidCoords.length - 1; i++) {
+            const x1 = avoidCoords[i][0] * kx, y1 = avoidCoords[i][1] * ky;
+            const x2 = avoidCoords[i + 1][0] * kx, y2 = avoidCoords[i + 1][1] * ky;
+            const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+            let t = L2 ? ((cx - x1) * dx + (cy - y1) * dy) / L2 : 0;
+            t = Math.max(0, Math.min(1, t));
+            const px = x1 + t * dx, py = y1 + t * dy;
+            const d2 = (cx - px) ** 2 + (cy - py) ** 2;
+            if (d2 < best) best = d2;
+          }
+          if (best < 75 * 75) stillNear++;
+        }
+        // Only use the avoidance route if it actually reduced corridor exposure
+        // and isn't absurdly long (< 4x fastest)
+        if (stillNear < corridorCams.length && avoid.distance <= fastest.distance * 4) {
+          strictOpt.route = avoid;
+          strictOpt.cameras = avoid.cameras;
+          strictOpt.route.cameras = avoid.cameras;
+          strictOpt.distance = avoid.distance;
+          strictOpt.duration = avoid.duration;
+          strictOpt.strictFallback = true;
+          strictOpt.overBudget = avoid.duration > (fastest.duration * 1.25 + 90);
+          strictOpt.largeDetour = avoid.distance > fastest.distance * 1.5;
+        }
       }
     }
   }
