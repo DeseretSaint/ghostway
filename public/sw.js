@@ -5,7 +5,7 @@
 // immediately (a cached shell would otherwise stick forever across versions).
 
 // Bump this on every release that changes the shell — it invalidates old caches.
-const VERSION = 'ghostway-v26';
+const VERSION = 'ghostway-v27';
 const SHELL = `${VERSION}-shell`;
 const TILES = `${VERSION}-tiles`;
 
@@ -88,7 +88,7 @@ function cacheNameFor(req) {
 }
 
 async function consume(req, event) {
-  const res = await fetch(req);
+  const res = await fetch(req, { cache: 'no-store' });
   if (!res || res.status !== 200 || req.method !== 'GET') return res;
   const buf = await res.arrayBuffer();
   const put = caches.open(cacheNameFor(req)).then((c) => c.put(req, new Response(buf, { headers: res.headers, status: res.status })));
