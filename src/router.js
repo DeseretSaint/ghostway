@@ -1110,32 +1110,23 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
           if (d2 < best) { best = d2; bestBx = px; bestBy = py; }
         }
         if (best >= 75 * 75) continue; // beyond corridor — safe at any heading
-        // Directional awareness: a camera reads plates ALONG its facing
-        // direction — both ahead (0° off-axis) and behind (180° off-axis)
-        // since Flock reads oncoming plates too. A route that crosses
-        // PERPENDICULAR to the camera's facing (off-axis 60°–120°) is
-        // SAFE — the camera is aimed at through-traffic, not the cross
-        // street. (Keaton: State St camera faces east; cutting through the
-        // neighborhood to turn out is safe because you cross perpendicular.)
-        let safe = false;
-        const dir = c.direction;
-        if (dir != null) {
-          const camDir = Number(dir);
-          if (Number.isFinite(camDir)) {
-            // Bearing from camera TO route point (0=N,90=E)
-            const bearing = ((Math.atan2(bestBx - cx, bestBy - cy) / rad) + 360) % 360;
-            // Angle off camera's forward axis (0=ahead, 180=behind)
-            let off = Math.abs(bearing - camDir) % 360;
-            if (off > 180) off = 360 - off;
-            if (off > 60 && off < 120) safe = true; // perpendicular crossing — not readable
-          }
-        }
-        if (!safe) near.push(c);
+        // Count ALL cameras within 75 m — the badge must be honest about
+        // every camera the route passes, even perpendicular crossings
+        // (which are safe but the driver still wants to SEE on the badge).
+        // Directional awareness was removed: it hid perpendicular crossings
+        // from the count, making the badge lie "0 cam / fully clear" while
+        // the route line visibly crossed a camera icon. (Keaton field
+        // report 2026-09-08: State St camera, strict route.)
+        near.push(c);
       }
       if (near.length) {
         o.cameras = (o.cameras || 0) + near.length;
         o.route.cameras = o.cameras;
         o.corridorCameras = near.map((c) => ({ lon: c.lon, lat: c.lat }));
+      }
+      // Debug log: trace exactly what the badge is reporting
+      if (o.mode === 'strict') {
+        console.log(`[CAM-COUNT] mode=${o.mode} corridor=${o.cameras || 0} stillNear=${o.cameras || 0} badge=${o.cameras || 0}`);
       }
     }
   }
