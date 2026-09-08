@@ -1120,13 +1120,10 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
         near.push(c);
       }
       if (near.length) {
+        o.corridorCount = near.length;
         o.cameras = (o.cameras || 0) + near.length;
         o.route.cameras = o.cameras;
         o.corridorCameras = near.map((c) => ({ lon: c.lon, lat: c.lat }));
-      }
-      // Debug log: trace exactly what the badge is reporting
-      if (o.mode === 'strict') {
-        console.log(`[CAM-COUNT] mode=${o.mode} corridor=${o.cameras || 0} stillNear=${o.cameras || 0} badge=${o.cameras || 0}`);
       }
     }
   }
@@ -1210,6 +1207,14 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
           strictOpt.largeDetour = avoid.distance > fastest.distance * 1.5;
         }
       }
+    }
+  }
+
+  // Debug log: trace exactly what the badge is reporting per option
+  for (const o of options) {
+    if (o.mode === 'strict') {
+      const stillNear = o.route.cameras ?? o.corridorCount ?? o.cameras ?? 0;
+      console.log(`[CAM-COUNT] mode=${o.mode} corridor=${o.corridorCount || 0} stillNear=${stillNear} badge=${o.cameras || 0}`);
     }
   }
 
