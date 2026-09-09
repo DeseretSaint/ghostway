@@ -1,18 +1,27 @@
-// Camera count truth-check: load cameras.geojson, route multiple corridors
-// on the prebuilt graph, and assert the badge count matches the raw distance
-// scan for each. FAILS if the badge count doesn't match the raw scan.
+// Camera count truth-check: load cameras.geojson, geocode corridor endpoints
+// (matching UI behavior), route on the prebuilt graph, and assert the badge
+// count matches the raw distance scan for each. FAILS if the badge count
+// doesn't match the raw scan.
 import { planRoutes } from '../src/router.js';
+import { searchPlaces } from '../src/search.js';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 
+// ---- Save native fetch BEFORE shimming ----
+const nativeFetch = globalThis.fetch;
+
 // ---- Load graph (shim fetch → local bin) ----
 const gz = readFileSync(join(DIR, '..', 'public', 'graph', 'wasatch-graph.bin.gz'));
-globalThis.fetch = async () => {
-  const ab = gz.buffer.slice(gz.byteOffset, gz.byteOffset + gz.byteLength);
-  return { ok: true, status: 200, arrayBuffer: async () => ab };
+globalThis.fetch = async (url) => {
+  if (typeof url === 'string' && (url.includes('graph') || url.includes('bin'))) {
+    const ab = gz.buffer.slice(gz.byteOffset, gz.byteOffset + gz.byteLength);
+    return { ok: true, status: 200, arrayBuffer: async () => ab };
+  }
+  // Real fetch for Photon geocoding
+  return nativeFetch(url);
 };
 
 // ---- Load cameras.geojson ----
@@ -24,13 +33,22 @@ const cams = (geojson.features || []).map((f) => ({
 
 console.log(`Loaded ${cams.length} cameras\n`);
 
-// ---- Corridors to test ----
-const CORRIDORS = [
-  { name: 'PG → Costco Lehi', from: [-111.759, 40.364], to: [-111.834, 40.394], expect: 'any' },
-  { name: 'PG → Lindon', from: [-111.759, 40.364], to: [-111.720, 40.345], expect: 0 },
-  { name: 'PG → BYU Provo', from: [-111.759, 40.364], to: [-111.6553, 40.2523], expect: 'multiple' },
-  { name: 'PG → Downtown SLC', from: [-111.759, 40.364], to: [-111.891, 40.7608], expect: 'multiple' },
+// ---- Corridors to test (geocoded to match UI) ----
+const CORRIDOR_QUERIES = [
+  { name: 'PG → Costco Lehi', from: 'Pleasant Grove, Utah', to: 'Costco Lehi, Utah', expect: 'any' },
+  { name: 'PG → Lindon', from: 'Pleasant Grove, Utah', to: 'Lindon, Utah', expect: 0 },
+  { name: 'PG → BYU Provo', from: 'Pleasant Grove, Utah', to: 'BYU Provo, Utah', expect: 'multiple' },
+  { name: 'PG → Downtown SLC', from: 'Pleasant Grove, Utah', to: 'Downtown Salt Lake City, Utah', expect: 'multiple' },
 ];
+
+// ---- Geocode endpoints ----
+async function geocode(query) {
+  const results = await searchPlaces(query, 1);
+  if (!results || results.length === 0) {
+    throw new Error(`Geocoding failed for: ${query}`);
+  }
+  return { lon: results[0].coords[0], lat: results[0].coords[1] };
+}
 
 // ---- Raw distance scan helper ----
 const RAD = Math.PI / 180;
@@ -61,10 +79,21 @@ function rawCameraCount(coords, from, to) {
 
 let failures = 0;
 
-for (const c of CORRIDORS) {
+for (const c of CORRIDOR_QUERIES) {
   console.log(`\n=== ${c.name} ===`);
+
+  // Geocode endpoints (matching UI behavior)
+  console.log(`Geocoding "${c.from}" → "${c.to}"...`);
+  const fromCoords = await geocode(c.from);
+  const toCoords = await geocode(c.to);
+  console.log(`From: [${fromCoords.lon.toFixed(6)}, ${fromCoords.lat.toFixed(6)}]`);
+  console.log(`To:   [${toCoords.lon.toFixed(6)}, ${toCoords.lat.toFixed(6)}]`);
+
+  const from = [fromCoords.lon, fromCoords.lat];
+  const to = [toCoords.lon, toCoords.lat];
+
   console.log('Planning routes (loads graph first)…');
-  const { options } = await planRoutes(c.from, c.to, { deflockCams: cams });
+  const { options } = await planRoutes(from, to, { deflockCams: cams });
 
   for (const o of options) {
     console.log(
@@ -82,7 +111,7 @@ for (const c of CORRIDORS) {
       continue;
     }
 
-    const trueCount = rawCameraCount(coords, c.from, c.to);
+    const trueCount = rawCameraCount(coords, from, to);
     const badge = o.cameras ?? 0;
     const status = badge === trueCount ? 'PASS' : 'FAIL';
     console.log(`  [${status}] ${o.mode}: badge=${badge} truth=${trueCount}`);
@@ -104,7 +133,7 @@ for (const c of CORRIDORS) {
 
 console.log('');
 if (failures === 0) {
-  console.log('COUNT-TRUTH-CHECK PASS ✅ — all corridors: badge matches raw distance scan');
+  console.log('COUNT-TRUTH-CHECK PASS ✅ — all corridors: badge matches raw distance scan (geocoded endpoints)');
   process.exit(0);
 } else {
   console.log(`COUNT-TRUTH-CHECK FAIL ❌ — ${failures} mismatch(es)`);
