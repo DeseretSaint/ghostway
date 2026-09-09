@@ -1,6 +1,6 @@
-// Camera count truth-check: load cameras.geojson, route PG→Costco Lehi on
-// the prebuilt graph, and assert the badge count matches the raw distance
-// scan. FAILS if the badge claims "0 cameras" but a camera is within 75 m.
+// Camera count truth-check: load cameras.geojson, route multiple corridors
+// on the prebuilt graph, and assert the badge count matches the raw distance
+// scan for each. FAILS if the badge count doesn't match the raw scan.
 import { planRoutes } from '../src/router.js';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -24,38 +24,20 @@ const cams = (geojson.features || []).map((f) => ({
 
 console.log(`Loaded ${cams.length} cameras\n`);
 
-// ---- Route PG → Costco Lehi ----
-const FROM = [-111.759, 40.364]; // Pleasant Grove
-const TO = [-111.834, 40.394];   // Costco Lehi
+// ---- Corridors to test ----
+const CORRIDORS = [
+  { name: 'PG → Costco Lehi', from: [-111.759, 40.364], to: [-111.834, 40.394], expect: 'any' },
+  { name: 'PG → Lindon', from: [-111.759, 40.364], to: [-111.720, 40.345], expect: 0 },
+  { name: 'PG → BYU Provo', from: [-111.759, 40.364], to: [-111.6553, 40.2523], expect: 'multiple' },
+  { name: 'PG → Downtown SLC', from: [-111.759, 40.364], to: [-111.891, 40.7608], expect: 'multiple' },
+];
 
-console.log('Planning routes (loads graph first)…');
-const { options } = await planRoutes(FROM, TO, { deflockCams: cams });
-console.log('');
-
-for (const o of options) {
-  console.log(
-    `${o.label.padEnd(9)} ${(o.distance / 1000).toFixed(1)} km  ` +
-    `${Math.round(o.duration / 60)} min  cameras: ${o.cameras}`
-  );
-}
-console.log('');
-
-// ---- Truth check: raw distance scan of all cameras vs route polyline ----
+// ---- Raw distance scan helper ----
 const RAD = Math.PI / 180;
-const cosLat = Math.cos(((FROM[1] + TO[1]) / 2) * RAD);
-const kx = 111320 * cosLat;
-const ky = 110540;
-
-let failures = 0;
-for (const o of options) {
-  if (o.mode !== 'strict') continue; // test the badge mode
-  const coords = o.route.coords || o.coords;
-  if (!coords || coords.length < 2) {
-    console.log(`SKIP ${o.mode}: no polyline`);
-    continue;
-  }
-
-  // Raw distance from each camera to the route polyline (meters)
+function rawCameraCount(coords, from, to) {
+  const cosLat = Math.cos(((from[1] + to[1]) / 2) * RAD);
+  const kx = 111320 * cosLat;
+  const ky = 110540;
   let trueCount = 0;
   for (const c of cams) {
     const cx = c.lon * kx;
@@ -74,19 +56,55 @@ for (const o of options) {
     }
     if (best < 75 * 75) trueCount++;
   }
+  return trueCount;
+}
 
-  const badge = o.cameras ?? 0;
-  const status = badge === trueCount ? 'PASS' : 'FAIL';
-  console.log(`[${status}] ${o.mode}: badge=${badge} truth=${trueCount}`);
-  if (badge !== trueCount) {
-    console.log(`  MISMATCH — badge claims ${badge}, raw scan found ${trueCount} cameras within 75m`);
-    failures++;
+let failures = 0;
+
+for (const c of CORRIDORS) {
+  console.log(`\n=== ${c.name} ===`);
+  console.log('Planning routes (loads graph first)…');
+  const { options } = await planRoutes(c.from, c.to, { deflockCams: cams });
+
+  for (const o of options) {
+    console.log(
+      `  ${o.label.padEnd(9)} ${(o.distance / 1000).toFixed(1)} km  ` +
+      `${Math.round(o.duration / 60)} min  cameras: ${o.cameras}`
+    );
+  }
+
+  // ---- Truth check: raw distance scan of all cameras vs route polyline ----
+  for (const o of options) {
+    if (o.mode !== 'strict') continue; // test the badge mode
+    const coords = o.route.coords || o.coords;
+    if (!coords || coords.length < 2) {
+      console.log(`  SKIP ${o.mode}: no polyline`);
+      continue;
+    }
+
+    const trueCount = rawCameraCount(coords, c.from, c.to);
+    const badge = o.cameras ?? 0;
+    const status = badge === trueCount ? 'PASS' : 'FAIL';
+    console.log(`  [${status}] ${o.mode}: badge=${badge} truth=${trueCount}`);
+    if (badge !== trueCount) {
+      console.log(`    MISMATCH — badge claims ${badge}, raw scan found ${trueCount} cameras within 75m`);
+      failures++;
+    }
+
+    // Assert expected camera count semantics
+    if (c.expect === 0 && trueCount !== 0) {
+      console.log(`    EXPECTED 0 cameras but found ${trueCount}`);
+      failures++;
+    } else if (c.expect === 'multiple' && trueCount < 1) {
+      console.log(`    EXPECTED multiple cameras but found ${trueCount}`);
+      failures++;
+    }
   }
 }
 
 console.log('');
 if (failures === 0) {
-  console.log('COUNT-TRUTH-CHECK PASS ✅ — badge matches raw distance scan');
+  console.log('COUNT-TRUTH-CHECK PASS ✅ — all corridors: badge matches raw distance scan');
   process.exit(0);
 } else {
   console.log(`COUNT-TRUTH-CHECK FAIL ❌ — ${failures} mismatch(es)`);
