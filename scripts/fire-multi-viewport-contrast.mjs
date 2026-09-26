@@ -6,7 +6,7 @@ import { contrast, parseRgb, compositeOver, getEffectiveBg, relativeLuminance, c
 import fs from 'node:fs';
 import path from 'node:path';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 setTimeout(() => { console.error('WATCHDOG: 180s'); process.exit(2); }, 180000).unref();
 

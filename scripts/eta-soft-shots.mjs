@@ -7,7 +7,7 @@
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const APP_URL = 'http://localhost:4173/';
 const OUT = new URL('../ux-shots/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });

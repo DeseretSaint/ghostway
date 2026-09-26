@@ -2,7 +2,7 @@ import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 import fs from 'node:fs';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const TODAY = new Date().toISOString().slice(0, 10);
 const OUTDIR = 'ux-shots';

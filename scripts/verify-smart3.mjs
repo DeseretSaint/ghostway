@@ -1,5 +1,5 @@
 import puppeteer from 'puppeteer-core';
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 setTimeout(() => { console.error('WATCHDOG 150s'); process.exit(2); }, 150000).unref();
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });

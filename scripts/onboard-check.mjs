@@ -9,7 +9,7 @@ import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 import { VIEWPORT_LADDER, THEMES, AA_THRESHOLD, contrast, parseRgb } from './lib-contrast.mjs';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 setTimeout(() => { console.error('WATCHDOG: 360s timeout — force exit'); process.exit(2); }, 360000).unref();
 

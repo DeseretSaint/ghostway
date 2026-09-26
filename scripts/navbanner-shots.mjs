@@ -29,7 +29,7 @@ import { mkdirSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() / preview shutdown can hang under swiftshader.
 // If anything wedges, force-exit with a distinct code so cron/CI doesn't hang.

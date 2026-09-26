@@ -3,7 +3,7 @@ import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 import { mkdirSync } from 'node:fs';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 setTimeout(() => { console.error('WATCHDOG: 180s timeout'); process.exit(2); }, 180000).unref();
 

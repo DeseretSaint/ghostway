@@ -7,7 +7,7 @@ import { contrast as libContrast, samplePixel as libSample } from './lib-contras
 import { PNG } from 'pngjs';
 import fs from 'node:fs';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 setTimeout(() => { console.error('WATCHDOG 120s'); process.exit(2); }, 120000).unref();
 

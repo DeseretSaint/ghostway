@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const OUT = 'ux-shots';
 const SUFFIX = 'apk-rebuild';
 

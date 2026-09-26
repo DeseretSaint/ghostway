@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const SVG = join(__dirname, '..', 'public', 'icon-base.svg');
 const MASKABLE_SVG = join(__dirname, '..', 'public', 'icon-maskable.svg');
 const OUT = join(__dirname, '..', 'public', 'icons');

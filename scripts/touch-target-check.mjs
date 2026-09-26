@@ -3,7 +3,7 @@ setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); proce
 import puppeteer from 'puppeteer-core';
 import { startPreview } from './lib-preview.mjs';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const { url, kill } = await startPreview();
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 const page = await browser.newPage();
