@@ -2066,6 +2066,25 @@ function openDonate() {
   `);
 }
 
+// Q231 iOS keyboard/viewport traps: expose the on-screen keyboard overlap as
+// --kb-inset so bottom-anchored chrome (.panel, .steps-sheet) lifts above it.
+// Recomputed on every visualViewport resize/scroll, which also absorbs the
+// iOS 26 ~24px visualViewport undershoot after keyboard close. 0px when the
+// keyboard is closed (innerHeight == visualViewport height).
+function initKeyboardInset() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const update = () => {
+    const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    document.documentElement.style.setProperty('--kb-inset', `${inset}px`);
+  };
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  window.addEventListener('resize', update);
+  update();
+}
+initKeyboardInset();
+
 init();
 
 // ---- First-run onboarding (Workstream D) ----

@@ -144,6 +144,9 @@ body {
   background: var(--bg);
   color: var(--ink);
   overflow: hidden;
+  /* Q160 edge-swipe hardening: stop horizontal swipe-back/navigation gestures
+     from leaking through the full-screen map (iOS Safari edge swipes). */
+  overscroll-behavior-x: contain;
 }
 #app {
   position: fixed;
@@ -152,6 +155,7 @@ body {
 #map {
   position: absolute;
   inset: 0;
+  overscroll-behavior-x: contain;
 }
 
 /* Top bar */
@@ -248,7 +252,9 @@ body {
   position: absolute;
   left: max(10px, env(safe-area-inset-left));
   right: max(10px, env(safe-area-inset-right));
-  bottom: max(10px, env(safe-area-inset-bottom));
+  /* --kb-inset lifts bottom-anchored chrome above the on-screen keyboard
+     (Q231 iOS viewport/keyboard trap cluster); 0px when no keyboard. */
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
   z-index: 5;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -1000,7 +1006,7 @@ details summary {
   position: absolute;
   left: max(10px, env(safe-area-inset-left));
   right: max(10px, env(safe-area-inset-right));
-  bottom: max(10px, env(safe-area-inset-bottom));
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
   top: max(64px, calc(env(safe-area-inset-top) + 58px));
   z-index: 9;
   display: flex;
