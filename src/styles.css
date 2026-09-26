@@ -2116,3 +2116,41 @@ select.rp-input {
     color: #0d0d0d;
   }
 }
+
+/* ---- PWA update toast (Q230/Q100): bottom-anchored, dismissible ---- */
+.sw-toast {
+  position: fixed;
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--panel-solid);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-3);
+}
+.sw-toast-msg {
+  flex: 1;
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+.sw-toast-refresh {
+  min-height: 44px;
+  padding: 0 16px;
+}
+.sw-toast-dismiss {
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.sw-toast-dismiss:hover {
+  color: var(--ink);
+}

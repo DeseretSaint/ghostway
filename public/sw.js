@@ -5,7 +5,7 @@
 // immediately (a cached shell would otherwise stick forever across versions).
 
 // Bump this on every release that changes the shell — it invalidates old caches.
-const VERSION = 'ghostway-v27';
+const VERSION = 'ghostway-v28';
 const SHELL = `${VERSION}-shell`;
 const TILES = `${VERSION}-tiles`;
 
@@ -20,9 +20,14 @@ const SHELL_URLS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(SHELL).then((c) => c.addAll(SHELL_URLS)).then(() => self.skipWaiting())
-  );
+  // No skipWaiting() here: the new worker waits so the page can surface the
+  // Q230 update toast first. The page sends SKIP_WAITING when the user
+  // taps Refresh (controllerchange then reloads once).
+  event.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_URLS)));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
