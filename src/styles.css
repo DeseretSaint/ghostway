@@ -2168,3 +2168,10 @@ select.rp-input {
   width: 100%;
   box-sizing: border-box;
 }
+/* Feedback CTA is an anchor styled as the primary button. */
+a.primary-btn.feedback-link {
+  display: inline-block;
+  text-decoration: none;
+  line-height: 44px;
+  padding: 0 18px;
+}

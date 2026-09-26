@@ -2083,6 +2083,25 @@ function handleDrawer(action) {
     startOnboarding();
     return;
   }
+  if (action === 'feedback') {
+    // No server-side form exists (privacy-first: no backend, no accounts), so
+    // feedback flows through a prefilled GitHub issue — the standard no-key
+    // OSS channel. If a form endpoint ever lands, Q90 applies in full:
+    // invisible honeypot (aria-hidden + tabindex=-1 + autocomplete=off) +
+    // rate limit + ALTCHA/Cap fallback — never a visible CAPTCHA.
+    const body = encodeURIComponent(
+      '**Describe the bug or feature request**\n…\n\n**What happened instead (bugs)**\n…\n\n---\n_Sent from the Ghostway app feedback link — no personal data attached._'
+    );
+    const href = `${CONFIG.github}/issues/new?body=${body}`;
+    openModal(`
+      <h3>Send feedback</h3>
+      <p>Ghostway has no accounts and no server — feedback goes straight to the public issue tracker.</p>
+      <p><a class="primary-btn feedback-link" id="feedbackIssue" href="${href}" target="_blank" rel="noopener">Report a bug or request a feature</a></p>
+      <p class="muted small">The issue body is prefilled and carries no personal data — review it before submitting (the tracker itself needs a GitHub account).</p>
+      <p><a class="text-link" href="${CONFIG.github}/issues" target="_blank" rel="noopener">Browse existing issues</a></p>
+    `);
+    return;
+  }
   if (action === 'about') {
     openModal(`
       <h3>${CONFIG.about.name}</h3><p class="tag">${CONFIG.about.tagline}</p><p>${CONFIG.about.body}</p>
