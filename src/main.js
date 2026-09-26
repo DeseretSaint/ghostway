@@ -762,11 +762,14 @@ function updateRouteCardInPlace(app, prevOptions, prevChosen, nextOptions, nextC
   }
 }
 
-async function useMyLocation() {
-  if (!navigator.geolocation) {
-    showStatus('Geolocation not available in this browser.', 'warn');
-    return;
-  }
+function geoErrorCopy(err) {
+  if (err && err.code === 1) return 'Location is blocked for Ghostway. To allow it, tap the ⓘ/lock beside the address bar and set Location to Allow — or just type a start place.';
+  if (err && err.code === 2) return 'Your device can’t get a location right now (GPS unavailable). Try again — or type a start place.';
+  if (err && err.code === 3) return 'Location lookup timed out. Tap the GPS button to retry — or type a start place.';
+  return 'Could not get location: ' + (err && err.message ? err.message : 'unknown error') + '. You can type a start place instead.';
+}
+
+function startLocationLookup() {
   // 1) Instant first fix from last known position (this session or persisted).
   const instant = app.state.userLoc || cachedLoc();
   if (instant) {
@@ -781,13 +784,44 @@ async function useMyLocation() {
     { enableHighAccuracy: false, maximumAge: 30000, timeout: 4000 }
   );
   // 3) High-accuracy GPS refine — runs in the background, never blocks the UI.
+  // (Non-blocking by design, so the iOS-standalone getCurrentPosition hang —
+  // no prompt, no timeout, no reject — can't wedge anything.)
   navigator.geolocation.getCurrentPosition(
     (pos) => onLocationFix([pos.coords.longitude, pos.coords.latitude]),
     (err) => {
-      if (!app.state.userLoc) showStatus('Could not get location: ' + err.message, 'warn');
+      if (!app.state.userLoc) showStatus(geoErrorCopy(err), 'warn');
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
   );
+}
+
+// Q33 geolocation permission UX: never prompt on load; the native prompt only
+// fires from a user gesture, after a WHAT+WHY explanation (first run only —
+// reason-present prompts measurably raise grant rates). The manual-entry path
+// doubles as the why-it's-optional explanation.
+function useMyLocation() {
+  if (!navigator.geolocation) {
+    showStatus('Geolocation not available in this browser.', 'warn');
+    return;
+  }
+  if (localStorage.getItem('gw-geo-explained')) { startLocationLookup(); return; }
+  openModal(`
+    <h3>Use your location?</h3>
+    <p>Ghostway would like to use your location so it can start routes from where you are.</p>
+    <p class="muted small">Your position stays on this device — it only plans routes here and is never sent anywhere.</p>
+    <p><button id="geoAllow" class="primary-btn">Use my location</button>
+       <button id="geoManual" class="text-link">Type a place instead</button></p>
+  `);
+  $('#geoAllow').addEventListener('click', () => {
+    localStorage.setItem('gw-geo-explained', '1');
+    closeModal();
+    startLocationLookup();
+  });
+  $('#geoManual').addEventListener('click', () => {
+    localStorage.setItem('gw-geo-explained', '1');
+    closeModal();
+    $('#fromInput').focus();
+  });
 }
 
 function maybeAutoRoute() {
