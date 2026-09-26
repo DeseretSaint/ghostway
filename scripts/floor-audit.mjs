@@ -32,7 +32,8 @@ const gzPath = binPath + '.gz';
 const buf = argPath
   ? (argPath.endsWith('.gz') ? gunzipSync(readFileSync(argPath)) : readFileSync(argPath))
   : (existsSync(binPath) ? readFileSync(binPath) : gunzipSync(readFileSync(gzPath)));
-if (buf.toString('latin1', 0, 4) !== 'GWR1') throw new Error('bad magic');
+const magic = buf.toString('latin1', 0, 4);
+if (magic !== 'GWR1' && magic !== 'GWR2') throw new Error('bad magic');
 const nodeCount = buf.readUInt32LE(4);
 const edgeCount = buf.readUInt32LE(8);
 const bbox = { w: buf.readDoubleLE(12), s: buf.readDoubleLE(20), e: buf.readDoubleLE(28), n: buf.readDoubleLE(36) };

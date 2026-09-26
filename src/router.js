@@ -129,11 +129,11 @@ export async function loadGraph(lon, lat, onProgress) {
   return loadPromise;
 }
 
-function parseGraph(raw) {
+export function parseGraph(raw) {
   const dv = new DataView(raw);
   let o = 0;
   const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
-  if (magic !== 'GWR1') throw new Error('bad graph magic');
+  if (magic !== 'GWR1' && magic !== 'GWR2') throw new Error('bad graph magic');
   o = 4;
   const nodeCount = dv.getUint32(o, true); o += 4;
   const edgeCount = dv.getUint32(o, true); o += 4;
@@ -171,6 +171,28 @@ function parseGraph(raw) {
     o += len;
   }
 
+  // Turn-restriction table (GWR2): banned + allow-listed (inEdge,inDir) →
+  // (outEdge,outDir) pairs at a via node. dir 0 = a→b, 1 = b→a. Translated to
+  // ARC indices below (missing arcs = impossible maneuver → dropped).
+  const turnRaw = { ban: [], allow: [] };
+  if (magic === 'GWR2') {
+    const readPairs = () => {
+      const n = dv.getUint32(o, true); o += 4;
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const node = dv.getUint32(o, true); o += 4;
+        const inEdge = dv.getUint32(o, true); o += 4;
+        const inDir = dv.getUint8(o); o += 1;
+        const outEdge = dv.getUint32(o, true); o += 4;
+        const outDir = dv.getUint8(o); o += 1;
+        out.push([node, inEdge, inDir, outEdge, outDir]);
+      }
+      return out;
+    };
+    turnRaw.ban = readPairs();
+    turnRaw.allow = readPairs();
+  }
+
   // Adjacency (forward-star). Each edge yields 1-2 directed arcs.
   let arcCount = 0;
   for (let i = 0; i < E; i++) arcCount += eOw[i] === 0 ? 2 : 1;
@@ -183,6 +205,7 @@ function parseGraph(raw) {
   const arcTo = new Uint32Array(arcCount);
   const arcEdge = new Uint32Array(arcCount);
   const arcRev = new Uint8Array(arcCount); // 1 = traversed against storage direction
+  const arcOf = new Map(); // (edge * 2 + dir) → arc index, for turn tables
   const cursor = outStart.slice(0, nodeCount);
   for (let i = 0; i < E; i++) {
     const a = ea[i], b = eB[i];
@@ -190,11 +213,36 @@ function parseGraph(raw) {
     if (eOw[i] !== 2) {
       p = cursor[a]++;
       arcTo[p] = b; arcEdge[p] = i; arcRev[p] = 0;
+      arcOf.set(i * 2, p);
     }
     if (eOw[i] !== 1) {
       p = cursor[b]++;
       arcTo[p] = a; arcEdge[p] = i; arcRev[p] = 1;
+      arcOf.set(i * 2 + 1, p);
     }
+  }
+
+  // Turn tables keyed by VIA NODE: ban: inArc → Set(outArc) (skip those),
+  // allow: inArc → Set(outArc) (ONLY those exits). Search checks the pair at
+  // the node where the maneuver happens (codex Q5 — a plain node/edge search
+  // otherwise plans illegal turns, fail-green).
+  const turns = new Map();
+  {
+    const add = (kind, recs) => {
+      for (const [node, inEdge, inDir, outEdge, outDir] of recs) {
+        const inArc = arcOf.get(inEdge * 2 + inDir);
+        const outArc = arcOf.get(outEdge * 2 + outDir);
+        if (inArc === undefined || outArc === undefined) continue; // impossible maneuver
+        let t = turns.get(node);
+        if (!t) turns.set(node, (t = { ban: new Map(), allow: new Map() }));
+        const m = t[kind];
+        let s = m.get(inArc);
+        if (!s) m.set(inArc, (s = new Set()));
+        s.add(outArc);
+      }
+    };
+    add('ban', turnRaw.ban);
+    add('allow', turnRaw.allow);
   }
 
   // Node degree (undirected edge count per node) — junction penalty input.
@@ -256,7 +304,7 @@ function parseGraph(raw) {
     nodeLon, nodeLat,
     ea, eB, eLen, eSpd, eCam, eOw, eName,
     outStart, arcTo, arcEdge, arcRev,
-    nodeDeg,
+    nodeDeg, turns,
     comp, largestComponent,
     grid, CELL,
   };
@@ -447,7 +495,7 @@ class Heap {
   get size() { return this.k.length; }
 }
 
-function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = false, maxCost = Infinity, penalty = null } = {}) {
+export function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = false, maxCost = Infinity, penalty = null } = {}) {
   const cfg = MODES[mode];
   // Hard exposure floor (strict): forbidden edges, except roads touching the
   // origin/destination — those may legitimately sit beside a camera.
@@ -488,6 +536,20 @@ function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { softCam = f
     for (let p = g.outStart[u]; p < g.outStart[u + 1]; p++) {
       const v = g.arcTo[p];
       if (closed[v]) continue;
+      // OSM turn restrictions (GWR2): at u, the maneuver (arc we arrived on →
+      // arc p) must not be banned; only_* entries allow-list the exit instead.
+      // Note: node-label A* checks the turn on the best-known approach arc —
+      // a legal alternate approach is rare and the fallback tiers catch it.
+      const inA = prevArc[u];
+      if (inA >= 0 && g.turns) {
+        const tt = g.turns.get(u);
+        if (tt !== undefined) {
+          const banSet = tt.ban.get(inA);
+          if (banSet !== undefined && banSet.has(p)) continue;
+          const allowSet = tt.allow.get(inA);
+          if (allowSet !== undefined && !allowSet.has(p)) continue;
+        }
+      }
       const e = g.arcEdge[p];
       // Strict safety floor: never traverse a high-exposure edge unless it is
       // the first/last road of the trip (endpoint exemption). >= (not >) so a

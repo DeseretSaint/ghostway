@@ -6,6 +6,7 @@ certs/
 engine/data/*.pbf
 engine/data/*.osm.pbf
 engine/data/*.geojson
+engine/data/restrictions.json
 
 # Ship only the gzipped national WZDx snapshot (raw is a build artifact).
 public/data/wzdx-national.json

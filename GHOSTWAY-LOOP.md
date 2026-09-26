@@ -592,7 +592,7 @@ from this queue first when it's non-empty.
       fix (spec re-verified against CURRENT working-tree router.js: L126 count
       loop, L128-131 outStart, L137-145 fill — line numbers unchanged by the
       in-flight nearestNode edit; fix spec still valid as pinned).
-- [ ] ROUTING AXIS (slot-A, research 2026-08-26 ~22:36): **OSM turn-restriction
+- [x] ROUTING AXIS (slot-A, research 2026-08-26 ~22:36 → LANDED 2026-09-26): **OSM turn-restriction
       ingestion** — the engine currently honors NO turn restrictions (A* only
       applies a degree-based junctionPenalty, never checks turn legality), so it
       can plan illegal U-turns / lefts against OSM `type=restriction` relations.
@@ -612,7 +612,12 @@ from this queue first when it's non-empty.
       existing prevFrom[]/arcEdge[] (when relaxing arc p→v, reject if the turn
       from prevEdge[u]→e is forbidden at v); (3) floor-audit + engine-check +
       avoidance-audit + smoke + engine-e2e before ship. Reuse /tmp/gw-turns3.mjs
-      (proven decoder) as the regression counter. Community-report baking is
+      (proven decoder) as the regression counter. LANDED 2026-09-26 exactly per
+      this plan (see the Latest round row): engine/extract-osm.mjs + GWR2 turn
+      table + astar enforcement, 2,262/3,073 mapped, turn-restrict-check.mjs
+      gates CI. Deviations: via-way restrictions skipped (228, counted+logged —
+      needs multi-edge expansion); engine-e2e kept out of the ship gate
+      (pre-existing stale selectors). Community-report baking is
       ALREADY shipped (planRoutes bakes communityCams into eCam) — not a new axis.
       UPDATE (slot-A round 43, /tmp/gw-turntable.mjs — working prototype of the
       build-time table): 2179 rels → 12 non-actionable, 14 `except` (skip v1),
@@ -859,6 +864,8 @@ block on these — it queues and moves on.
 | 2026-08-27 04:15 MDT | ux (slot-B round 58) | search loading state + stale-reply guard: ui.js render() now shows an immediate non-interactive "Searching…" row (role=status, pulse animation — reduced-motion global rule already disables it) while photon is in flight, and a monotonic reqSeq token DROPS out-of-order stale replies (slow first response can no longer overwrite a newer query's results). New hermetic scripts/search-loading-check.mjs: CDP interception delays photon req #1 2.5s, asserts loading row + B's results win + late A reply dropped (SW registration stubbed — the stale-while-revalidate SW otherwise swallows fetches before interception sees them; photonCount=0 on first draft proved it). ALSO fixed interact-check.mjs flakiness found while verifying: its fixed 1100ms photon waits false-FAILed twice (photon latency measured 0.8-3.9s) → waitForSelector('#suggestions .sugg', 12s), same flaky class round 22/23 removed for the preview server. No routing/engine files touched. | build exit 0; search-loading-check PASS (loading row role=status non-button, B results win, stale dropped, photon reqs=2, 0 errors); search-empty-check PASS (empty state intact); interact-check PASS (full flow routes); escape-check PASS | committed eb44af7, PUSHED (b9d90cf..eb44af7) |
 
  | 2026-08-27 ~05:07 MDT | ux (slot-B round 61) | Maps-parity mission callout: route options that pass 0 cameras now render a prominent green **shield badge** "🛡 Camera-free route" (above the meta line) so the privacy win is obvious at a glance — replaces the easy-to-miss inline "0 cameras" text. ui.js renderEngineCard adds `opt-clear-badge` (gated on o.cameras===0); styles.css adds the pill (accent border/bg, shieldCheck icon). No routing/engine files touched. | build exit 0; bundle grep confirms "Camera-free route" + "opt-clear-badge" present in dist; interact-check PASS (full flow routes, 0 page errors) — flaky splash-hit first run was timing, re-ran clean PASS; shieldCheck icon already in icons.js | committed 3b5dfac, PUSHED (113e57e..3b5dfac) |
+
+| 2026-09-26 | routing (research-gap closure) | **OSM turn restrictions LANDED (GWR2)**: new pure-Node extractor (engine/extract-osm.mjs — replaces the osmium chain locally AND in CI) emits roads-with-osmId + restrictions.json (3,073 via-node restrictions; 228 via-way honestly skipped + logged); build-graph maps them to directed edge pairs at via nodes (1,565 ban + 697 allow pairs — 2,262/3,073 mapped) and emits a GWR2 turn table after names; astar enforces ban/allow at the maneuver junction via prevArc (node-label A* caveat documented in code — fallback tiers catch rare alternate-approach cases). Graph rebuilt (1,477,863 nodes / 1,528,472 edges — matches shipped scale; README stale 551k figure fixed). Codex Q5 fail-green class closed | scripts/turn-restrict-check.mjs PASS (1,498 turn nodes, 1,549 ban + 696 allow pairs in shipped graph; 12/12 sampled real restrictions DETOUR the banned maneuver; 0 walk-check violations); floor-audit PASS (0 <31.4 m); engine-check PASS; avoidance-audit + avoidance-audit-random PASS (24 pairs); smoke PASS; pwa-check + bundle-size PASS. engine-e2e + interact-check goBtn flake = pre-existing (baseline-verified identical failures) | shipped |
 
 ## Concurrency protocol
 - Lock file: ~/projects/ghostway/.ghostway-loop.lock (epoch ts + file list).

@@ -35,7 +35,8 @@ to keep you off those roads by default.
 
 - **Camera-aware routing engine** — Ghostway builds its own road graph from
   OpenStreetMap with camera exposure baked into every road segment, then runs
-  A* on-device. No third-party routing service decides where you go.
+  A* on-device. No third-party routing service decides where you go. OSM turn
+  restrictions are honored too — no illegal turns.
 - **Three avoidance modes**: *Strict* (bend over backwards for zero cameras),
   *Moderate* (avoid most, keep the detour sensible), *Off* (fastest). Per-mode
   ETA + camera count shown **before** you pick.
@@ -64,7 +65,7 @@ to keep you off those roads by default.
 
 | Tier | Engine | Coverage | Notes |
 |---|---|---|---|
-| 1 | **Ghostway's own graph** | Wasatch Front (SLC → Santaquin), 550k road edges | On-device A*, camera + traffic costs, 9–300 ms per route |
+| 1 | **Ghostway's own graph** | Utah statewide, 1.5M road edges | On-device A*, camera + traffic costs + OSM turn restrictions, 9–300 ms per route |
 | 2 | **Valhalla** (public demo) | Worldwide | Key-free, CORS-open; camera avoidance via `exclude_locations` |
 | 3 | **BRouter + OSRM** | Worldwide | Legacy fallback of last resort (flaky public servers) |
 
@@ -84,6 +85,9 @@ point `CONFIG.valhallaUrl` at it and nothing else changes.
    mode weight`. Strict mode weights exposure ~10× higher than Moderate.
 4. Community-reported cameras are merged into the exposure at plan time, so
    they protect routes immediately.
+5. OSM turn restrictions (`no_left_turn`, `no_u_turn`, `only_straight_on`, …)
+   are baked into the graph format (GWR2) and enforced by the router — the
+   planner never issues an illegal maneuver at a junction.
 
 ## Data sources (all open, all key-free)
 

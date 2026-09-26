@@ -6,8 +6,8 @@
 //                ↓
 //   public/graph/wasatch-graph.bin(.gz)
 //
-// Binary layout (all little-endian):
-//   magic "GWR1" (4B)
+// Binary layout (all little-endian), magic "GWR2" (4B) — GWR1 graphs (no
+// turn table) still parse:
 //   nodeCount u32, edgeCount u32
 //   bbox: 4 × f64  (w, s, e, n)
 //   nodes:  nodeCount × (i32 lon×1e6, i32 lat×1e6)
@@ -59,7 +59,7 @@ for (const f of roads.features) {
   if (p.access === 'private' || p.access === 'no') continue;
   const coords = f.geometry.coordinates;
   if (!coords.some(inBox)) continue;
-  ways.push({ coords, p });
+  ways.push({ coords, p, osmId: p.osmId ?? null });
   for (const c of coords) if (inBox(c)) nodeIds.add(c.join(','));
 }
 console.log(`ways: ${ways.length}, unique nodes: ${nodeIds.size}`);
@@ -131,9 +131,11 @@ function getNameId(name) {
 
 // ---- 5. Build edges ----
 const A = [], B = [], LEN = [], SPD = [], CAM = [], OW = [], NAME = [];
+// osmId → segments {e, a, b} for turn-restriction mapping (GWR2).
+const waySegs = new Map();
 let camEdges = 0;
 
-for (const { coords, p } of ways) {
+for (const { coords, p, osmId } of ways) {
   const hw = p.highway;
   let spd = SPEED[hw] || 40;
   if (p.maxspeed) {
@@ -168,12 +170,63 @@ for (const { coords, p } of ways) {
     }
     if (cam > 0) camEdges++;
     A.push(a); B.push(b); LEN.push(len); SPD.push(spd); CAM.push(cam); OW.push(ow); NAME.push(nid);
+    if (osmId != null) {
+      let segs = waySegs.get(osmId);
+      if (!segs) waySegs.set(osmId, (segs = []));
+      segs.push({ e: A.length - 1, a, b });
+    }
   }
 }
 const edgeCount = A.length;
 console.log(`edges: ${edgeCount}, camera-exposed: ${camEdges} (${((camEdges / edgeCount) * 100).toFixed(1)}%), names: ${names.length}`);
 
+// ---- 5b. Turn restrictions (GWR2) ----
+// Map OSM type=restriction relations onto directed edge pairs at their via
+// node. dir 0 = a→b traversal, dir 1 = b→a (matches arcRev in parseGraph).
+// no_* → banned pair; only_* → the exit arc is ALLOW-LISTED (all other exits
+// from that entry arc at the via node are forbidden at search time).
+const bans = [];
+const allows = [];
+{
+  let recs = [];
+  try {
+    recs = JSON.parse(readFileSync(join(DATA, 'restrictions.json'), 'utf8'));
+  } catch {
+    console.log('turn restrictions: restrictions.json missing — GWR2 with empty table');
+  }
+  let mapped = 0, unmapped = 0;
+  const allowSets = new Map(); // `${node}:${inEdge}:${inDir}` → {node, inEdge, inDir, outs:Set}
+  for (const r of recs) {
+    const viaIdx = idOf.get(r.viaLon + ',' + r.viaLat);
+    const fsegs = waySegs.get(r.from);
+    const tsegs = waySegs.get(r.to);
+    if (viaIdx === undefined || !fsegs || !tsegs) { unmapped++; continue; }
+    const f = fsegs.find((s) => s.a === viaIdx || s.b === viaIdx);
+    const t = tsegs.find((s) => s.a === viaIdx || s.b === viaIdx);
+    if (!f || !t) { unmapped++; continue; }
+    const inDir = f.b === viaIdx ? 0 : 1;
+    const outDir = t.a === viaIdx ? 0 : 1;
+    if (r.restriction.startsWith('only_')) {
+      const k = viaIdx + ':' + f.e + ':' + inDir;
+      let a = allowSets.get(k);
+      if (!a) allowSets.set(k, (a = { node: viaIdx, inEdge: f.e, inDir, outs: new Set() }));
+      a.outs.add(t.e * 2 + outDir);
+    } else {
+      bans.push({ node: viaIdx, inEdge: f.e, inDir, outEdge: t.e, outDir });
+    }
+    mapped++;
+  }
+  for (const a of allowSets.values()) {
+    for (const out of a.outs) allows.push({ node: a.node, inEdge: a.inEdge, inDir: a.inDir, outEdge: Math.floor(out / 2), outDir: out % 2 });
+  }
+  console.log(`turn restrictions: ${recs.length} input · ${mapped} mapped (${bans.length} ban pairs, ${allows.length} allow pairs) · ${unmapped} unmapped`);
+}
+
 // ---- 6. Serialize binary (block layout — matches parseGraph in src/router.js) ----
+// GWR2 = GWR1 + a turn-restriction table after names:
+//   u32 banCount   × (node u32, inEdge u32, inDir u8, outEdge u32, outDir u8)
+//   u32 allowCount × (node u32, inEdge u32, inDir u8, outEdge u32, outDir u8)
+// (dir 0 = a→b, 1 = b→a; allow rows group per (node,inEdge,inDir) at parse.)
 mkdirSync(OUT, { recursive: true });
 const namesBytes = names.map((s) => new TextEncoder().encode(s));
 const namesTotal = namesBytes.reduce((acc, b) => acc + 2 + b.length, 0);
@@ -181,10 +234,11 @@ const namePad = edgeCount % 2; // keep the u16 name array aligned for the parser
 const headerSize = 4 + 4 + 4 + 8 * 4;
 const nodesSize = nodeCount * 8;
 const edgesSize = edgeCount * 15 + namePad;
-const buf = Buffer.alloc(headerSize + nodesSize + edgesSize + 2 + namesTotal);
+const turnSize = 8 + (bans.length + allows.length) * 14;
+const buf = Buffer.alloc(headerSize + nodesSize + edgesSize + 2 + namesTotal + turnSize);
 
 let o = 0;
-buf.write('GWR1', o); o += 4;
+buf.write('GWR2', o); o += 4;
 buf.writeUInt32LE(nodeCount, o); o += 4;
 buf.writeUInt32LE(edgeCount, o); o += 4;
 buf.writeDoubleLE(BBOX.w, o); o += 8;
@@ -211,6 +265,20 @@ for (const b of namesBytes) {
   buf.writeUInt16LE(b.length, o); o += 2;
   buf.set(b, o); o += b.length;
 }
+
+// Turn table (GWR2).
+const writePairs = (recs) => {
+  buf.writeUInt32LE(recs.length, o); o += 4;
+  for (const r of recs) {
+    buf.writeUInt32LE(r.node, o); o += 4;
+    buf.writeUInt32LE(r.inEdge, o); o += 4;
+    buf.writeUInt8(r.inDir, o); o += 1;
+    buf.writeUInt32LE(r.outEdge, o); o += 4;
+    buf.writeUInt8(r.outDir, o); o += 1;
+  }
+};
+writePairs(bans);
+writePairs(allows);
 
 const binPath = join(OUT, 'wasatch-graph.bin');
 const gzPath = binPath + '.gz';
