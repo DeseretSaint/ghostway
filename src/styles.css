@@ -2175,3 +2175,86 @@ a.primary-btn.feedback-link {
   line-height: 44px;
   padding: 0 18px;
 }
+
+/* ---- Trip dates (Q42): APG range calendar — 44px cells (touch floor) ---- */
+.trip-cal {
+  margin: 8px 0;
+}
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cal-label {
+  font-weight: 700;
+}
+.cal-nav {
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.cal-nav:hover {
+  border-color: var(--line-strong);
+}
+.cal-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.cal-grid th {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 4px 0;
+}
+.cal-cell {
+  text-align: center;
+  padding: 1px;
+}
+.cal-cell.empty {
+  height: 44px;
+}
+.cal-day {
+  width: 100%;
+  min-width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.cal-day:hover {
+  background: var(--bg-2);
+}
+.cal-cell.cal-in {
+  background: rgba(58, 214, 197, 0.12);
+}
+.cal-cell.cal-start .cal-day,
+.cal-cell.cal-end .cal-day {
+  background: var(--accent);
+  color: #0b0f17;
+  font-weight: 700;
+}
+.trip-summary {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+.rc-trip {
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-size: 0.8125rem;
+  color: var(--ink);
+}

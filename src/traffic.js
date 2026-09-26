@@ -185,7 +185,7 @@ export async function loadNationalWzdx(bbox, force = false) {
         if (coords.length < 2) continue;
         const touches = coords.some((c) => c[0] >= w && c[0] <= e && c[1] >= s && c[1] <= n);
         if (!touches) continue;
-        zones.push({ coords, factor: z.f || 0.85, road: z.r || '' });
+        zones.push({ coords, factor: z.f || 0.85, road: z.r || '', start: z.s, end: z.e });
       }
     }
     wzdxCache = { ok: true, zones, asOf: data.asOf, at: Date.now() };
@@ -211,4 +211,22 @@ export function closurePointsNear(zones, bbox, cap = 25) {
     }
   }
   return pts;
+}
+
+// Work zones whose activity window overlaps [startISO, endISO] within a bbox —
+// the trip date-range filter (Q42). Zones with unknown dates are counted
+// (honest: absence of dates is not evidence the zone is inactive).
+export function workZonesInWindow(zones, bbox, startISO, endISO) {
+  const t0 = Date.parse(startISO);
+  const t1 = Date.parse(endISO);
+  if (isNaN(t0) || isNaN(t1)) return [];
+  const [w, s, e, n] = bbox;
+  const out = [];
+  for (const z of zones || []) {
+    const zs = typeof z.start === 'number' ? z.start : -Infinity;
+    const ze = typeof z.end === 'number' ? z.end : Infinity;
+    if (ze < t0 / 1000 || zs > t1 / 1000) continue;
+    if (z.coords.some((c) => c[0] >= w && c[0] <= e && c[1] >= s && c[1] <= n)) out.push(z);
+  }
+  return out;
 }

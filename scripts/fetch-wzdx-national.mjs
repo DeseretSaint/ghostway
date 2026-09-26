@@ -79,6 +79,9 @@ for (const f of feeds) {
         c: thin.map((c) => [Number(c[0].toFixed(5)), Number(c[1].toFixed(5))]),
         f: Number(factor.toFixed(2)),
         r: (p.road_names || []).join('; ').slice(0, 40) || undefined,
+        // Activity window (epoch s) — powers trip date-range filtering (Q42).
+        s: (() => { const t = Date.parse(p.start_date || (p.core_details || {}).start_date || ''); return isNaN(t) ? undefined : Math.round(t / 1000); })(),
+        e: (() => { const t = Date.parse(p.end_date || (p.core_details || {}).end_date || ''); return isNaN(t) ? undefined : Math.round(t / 1000); })(),
       });
       kept++;
     }

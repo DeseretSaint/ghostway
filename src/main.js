@@ -12,7 +12,7 @@ import { loadEngine } from './engine-loader.js';
 // still synchronous (no async-await chain to thread through callers).
 import { regionCovers } from './engine-region.js';
 import { valhallaPlanRoutes } from './valhalla.js';
-import { loadTraffic, loadNationalWzdx, closurePointsNear } from './traffic.js';
+import { loadTraffic, loadNationalWzdx, closurePointsNear, workZonesInWindow } from './traffic.js';
 import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, fmtArrive, haversine, haptic, pointToSegmentM, getUnits, setUnits } from './utils.js';
 import { buildPanel, renderRouteCard, showStatus, clearStatus, showStatusWithRetry } from './ui.js';
 import { icon, stepIconSvg } from './icons.js';
@@ -65,6 +65,8 @@ async function init() {
   app.selectOption = selectOption;
   app.onRoute = onRoute;
   app.applyModeUI = applyModeUI;
+  app.openTripDates = openTripDates;
+  app.updateTripBadge = updateTripBadge;
 
   buildPanel(app);
   wireApp();
@@ -2043,6 +2045,94 @@ function openWhyModal() {
     <p><b>Strict</b> bends over backwards to pass zero cameras. <b>Moderate</b> avoids most while
     keeping the detour sensible. <b>Off</b> takes the fastest road.</p>
   `);
+}
+
+// ---- Trip dates (Q42): date-range window for scheduled work zones ----
+const TRIP_KEY = 'gw-trip-dates';
+
+function getTrip() {
+  try {
+    const t = JSON.parse(localStorage.getItem(TRIP_KEY) || 'null');
+    return t && t.start && t.end ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+async function openTripDates() {
+  const trip = getTrip();
+  openModal(`
+    <h3>Trip dates</h3>
+    <p class="muted small">When are you driving? Ghostway counts work zones scheduled along your route during those dates — so a closure that starts next month won't surprise you today.</p>
+    <div id="tripCal" class="trip-cal"></div>
+    <p id="tripSummary" class="trip-summary" aria-live="polite">${trip ? `Selected: ${trip.start} → ${trip.end}` : 'No dates selected.'}</p>
+    <p>
+      <button id="tripSave" class="primary-btn">Save trip dates</button>
+      <button id="tripClear" class="text-link">Clear</button>
+    </p>
+  `);
+  let draft = trip ? { ...trip } : { start: null, end: null };
+  const summary = $('#tripSummary');
+  const { mountRangeCalendar } = await import('./calendar.js'); // lazy chunk
+  mountRangeCalendar($('#tripCal'), {
+    start: trip ? trip.start : null,
+    end: trip ? trip.end : null,
+    onChange: (r) => {
+      draft = r;
+      summary.textContent =
+        r.start && r.end ? `Selected: ${r.start} → ${r.end}` : r.start ? `Start: ${r.start} — pick an end date.` : 'No dates selected.';
+    },
+  });
+  $('#tripSave').addEventListener('click', () => {
+    if (draft.start && draft.end) {
+      localStorage.setItem(TRIP_KEY, JSON.stringify(draft));
+      showStatus(`Trip dates saved — ${draft.start} → ${draft.end}.`, 'info');
+    } else {
+      localStorage.removeItem(TRIP_KEY);
+      showStatus('Pick a start and an end date to save trip dates.', 'warn');
+    }
+    closeModal();
+    updateTripBadge();
+  });
+  $('#tripClear').addEventListener('click', () => {
+    localStorage.removeItem(TRIP_KEY);
+    closeModal();
+    updateTripBadge();
+  });
+}
+
+// Work zones ACTIVE during the trip window along the planned corridor (the
+// national snapshot carries each zone's WZDx activity dates). The badge is
+// informational — future-dated closures do not change today's routing.
+async function updateTripBadge() {
+  const badge = $('#tripBadge');
+  if (!badge) return;
+  const trip = getTrip();
+  const from = app.state.from;
+  const to = app.state.to;
+  if (!trip || !from || !to) {
+    badge.hidden = true;
+    return;
+  }
+  try {
+    const pad = 0.05;
+    const bbox = [
+      Math.min(from.coords[0], to.coords[0]) - pad,
+      Math.min(from.coords[1], to.coords[1]) - pad,
+      Math.max(from.coords[0], to.coords[0]) + pad,
+      Math.max(from.coords[1], to.coords[1]) + pad,
+    ];
+    const { zones } = await loadNationalWzdx(bbox);
+    const hits = workZonesInWindow(zones, bbox, trip.start, trip.end);
+    const hard = hits.filter((z) => z.factor <= 0.25).length;
+    badge.hidden = false;
+    badge.textContent =
+      hits.length === 0
+        ? `No work zones scheduled on your trip dates (${trip.start} → ${trip.end})`
+        : `${hits.length} work zone${hits.length === 1 ? '' : 's'} active on your trip dates (${trip.start} → ${trip.end})${hard ? ` — ${hard} full closure${hard === 1 ? '' : 's'}` : ''}`;
+  } catch {
+    badge.hidden = true;
+  }
 }
 
 function handleDrawer(action) {

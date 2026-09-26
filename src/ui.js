@@ -335,8 +335,10 @@ function renderEngineCard(app, card, result) {
         ? `${icon('shield', { size: 15 })} Fully clear of known cameras`
         : `${icon('shield', { size: 15 })} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
     }</div>
+    <div class="rc-trip" id="tripBadge" hidden></div>
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     <button id="densityBtn" class="text-link rc-density" type="button" aria-pressed="${!!app.state.compactBanner}" title="Toggle the active-nav banner density (compact = fewer glance elements)">${icon(app.state.compactBanner ? 'densityFull' : 'densityCompact', { size: 14 })} ${app.state.compactBanner ? 'Compact banner' : 'Full banner'}</button>
+    <button id="tripDatesBtn" class="text-link rc-density" type="button" title="Count scheduled work zones on your trip dates">Trip dates</button>
   `;
   card.hidden = false;
 
@@ -370,6 +372,9 @@ function renderEngineCard(app, card, result) {
       density.innerHTML = `${icon(app.state.compactBanner ? 'densityFull' : 'densityCompact', { size: 14 })} ${app.state.compactBanner ? 'Compact banner' : 'Full banner'}`;
     });
   }
+  const tripBtn = $('#tripDatesBtn');
+  if (tripBtn) tripBtn.addEventListener('click', () => app.openTripDates());
+  if (app.updateTripBadge) app.updateTripBadge();
 }
 
 function modeEmoji(mode) {
@@ -412,7 +417,9 @@ function renderLegacyCard(app, card, result) {
       <div class="rc-dist">${fmtDistance(shown.distance)}</div>
     </div>
     <div class="rc-badge">${headline}</div>
+    <div class="rc-trip" id="tripBadge" hidden></div>
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
+    <button id="tripDatesBtn" class="text-link" type="button" title="Count scheduled work zones on your trip dates">Trip dates</button>
     ${steps.length ? `<details class="steps-wrap"><summary>${steps.length} steps</summary><ol class="steps">${stepHtml}</ol></details>` : '<p class="muted small">Turn-by-turn directions unavailable right now.</p>'}
     ${result.applied ? `<button id="showFastest" class="text-link">Show fastest route instead</button>` : ''}
   `;
@@ -432,6 +439,9 @@ function renderLegacyCard(app, card, result) {
     });
   const sn = $('#startNavBtn');
   if (sn) sn.addEventListener('click', () => app.startNav());
+  const tripBtn = $('#tripDatesBtn');
+  if (tripBtn) tripBtn.addEventListener('click', () => app.openTripDates());
+  if (app.updateTripBadge) app.updateTripBadge();
 }
 
 function stepIcon(mod) {
