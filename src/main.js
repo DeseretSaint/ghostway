@@ -17,6 +17,7 @@ import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmt
 import { buildPanel, renderRouteCard, showStatus, clearStatus, showStatusWithRetry } from './ui.js';
 import { icon, stepIconSvg } from './icons.js';
 import { registerSW } from './pwa.js';
+import { getShareUrl, applyShareParams, renderShareQr } from './share.js';
 import { speak, phraseManeuver, phraseArrival, cancel as cancelVoice, toggleVoice, voiceEnabled, setVoiceEnabled } from './voice.js';
 
 const app = {
@@ -195,6 +196,18 @@ async function init() {
   });
 
   showStatus('Tap the locate button to start from your location, or search a destination.', 'info');
+
+  // Deep link (Q119 URL-as-state): a shared ?from=&to=&mode= opens routed.
+  const shared = applyShareParams();
+  if (shared) {
+    if (shared.mode) {
+      app.state.mode = shared.mode;
+      localStorage.setItem('gw-mode', shared.mode);
+    }
+    setEndpoints(shared.from, shared.to);
+    maybeAutoRoute();
+  }
+
   registerSW();
   applyModeUI();
   wireOfflineBanner();
@@ -2035,6 +2048,35 @@ function openWhyModal() {
 function handleDrawer(action) {
   if (action === 'report') {
     openReportModal();
+    return;
+  }
+  if (action === 'share') {
+    if (!app.state.from || !app.state.to) {
+      showStatus('Set a start and destination first — then share the route.', 'info');
+      return;
+    }
+    const url = getShareUrl({ from: app.state.from, to: app.state.to, mode: app.state.mode });
+    openModal(`
+      <h3>Share route</h3>
+      <p class="muted small">The link opens Ghostway with this route ready. The QR is for phone cameras.</p>
+      <canvas id="shareQr" class="share-qr" role="img" aria-label="QR code for the route link"></canvas>
+      <p><input id="shareUrl" class="share-url" readonly value="${escHtml(url)}" aria-label="Route link" /></p>
+      <p><button id="shareCopy" class="primary-btn">Copy link</button>${navigator.share ? ' <button id="shareNative" class="text-link">Share…</button>' : ''}</p>
+    `);
+    renderShareQr($('#shareQr'), url).catch(() => { /* link input still works */ });
+    $('#shareCopy').addEventListener('click', async () => {
+      $('#shareUrl').select();
+      try {
+        await navigator.clipboard.writeText(url);
+        showStatus('Route link copied.', 'info');
+      } catch {
+        showStatus('Could not copy — select the link to copy it manually.', 'warn');
+      }
+    });
+    const native = $('#shareNative');
+    if (native) native.addEventListener('click', () => {
+      navigator.share({ title: 'Ghostway route', url }).catch(() => {});
+    });
     return;
   }
   if (action === 'tour') {

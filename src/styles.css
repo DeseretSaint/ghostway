@@ -2154,3 +2154,17 @@ select.rp-input {
 .sw-toast-dismiss:hover {
   color: var(--ink);
 }
+
+/* ---- Share route (Q121 QR recipe: dark-on-light, quiet zone baked in) ---- */
+.share-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin: 12px auto;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+.share-url {
+  width: 100%;
+  box-sizing: border-box;
+}
