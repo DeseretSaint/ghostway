@@ -100,7 +100,7 @@ summary {
 .maplibregl-ctrl-attrib {
   background: rgba(11, 15, 23, 0.7);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .maplibregl-ctrl-attrib a {
   color: var(--muted);
@@ -114,6 +114,11 @@ summary {
 .maplibregl-ctrl-attrib-button {
   width: 44px !important;
   height: 44px !important;
+}
+/* MapLibre's bundled scale control ships px type (Q122: everything scales
+   with the OS text size). */
+.maplibregl-ctrl-scale {
+  font-size: 0.625rem;
 }
 
 /* Loading spinner (buttons + panels). */
@@ -182,7 +187,7 @@ body {
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
-  font-size: 18px;
+  font-size: 1.125rem;
   cursor: pointer;
   backdrop-filter: blur(8px);
   display: grid;
@@ -210,10 +215,10 @@ body {
 }
 .brand-mark {
   color: var(--accent);
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 .brand-name {
-  font-size: 17px;
+  font-size: 1.0625rem;
   color: var(--ink);
 }
 .safety-pill {
@@ -226,7 +231,7 @@ body {
   border-radius: 999px;
   padding: 8px 12px;
   height: 44px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   backdrop-filter: blur(8px);
   box-shadow: var(--shadow-1);
@@ -300,7 +305,7 @@ body {
   background: none;
   border: none;
   color: var(--ink);
-  font-size: 16px; /* >=16px prevents iOS focus zoom */
+  font-size: 1rem; /* >=16px prevents iOS focus zoom */
   outline: none;
 }
 .field input::placeholder {
@@ -310,7 +315,7 @@ body {
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 20px;
+  font-size: 1.25rem;
   cursor: pointer;
   width: 44px;
   height: 44px;
@@ -351,11 +356,11 @@ body {
   background: var(--bg-2);
 }
 .sugg-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 .sugg-sub {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 /* Recent-places header + icon rows (Maps-parity quick pick). */
@@ -364,7 +369,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 8px 12px 4px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -424,7 +429,7 @@ body {
   background: linear-gradient(90deg, var(--accent), #2bb6a8);
   color: #04130f;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 0.9375rem;
   cursor: pointer;
   letter-spacing: 0.2px;
   display: inline-flex;
@@ -452,7 +457,7 @@ body {
   border: 1px solid var(--line-strong);
   background: var(--bg-2);
   color: var(--ink);
-  font-size: 18px;
+  font-size: 1.125rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -481,7 +486,7 @@ body {
   border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -496,7 +501,7 @@ body {
   color: var(--accent);
 }
 .switch-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 .text-link {
@@ -504,7 +509,7 @@ body {
   border: none;
   color: var(--accent);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin-left: auto;
   text-decoration: underline;
 }
@@ -520,24 +525,24 @@ body {
   gap: 12px;
 }
 .rc-time {
-  font-size: 28px;
+  font-size: 1.75rem;
   font-weight: 800;
   letter-spacing: -0.5px;
   line-height: 1.1;
 }
 .rc-dist {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--muted);
 }
 .rc-arrive {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--accent);
   align-self: center;
 }
 .rc-badge {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--accent);
 }
@@ -545,7 +550,7 @@ body {
   color: #fff;
 }
 .rc-detour {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--accent-2);
   margin-top: 4px;
 }
@@ -560,7 +565,7 @@ body {
   gap: 10px;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .steps li:last-child {
   border-bottom: none;
@@ -569,19 +574,19 @@ body {
   width: 22px;
   text-align: center;
   color: var(--accent);
-  font-size: 16px;
+  font-size: 1rem;
   flex: none;
 }
 .step-dist {
   margin-left: auto;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   flex: none;
 }
 
 .status {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 8px 12px;
   border-radius: var(--r-sm);
   background: var(--bg-2);
@@ -605,7 +610,7 @@ body {
   background: var(--bg-2);
   border: 1px solid var(--accent-2);
   color: var(--accent-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.35;
   text-align: center;
   pointer-events: none;
@@ -625,7 +630,7 @@ body {
   background: var(--bg-2);
   border: 1px solid var(--accent-2);
   color: var(--accent-2);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.35;
   text-align: center;
 }
@@ -633,12 +638,14 @@ body {
   position: absolute;
   top: 0;
   right: 0;
-  width: 36px;
+  width: auto;
+  min-width: 36px;
+  padding: 0 6px;
   height: 36px;
   background: none;
   border: none;
   color: var(--accent-2);
-  font-size: 18px;
+  font-size: 1.125rem;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -662,7 +669,7 @@ body {
   background: var(--bg-2);
   border: 1px solid #d97706;
   color: #d97706;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.35;
   text-align: center;
 }
@@ -675,7 +682,7 @@ body {
   background: none;
   border: none;
   color: #d97706;
-  font-size: 18px;
+  font-size: 1.125rem;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -745,7 +752,7 @@ body {
 }
 .drawer-head h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   background: linear-gradient(90deg, #fff, var(--accent));
   -webkit-background-clip: text;
   background-clip: text;
@@ -765,7 +772,7 @@ body {
   background: none;
   border: none;
   color: var(--ink);
-  font-size: 15px;
+  font-size: 0.9375rem;
   min-height: 44px;
   padding: 10px 12px;
   border-radius: var(--r-sm);
@@ -784,7 +791,7 @@ body {
   bottom: max(16px, env(safe-area-inset-bottom));
   left: max(16px, env(safe-area-inset-left));
   right: max(16px, env(safe-area-inset-right));
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
@@ -814,7 +821,7 @@ body {
 }
 .modal-card h3 {
   margin: 0 0 8px;
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 .modal-close {
   position: absolute;
@@ -827,7 +834,7 @@ body {
   color: var(--muted);
 }
 .small {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .tag {
   color: var(--accent);
@@ -839,10 +846,10 @@ body {
 }
 .warn-text {
   color: var(--danger);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .addr {
-  font-size: 12px;
+  font-size: 0.75rem;
   word-break: break-word;
   background: var(--bg-2);
   padding: 4px 8px;
@@ -955,7 +962,7 @@ details summary {
   border: 1px solid var(--danger);
   background: rgba(255, 77, 109, 0.15);
   color: var(--danger);
-  font-size: 16px;
+  font-size: 1rem;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -968,14 +975,14 @@ details summary {
   min-width: 0;
 }
 .nav-dist {
-  font-size: 32px;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--accent);
   line-height: 1.05;
   letter-spacing: -0.5px;
 }
 .nav-dir {
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -983,13 +990,13 @@ details summary {
 }
 .nav-eta {
   flex: none;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
   text-align: right;
 }
 .nav-arrive {
   flex: none;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--muted);
   text-align: right;
   opacity: 0.85;
@@ -1025,7 +1032,7 @@ details summary {
   padding: 12px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.steps-title { font-weight: 700; font-size: 16px; }
+.steps-title { font-weight: 700; font-size: 1rem; }
 .steps-list { overflow-y: auto; padding: 6px 8px 16px; -webkit-overflow-scrolling: touch; }
 .steps-row {
   display: flex;
@@ -1045,9 +1052,9 @@ details summary {
   place-items: center;
 }
 .steps-row .st { flex: 1; min-width: 0; }
-.steps-row .sd { font-size: 15px; color: var(--ink); }
-.steps-row .sroad { font-size: 13px; color: var(--muted); }
-.steps-row .sdist { flex: none; font-size: 12px; color: var(--muted); text-align: right; min-width: 52px; }
+.steps-row .sd { font-size: 0.9375rem; color: var(--ink); }
+.steps-row .sroad { font-size: 0.8125rem; color: var(--muted); }
+.steps-row .sdist { flex: none; font-size: 0.75rem; color: var(--muted); text-align: right; min-width: 52px; }
 
 /* Avoidance mode switch (Strict / Moderate / Off) */
 .mode-switch {
@@ -1062,7 +1069,7 @@ details summary {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   min-height: 44px;
   padding: 8px 12px;
@@ -1078,7 +1085,7 @@ details summary {
 }
 .engine-status {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--accent);
   text-align: center;
 }
@@ -1102,11 +1109,11 @@ details summary {
   padding: 6px 4px;
   cursor: pointer;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 0.75rem;
   transition: border-color 0.15s, background 0.15s;
 }
 .mode-chip .chip-meta {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: #8b98ad;
 }
 .mode-chip.active {
@@ -1142,7 +1149,7 @@ details summary {
   cursor: pointer;
   text-align: left;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 0.8125rem;
   transition: border-color 0.15s, background 0.15s;
 }
 .route-opt:hover {
@@ -1159,7 +1166,7 @@ details summary {
 }
 .opt-meta {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   /* Badges (cameras + hwy + delay + best-effort) can exceed the button width
      on narrow phones — wrap instead of spilling out (queue item 5). */
   overflow-wrap: anywhere;
@@ -1179,7 +1186,7 @@ details summary {
   background: rgba(58, 214, 197, 0.14);
   border: 1px solid var(--accent);
   color: var(--accent);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 700;
   letter-spacing: 0.2px;
   line-height: 1.4;
@@ -1192,7 +1199,7 @@ details summary {
 .opt-tradeoff {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.2px;
   color: var(--muted, #9aa3b2);
@@ -1212,7 +1219,7 @@ details summary {
   background: rgba(124, 207, 138, 0.16);
   border: 1px solid #7ccf8a;
   color: #5fbf78;
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 700;
   letter-spacing: 0.2px;
   line-height: 1.4;
@@ -1232,7 +1239,7 @@ details summary {
   align-items: center;
   min-height: 44px;
   padding: 0 4px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   list-style: none;
 }
@@ -1269,7 +1276,7 @@ details summary {
   margin-bottom: 4px;
   min-height: 44px;
   padding: 0 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 /* C12 #126: density toggle moved to the planning panel. Subdued link under
    the Start button — visible only at planning time (not while driving). */
@@ -1280,7 +1287,7 @@ details summary {
   margin: 6px 0 0;
   min-height: 36px;
   padding: 0 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
@@ -1296,19 +1303,19 @@ details summary {
   height: 52px;
   display: grid;
   place-items: center;
-  font-size: 30px;
+  font-size: 1.875rem;
   color: var(--accent);
   background: rgba(58, 214, 197, 0.12);
   border: 1px solid rgba(58, 214, 197, 0.4);
   border-radius: var(--r-md);
 }
 .nav-dist {
-  font-size: 32px;
+  font-size: 2rem;
   font-weight: 800;
   letter-spacing: -0.5px;
 }
 .nav-then {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
   margin-top: 2px;
   white-space: nowrap;
@@ -1326,7 +1333,7 @@ details summary {
   background: var(--bg-2);
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   padding: 4px 8px;
   cursor: pointer;
   opacity: 0.6;
@@ -1358,15 +1365,15 @@ details summary {
 }
 .sl-num {
   font-weight: 800;
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 .sl-lbl {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 1px;
 }
 .speed-chip {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--ink);
   background: var(--bg-2);
@@ -1375,7 +1382,7 @@ details summary {
   padding: 2px 7px;
 }
 .arrival-cams {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 /* ---- Iteration 2: motion polish (Workstream D) ---- */
@@ -1409,7 +1416,7 @@ details summary {
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
-  font-size: 16px;
+  font-size: 1rem;
   cursor: pointer;
   box-shadow: var(--shadow-2);
   backdrop-filter: blur(8px);
@@ -1430,7 +1437,7 @@ details summary {
 .map-chip.on { background: var(--accent); color: #0b0f17; border-color: var(--accent); }
 /* During navigation the banner occupies the top — drop the basemap chip below it. */
 #navBanner:not([hidden]) ~ #basemapBtn { top: calc(max(64px, env(safe-area-inset-top) + 58px) + 200px); }
-#unitsBtn { top: calc(max(70px, env(safe-area-inset-top) + 64px) + 156px); font-weight: 600; min-width: 44px; padding: 0 4px; }
+#unitsBtn { top: calc(max(70px, env(safe-area-inset-top) + 64px) + 156px); font-weight: 600; width: auto; min-width: 44px; padding: 0 8px; }
 #navBanner:not([hidden]) ~ #unitsBtn { top: calc(max(64px, env(safe-area-inset-top) + 58px) + 304px); }
 
 /* Custom zoom control (Maps-parity +/−), right edge above the bottom sheet */
@@ -1458,7 +1465,7 @@ details summary {
   background: transparent;
   color: var(--ink);
   cursor: pointer;
-  font-size: 20px;
+  font-size: 1.25rem;
   line-height: 1;
 }
 .zoom-btn + .zoom-btn { border-top: 1px solid var(--line); }
@@ -1485,13 +1492,13 @@ details summary {
   color: var(--ink);
   box-shadow: var(--shadow-2);
   backdrop-filter: blur(10px);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.35;
 }
 .legend-panel[hidden] { display: none; }
 .legend-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin-bottom: 8px;
   color: var(--accent);
 }
@@ -1517,7 +1524,7 @@ details summary {
   margin-top: 9px;
   padding-top: 9px;
   border-top: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 0.75rem;
   opacity: 0.8;
 }
 
@@ -1548,7 +1555,7 @@ details summary {
   border: 1px solid var(--accent);
   background: var(--panel);
   color: var(--accent);
-  font-size: 20px;
+  font-size: 1.25rem;
   cursor: pointer;
   box-shadow: var(--shadow);
   backdrop-filter: blur(8px);
@@ -1582,9 +1589,9 @@ details summary {
 .splash-logo svg { width: 100%; height: 100%; border-radius: 26px; }
 @keyframes splash-pop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .splash-name {
-  font-size: 28px; font-weight: 700; letter-spacing: 0.5px; color: #e8eef7;
+  font-size: 1.75rem; font-weight: 700; letter-spacing: 0.5px; color: #e8eef7;
 }
-.splash-tag { font-size: 13px; color: #8fa0b8; }
+.splash-tag { font-size: 0.8125rem; color: #8fa0b8; }
 .splash-load { display: flex; gap: 8px; margin-top: 16px; }
 .splash-load span {
   width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
@@ -1600,7 +1607,7 @@ details summary {
 /* F1: Splash progress text */
 .splash-text {
   margin-top: 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
   text-align: center;
   min-height: 16px;
@@ -1610,7 +1617,7 @@ details summary {
 .status-retry {
   margin-left: 12px;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--accent);
   background: transparent;
@@ -1638,17 +1645,17 @@ details summary {
   margin-bottom: 4px;
 }
 .rc-empty-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text);
 }
 .rc-empty-sub {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
   line-height: 1.4;
 }
 .rc-empty-note {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
   opacity: 0.8;
   margin-top: 4px;
@@ -1662,7 +1669,7 @@ details summary {
   transform: translateX(-50%);
   z-index: 5;
   padding: 6px 14px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
   background: var(--bg-2);
   border: 1px solid var(--line);
@@ -1703,7 +1710,7 @@ details summary {
   background: none;
   border: none;
   color: #b7c3d4;
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
   padding: 10px 14px;
   min-height: 44px;
@@ -1747,7 +1754,7 @@ details summary {
 }
 /* Typography: larger headings, tighter line-height, stronger hierarchy */
 .ob-step h3 {
-  font-size: 23px;
+  font-size: 1.4375rem;
   line-height: 1.2;
   letter-spacing: -0.015em;
   color: #f0f5fb;
@@ -1755,7 +1762,7 @@ details summary {
   font-weight: 700;
 }
 .ob-step p {
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--muted);
   line-height: 1.5;
   margin: 0;
@@ -1793,7 +1800,7 @@ details summary {
 .ob-actions .primary-btn {
   min-width: 180px;
   height: 52px;
-  font-size: 16px;
+  font-size: 1rem;
   letter-spacing: 0.02em;
   border-radius: 14px;
   box-shadow: 0 6px 24px rgba(58, 214, 197, 0.28);
@@ -1812,7 +1819,7 @@ details summary {
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 @keyframes slide-up {
   from { transform: translateY(28px); opacity: 0; }
@@ -1845,7 +1852,7 @@ details summary {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 8px;
@@ -1856,7 +1863,7 @@ details summary {
 }
 .cam-chip.mission-signal {
   /* Banner compact mode = default; this is the prominent mission readout */
-  font-size: 14px;
+  font-size: 0.875rem;
   padding: 5px 10px;
   border-radius: 10px;
   background: rgba(63, 185, 130, 0.12);
@@ -1874,7 +1881,7 @@ details summary {
 }
 
 /* Report-a-camera form */
-.rp-label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+.rp-label { display: block; font-size: 0.75rem; color: var(--muted); margin: 12px 0 4px; }
 .rp-input {
   width: 100%;
   padding: 10px 12px;
@@ -1882,7 +1889,7 @@ details summary {
   border: 1px solid var(--line);
   border-radius: 10px;
   color: #e8eef7;
-  font-size: 14px;
+  font-size: 0.875rem;
   box-sizing: border-box;
 }
 .rp-input:focus { outline: none; border-color: var(--accent); }
@@ -1905,18 +1912,18 @@ select.rp-input {
    route card / steps list, not the safety-critical surface. */
 .nav-side-row { display: flex; gap: 5px; }
 .nav-banner.compact { padding: 8px 10px; gap: 8px; }
-.nav-banner.compact .nav-icon { width: 38px; height: 38px; font-size: 22px; border-radius: 9px; }
-.nav-banner.compact .nav-dist { font-size: 20px; }
-.nav-banner.compact .nav-dir { font-size: 13px; }
+.nav-banner.compact .nav-icon { width: 38px; height: 38px; font-size: 1.375rem; border-radius: 9px; }
+.nav-banner.compact .nav-dist { font-size: 1.25rem; }
+.nav-banner.compact .nav-dir { font-size: 0.8125rem; }
 .nav-banner.compact .nav-then { display: none; }
 .nav-banner.compact .speed-limit { display: none; }
-.nav-banner.compact .nav-eta { font-size: 12px; }
+.nav-banner.compact .nav-eta { font-size: 0.75rem; }
 .nav-banner.compact .nav-arrive { display: none; }
 .nav-banner.compact .nav-progress { display: none; }
-.nav-banner.compact .speed-chip { font-size: 12px; padding: 1px 7px; }
+.nav-banner.compact .speed-chip { font-size: 0.75rem; padding: 1px 7px; }
 /* Camera chip stays prominent in compact — it's the only data element the
    side column carries, and it's the mission signal. */
-.nav-banner.compact .cam-chip { font-size: 13px; padding: 4px 9px; }
+.nav-banner.compact .cam-chip { font-size: 0.8125rem; padding: 4px 9px; }
 
 /* Maneuver-approach emphasis (slot-B round 65): within ~220 m of the next
    turn the banner goes urgent — warm distance number + softly pulsing
