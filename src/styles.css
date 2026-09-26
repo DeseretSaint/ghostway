@@ -2042,3 +2042,77 @@ select.rp-input {
     color: #78350f;
   }
 }
+
+/* ---- Field mode: sunlight / outdoor legibility (Q143) ----
+   Gated on `prefers-contrast: more` (Chrome/Edge 96, Firefox 101, Safari 14.1+)
+   — NOT a hand-rolled toggle (Q143 rejects manual contrast switches). Direct
+   sun costs ~2:1 luminance through glass reflectance, so the levers are
+   contrast HEADROOM (all text ≥7:1), solid surfaces (alpha + blur over a map
+   reads as glare), thicker boundaries, and heavier readout shapes. Neither
+   theme "wins" in sun — both get a max-contrast variant. */
+@media (prefers-contrast: more) {
+  :root {
+    --bg: #05070c;
+    --bg-2: #0b1019;
+    --panel: #0b1019;
+    --panel-solid: #0b1019;
+    --ink: #ffffff;
+    --muted: #c3cede;
+    --line: #8496b3;
+    --line-strong: #a9bad3;
+    --accent: #4fe8d6;
+    --accent-2: #ffc46b;
+    --danger: #ff7d94;
+    --danger-strong: #ff9daf;
+  }
+  .nav-banner {
+    background: var(--panel-solid);
+    border-width: 2px;
+  }
+  .map-chip,
+  .panel,
+  .drawer,
+  .steps-sheet,
+  .zoom-ctrl,
+  .modal-card,
+  .maplibregl-ctrl-attrib {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--panel-solid);
+    border-width: 2px;
+  }
+  /* Weight/shape survives reflection better than color alone. */
+  .nav-dist,
+  .rc-time,
+  .sl-num {
+    font-weight: 800;
+  }
+  :focus-visible {
+    outline-width: 3px;
+  }
+}
+
+/* Light variant of field mode: near-black on off-white (Q143 palette). */
+@media (prefers-contrast: more) and (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f6f7;
+    --bg-2: #ffffff;
+    --panel: #ffffff;
+    --panel-solid: #ffffff;
+    --ink: #0d0d0d;
+    --muted: #45515f;
+    --line: #5b6675;
+    --line-strong: #3c4654;
+    --accent: #005049;
+    --accent-2: #664000;
+    --danger: #9c0017;
+    --danger-strong: #7a0012;
+  }
+  .cam-chip {
+    color: #005049;
+    background: transparent;
+  }
+  .cam-chip.passed {
+    color: #0d0d0d;
+  }
+}
