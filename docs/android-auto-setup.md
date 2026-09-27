@@ -52,13 +52,17 @@ plus a nightly 04:00 UTC build as a safety net.
 | Install refused on the phone | "Install unknown apps" not granted for your file manager/browser | Grant it once in the install prompt (step 6). |
 | Map or route planning inside the car | By design | AA is a mirror, not a second UI — the phone computes, the car displays. |
 
+## Trip feeds (instrument cluster / HUD)
+
+The car screen also sends `NavigationManager` trip updates (`Trip` with step +
+destination `TravelEstimate`s) on the same phone-state pushes: vehicles that
+support it show the maneuver in the instrument cluster / HUD, and Android Auto
+mutes its own prompts while Ghostway navigates. Best-effort — hosts without
+cluster support ignore it and the turn panel works regardless. The host's stop
+button ends the trip feed (the phone owns navigation).
+
 ## Known follow-ups (documented, not built)
 
-- **Trip / TravelEstimate feeds** (`NavigationManager.updateTrip`): feeds the
-  instrument cluster and lets Android Auto mute its own prompts during Ghostway
-  navigation. API shape: `Trip.Builder.addStep(Step, TravelEstimate)` — the
-  `TravelEstimate` factory still needs signature verification; the turn panel
-  works without it.
 - **MapActionStrip / pan-mode** (car API 2): the phone owns the map; the car
   stays a display surface by design.
 

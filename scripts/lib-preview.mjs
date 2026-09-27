@@ -32,3 +32,21 @@ export async function startPreview({ port = 4173, tries = 40, interval = 500 } =
 function killTree(srv) {
   try { process.kill(-srv.pid, 'SIGTERM'); } catch { /* already gone */ }
 }
+
+// Suites that die mid-flight (top-level await rejections land here) otherwise
+// leak their vite + chromium — on small hosts that RAM-pressure cascade kills
+// every later suite. Close everything before the process exits.
+export function crashGuard(pv, getBrowsers) {
+  for (const sig of ['uncaughtException', 'unhandledRejection']) {
+    process.on(sig, async (e) => {
+      console.error(e);
+      try {
+        for (const b of getBrowsers() || []) {
+          await Promise.race([b.close(), wait(5000)]);
+        }
+      } catch { /* already gone */ }
+      try { pv.kill(); } catch { /* already gone */ }
+      process.exit(1);
+    });
+  }
+}

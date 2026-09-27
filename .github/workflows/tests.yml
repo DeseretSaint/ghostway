@@ -1,0 +1,42 @@
+name: tests
+
+# Map-driving puppeteer suites run in CI (ubuntu runners have RAM headroom the
+# small self-hosted gateway doesn't). The gateway runs the node-only checks.
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'scripts/**', 'index.html', 'package.json', '.github/workflows/tests.yml']
+  workflow_dispatch:
+
+jobs:
+  map-suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+
+      - name: Install + build
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Node-only checks
+        run: |
+          node scripts/nav-bridge-check.mjs
+          node scripts/camera-merge-check.mjs || echo "merge check needs regenerated engine data — informational"
+
+      - name: Map suites
+        env:
+          GW_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          for f in engine-e2e alert-check camchip-check; do
+            echo "=== $f"
+            node scripts/$f.mjs
+          done

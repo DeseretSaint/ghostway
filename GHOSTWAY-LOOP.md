@@ -96,9 +96,13 @@ free, privacy-first.
   Verified API surface (androidx.car.app 1.7.0): Step.Builder() no-arg
   (setCue/setRoad/setManeuver), RoutingInfo.Builder().setCurrentStep(Step,
   Distance), Distance.create(double, UNIT_METERS), Maneuver.Builder(int type).
-  Follow-up (documented, not built): Trip.Builder.addStep(Step, TravelEstimate)
-  for instrument-cluster feeds + AA prompt muting — TravelEstimate factory
-  needs signature verification first.
+  Follow-up CLOSED same day: Trip/TravelEstimate cluster feeds landed
+  (verified API: TravelEstimate.Builder(Distance, DateTimeWithZone) ctor +
+  setRemainingTimeSeconds, Destination.Builder().setName, Trip.Builder
+  .addStep/addDestination/setCurrentRoad/setLoading, NavigationManager
+  .navigationStarted/updateTrip/navigationEnded + all-default
+  NavigationManagerCallback onStopNavigation; wrapped best-effort so the turn
+  panel never depends on it).
 
 ## Improvement Queue
 Research-only runs (locked or warm-deploy) append ideas here. Edit runs pull

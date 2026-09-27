@@ -1,7 +1,7 @@
 // Workstream C alerts: over-speed chip turns red; camera-ahead voice warning
 // fires when the chosen route passes a camera and we approach it.
 import puppeteer from 'puppeteer-core';
-import { startPreview } from './lib-preview.mjs';
+import { startPreview, crashGuard } from './lib-preview.mjs';
 const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
@@ -14,6 +14,7 @@ setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); proce
 const pv = await startPreview();
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
+crashGuard(pv, () => [b]);
 const p = await b.newPage();
 await p.setViewport({ width: 390, height: 844, isMobile: true });
 const errs = [];
@@ -48,14 +49,26 @@ await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 600
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
 async function pick(inputSel, query) {
+  await p.evaluate((sel) => { const el = document.querySelector(sel); if (el) el.value = ''; }, inputSel);
   await p.type(inputSel, query);
   try { await p.waitForFunction(() => !document.querySelector('#suggestions .sugg-loading') && !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'), { timeout: 12000 }); await p.click('#suggestions .sugg:not(.sugg-recent)'); }
   catch { await p.focus(inputSel); await p.keyboard.press('Enter'); }
   await wait(500);
 }
-await pick('#toInput', 'Costco Lehi');
-await pick('#fromInput', 'Pleasant Grove Utah');
-await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 30000 });
+// Photon suggestion timing is network-flaky — a missed suggestion leaves an
+// unresolved endpoint and no route, so retry the WHOLE setup, not one click.
+async function setupRoute(attempt = 0) {
+  await pick('#toInput', 'Costco Lehi');
+  await pick('#fromInput', 'Pleasant Grove Utah');
+  try { await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 30000 }); }
+  catch (e) {
+    if (attempt >= 2) throw e;
+    await p.reload({ waitUntil: 'networkidle2' });
+    await wait(1500);
+    await setupRoute(attempt + 1);
+  }
+}
+await setupRoute();
 
 // Choose the Fastest mode (has 1 camera) so the camera-ahead alert can fire.
 // (#31: mode selection is the .mode-chip row on the route card.)
@@ -67,7 +80,9 @@ const pickedFastest = await p.evaluate(() => {
 });
 console.log('picked Fastest:', pickedFastest);
 await wait(800);
-await p.click('#startNavBtn');
+// evaluate-click: the card re-renders on mode switch, so a stale handle
+// between query and click throws "Node is detached".
+await p.evaluate(() => document.querySelector('#startNavBtn')?.click());
 await wait(600);
 
 // Drive the FULL route at a deliberately high speed (30 m/s ≈ 108 km/h) so

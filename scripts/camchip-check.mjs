@@ -5,7 +5,7 @@
 // Extended (round-28): multi-viewport contrast probe — 320/375/390/430/720/1024/1440
 // × light/dark, asserting AA contrast (≥4.5:1) on #camChip at every viewport.
 import puppeteer from 'puppeteer-core';
-import { startPreview } from './lib-preview.mjs';
+import { startPreview, crashGuard } from './lib-preview.mjs';
 import { VIEWPORT_LADDER, THEMES, AA_THRESHOLD, contrast, parseRgb, compositeOver } from './lib-contrast.mjs';
 
 const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -15,7 +15,9 @@ setTimeout(() => { console.error('WATCHDOG: 420s timeout — force exit'); proce
 const pv = await startPreview();
 
 // --- Phase 1: behavioral test at 390x844 (original) ---
+let b2 = null;
 const b1 = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+crashGuard(pv, () => [b1, b2].filter(Boolean));
 const p = await b1.newPage();
 await p.setViewport({ width: 390, height: 844, isMobile: true });
 const errs = [];
@@ -35,14 +37,26 @@ await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 600
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
 async function pickRoute(page, inputSel, query) {
+  await page.evaluate((sel) => { const el = document.querySelector(sel); if (el) el.value = ''; }, inputSel);
   await page.type(inputSel, query);
   try { await page.waitForFunction(() => !document.querySelector('#suggestions .sugg-loading') && !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'), { timeout: 15000 }); await page.click('#suggestions .sugg:not(.sugg-recent)'); }
   catch { await page.focus(inputSel); await page.keyboard.press('Enter'); }
   await wait(500);
 }
-await pickRoute(p, '#toInput', 'Costco Lehi');
-await pickRoute(p, '#fromInput', 'Pleasant Grove Utah');
-await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 40000 });
+// Photon suggestion timing is network-flaky — retry the whole route setup
+// (a missed suggestion leaves an unresolved endpoint and no route).
+async function setupRoute(page, attempt = 0) {
+  await pickRoute(page, '#toInput', 'Costco Lehi');
+  await pickRoute(page, '#fromInput', 'Pleasant Grove Utah');
+  try { await page.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 40000 }); }
+  catch (e) {
+    if (attempt >= 2) throw e;
+    await page.reload({ waitUntil: 'networkidle2' });
+    await wait(1500);
+    await setupRoute(page, attempt + 1);
+  }
+}
+await setupRoute(p);
 
 await p.evaluate(() => {
   // #31: mode selection is the .mode-chip row on the route card.
@@ -51,7 +65,8 @@ await p.evaluate(() => {
   if (fast) fast.click();
 });
 await wait(600);
-await p.click('#startNavBtn');
+// evaluate-click: the card re-renders on mode switch (stale handle risk).
+await p.evaluate(() => document.querySelector('#startNavBtn')?.click());
 await wait(600);
 
 const samples = await p.evaluate(async () => {
@@ -88,7 +103,7 @@ try { await Promise.race([b1.close(), wait(5000)]); } catch {}
 // --- Phase 2: multi-viewport contrast sweep ---
 console.log('\n=== MULTI-VIEWPORT CONTRAST PROBE ===');
 
-const b2 = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+b2 = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const contrastResults = [];
 let contrastAllPass = true;
 
@@ -120,10 +135,8 @@ for (const vp of VIEWPORT_LADDER) {
       await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
       await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
-      // Pick route
-      await pickRoute(page, '#toInput', 'Costco Lehi');
-      await pickRoute(page, '#fromInput', 'Pleasant Grove Utah');
-      await page.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 40000 });
+      // Pick route (retried — Photon timing is network-flaky)
+      await setupRoute(page);
 
       // Choose Fastest (#31: mode chips on the route card)
       await page.evaluate(() => {
@@ -132,7 +145,7 @@ for (const vp of VIEWPORT_LADDER) {
         if (fast) fast.click();
       });
       await wait(600);
-      await page.click('#startNavBtn');
+      await page.evaluate(() => document.querySelector('#startNavBtn')?.click());
       await wait(1000);
 
       // Measure chip contrast. The chip sits on the nav-banner; both may

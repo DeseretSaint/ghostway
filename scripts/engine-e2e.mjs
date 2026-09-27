@@ -7,7 +7,7 @@
 // 6. Mode switch Strict re-routes and avoids ≥ as many cameras
 // 7. Start navigation banner shows (hit-tested)
 import puppeteer from 'puppeteer-core';
-import { startPreview } from './lib-preview.mjs';
+import { startPreview, crashGuard } from './lib-preview.mjs';
 const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
@@ -20,6 +20,7 @@ setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); proce
 const pv = await startPreview();
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+crashGuard(pv, () => [b]);
 const p = await b.newPage();
 await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 const errs = [];
@@ -105,16 +106,18 @@ await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 
 const engine = await p.evaluate(() => window.__ghostwayEngine);
 console.log('engine status (after route):', engine);
 
-const optCount = await p.evaluate(() => document.querySelectorAll('.route-opt').length);
+// The card shows ONE route (the chosen mode's); mode chips ARE the route
+// options (#31: strict=Clearest, moderate=Balanced, off=Fastest).
+const optCount = await p.evaluate(() => document.querySelectorAll('.mode-chip').length);
 console.log('options shown:', optCount);
 
-// Hit-test an option + click the non-chosen one.
-const optHit = await hit('.route-opt:not(.chosen)');
+// Hit-test a mode chip + click the non-active one (switching the route).
+const optHit = await hit('.mode-chip:not(.active)');
 console.log('option hit:', optHit);
 if (optCount >= 2) {
-  await p.click('.route-opt:not(.chosen)');
+  await p.evaluate(() => document.querySelector('.mode-chip:not(.active)')?.click());
   await wait(800);
-  console.log('after switch, chosen label:', await p.evaluate(() => document.querySelector('.route-opt.chosen .opt-label')?.textContent));
+  console.log('after switch, active chip:', await p.evaluate(() => document.querySelector('.mode-chip.active')?.textContent.trim()));
 }
 
 // Switch to Strict mode and re-route. The mode switch lives behind "Edit route"
@@ -124,13 +127,13 @@ if (editBtn) {
   await editBtn.click();
   await wait(400);
 }
-const strictHit = await hit('.mode-btn[data-mode="strict"]');
+const strictHit = await hit('.mode-chip[data-mode="strict"]');
 console.log('strict btn hit:', strictHit);
-await p.click('.mode-btn[data-mode="strict"]');
-await p.waitForFunction("() => !document.querySelector('#route-card').hidden && document.querySelector('.route-opt.chosen')", { timeout: 30000 });
+await p.evaluate(() => document.querySelector('.mode-chip[data-mode="strict"]')?.click());
+await p.waitForFunction("() => !document.querySelector('#route-card').hidden && document.querySelector('.mode-chip.active')", { timeout: 30000 });
 await wait(1500);
 const afterStrict = await p.evaluate(() => {
-  const opts = [...document.querySelectorAll('.route-opt .opt-meta')].map((e) => e.textContent);
+  const opts = [...document.querySelectorAll('.mode-chip .chip-meta')].map((e) => e.textContent);
   return opts;
 });
 console.log('strict-mode options:', JSON.stringify(afterStrict));

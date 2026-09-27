@@ -26,7 +26,15 @@ import android.os.Looper;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleEventObserver;
 
+import androidx.car.app.navigation.NavigationManager;
+import androidx.car.app.navigation.NavigationManagerCallback;
+import androidx.car.app.model.DateTimeWithZone;
+import androidx.car.app.navigation.model.Destination;
+import androidx.car.app.navigation.model.TravelEstimate;
+import androidx.car.app.navigation.model.Trip;
+
 import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  * Ghostway's Android Auto session (v2): plug-and-play turn-by-turn mirror.
@@ -66,6 +74,8 @@ public class GhostwayCarAppService extends CarAppService {
     /** One screen, two templates — see class docs. */
     static class CarScreen extends Screen implements NavState.Listener {
         private final Handler main = new Handler(Looper.getMainLooper());
+        private boolean navActive = false; // main thread only
+        private boolean callbackSet = false;
 
         CarScreen(CarContext ctx) {
             super(ctx);
@@ -74,6 +84,12 @@ public class GhostwayCarAppService extends CarAppService {
             getLifecycle().addObserver((LifecycleEventObserver) (src, event) -> {
                 if (event == Lifecycle.Event.ON_DESTROY) {
                     NavState.removeListener(CarScreen.this);
+                    if (navActive) {
+                        navActive = false;
+                        try {
+                            getCarContext().getCarService(NavigationManager.class).navigationEnded();
+                        } catch (RuntimeException ignored) { /* host gone */ }
+                    }
                 }
             });
         }
@@ -88,7 +104,86 @@ public class GhostwayCarAppService extends CarAppService {
         @Override
         public Template onGetTemplate() {
             JSONObject s = NavState.snapshot();
-            return (s != null && s.optBoolean("active")) ? navTemplate(s) : homeTemplate(s);
+            boolean active = s != null && s.optBoolean("active");
+            syncNavManager(s, active);
+            return active ? navTemplate(s) : homeTemplate(s);
+        }
+
+        /**
+         * Trip feeds for the instrument cluster / HUD and AA prompt muting
+         * (NavigationManager). Strictly best-effort: the turn panel above never
+         * depends on this, so a host that rejects trip data still gets the
+         * NavigationTemplate. Main thread only (all callers are).
+         */
+        private void syncNavManager(JSONObject s, boolean active) {
+            try {
+                NavigationManager nav = getCarContext().getCarService(NavigationManager.class);
+                if (!callbackSet) {
+                    callbackSet = true;
+                    nav.setNavigationManagerCallback(new NavigationManagerCallback() {
+                        @Override
+                        public void onStopNavigation() {
+                            // Host asked us to stop the trip feed. The phone owns
+                            // navigation — end the feed; the next state push re-syncs.
+                            if (navActive) {
+                                navActive = false;
+                                try { nav.navigationEnded(); } catch (RuntimeException ignored) {}
+                            }
+                        }
+                    });
+                }
+                if (active && !navActive) {
+                    nav.navigationStarted();
+                    navActive = true;
+                }
+                if (!active && navActive) {
+                    nav.navigationEnded();
+                    navActive = false;
+                    return;
+                }
+                if (active) nav.updateTrip(buildTrip(s));
+            } catch (RuntimeException e) {
+                // HostException on non-navigation hosts / IllegalStateException on
+                // odd ordering — the panel still renders without trip feeds.
+            }
+        }
+
+        private static Trip buildTrip(JSONObject s) {
+            double distM = s.optDouble("distM", 0);
+            double remainingM = s.optDouble("remainingM", 0);
+            long etaS = Math.max(0, s.optLong("etaS", 0));
+            String road = s.optString("road", "");
+            String to = s.optString("toLabel", "");
+            // Rough split of the ETA between the maneuver and the destination.
+            long stepEtaS = remainingM > 1 ? Math.round(etaS * (distM / remainingM)) : etaS;
+            Step step = new Step.Builder()
+                .setCue(s.optString("instruction", "Continue"))
+                .setRoad(road)
+                .setManeuver(new Maneuver.Builder(maneuverType(s.optString("modifier", ""))).build())
+                .build();
+            TravelEstimate stepEst = new TravelEstimate.Builder(
+                    Distance.create(distM, Distance.UNIT_METERS), arrival(stepEtaS))
+                .setRemainingTimeSeconds(stepEtaS)
+                .build();
+            Destination dest = new Destination.Builder()
+                .setName(to.isEmpty() ? "Destination" : to)
+                .build();
+            TravelEstimate destEst = new TravelEstimate.Builder(
+                    Distance.create(remainingM, Distance.UNIT_METERS), arrival(etaS))
+                .setRemainingTimeSeconds(etaS)
+                .build();
+            return new Trip.Builder()
+                .addStep(step, stepEst)
+                .addDestination(dest, destEst)
+                .setCurrentRoad(road)
+                .setLoading(false)
+                .build();
+        }
+
+        private static DateTimeWithZone arrival(long etaS) {
+            // Builder(Distance, DateTimeWithZone) is the minSdk-23-safe ctor.
+            return DateTimeWithZone.create(
+                System.currentTimeMillis() + etaS * 1000L, TimeZone.getDefault());
         }
 
         private Template navTemplate(JSONObject s) {
@@ -102,8 +197,8 @@ public class GhostwayCarAppService extends CarAppService {
                 .build();
             // No action strip: NavigationTemplate has no title bar and the
             // host provides system back — one less thing to hit while driving.
-            // Trip/TravelEstimate feeds (instrument cluster, AA's own prompts)
-            // are the documented follow-up in docs/android-auto-setup.md.
+            // Cluster/HUD feeds + AA prompt muting go through NavigationManager
+            // (syncNavManager) on the same state pushes.
             return new NavigationTemplate.Builder()
                 .setNavigationInfo(info)
                 .build();
