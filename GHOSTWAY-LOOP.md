@@ -103,6 +103,13 @@ free, privacy-first.
   .navigationStarted/updateTrip/navigationEnded + all-default
   NavigationManagerCallback onStopNavigation; wrapped best-effort so the turn
   panel never depends on it).
+- 2026-09-26 (test hardening + CI home): closed the last failure classes —
+  engine-e2e's dead .route-opt/.mode-btn selectors (single-route .mode-chip DOM),
+  alert/camchip/engine-e2e stale-handle + Photon pick races (evaluate-clicks +
+  whole-setup retry x3), and the leak cascade (crashGuard in lib-preview closes
+  vite+chromium on crash — a 3.7G gateway can't survive leaked suites). Map
+  suites moved to CI (tests.yml, browser-actions/setup-chrome): engine-e2e +
+  ALERTS PASS + CAM-CHIP PASS (14/14 contrast) + NAV BRIDGE PASS green there.
 
 ## Improvement Queue
 Research-only runs (locked or warm-deploy) append ideas here. Edit runs pull
