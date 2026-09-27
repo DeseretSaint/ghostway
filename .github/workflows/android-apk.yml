@@ -75,7 +75,6 @@ jobs:
           gh release create "$TAG" \
             --title "Ghostway for Android — download & install" \
             --notes-file .github/RELEASE-NOTES-android.md \
-            --prerelease \
             android/app/build/outputs/apk/release/ghostway-android.apk \
             android/app/build/outputs/apk/debug/ghostway-android-debug.apk \
             android/app/build/outputs/apk/SHA256SUMS.txt
