@@ -20,6 +20,12 @@ import androidx.car.app.validation.HostValidator;
 
 import org.json.JSONObject;
 
+import android.os.Handler;
+import android.os.Looper;
+
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleEventObserver;
+
 import java.util.Locale;
 
 /**
@@ -59,20 +65,24 @@ public class GhostwayCarAppService extends CarAppService {
 
     /** One screen, two templates — see class docs. */
     static class CarScreen extends Screen implements NavState.Listener {
+        private final Handler main = new Handler(Looper.getMainLooper());
+
         CarScreen(CarContext ctx) {
             super(ctx);
             NavState.addListener(this);
+            // Screen has no onDestroy() override — unhook through the lifecycle.
+            getLifecycle().addObserver((LifecycleEventObserver) (src, event) -> {
+                if (event == Lifecycle.Event.ON_DESTROY) {
+                    NavState.removeListener(CarScreen.this);
+                }
+            });
         }
 
         @Override
         public void onNavState() {
-            invalidate(); // phone pushed new state — redraw whatever fits
-        }
-
-        @Override
-        public void onDestroy() {
-            NavState.removeListener(this);
-            super.onDestroy();
+            // Pushes arrive on the WebView's JavaBridge thread; Screen is not
+            // thread safe — marshal the redraw onto the main thread.
+            main.post(this::invalidate);
         }
 
         @Override
