@@ -904,20 +904,31 @@ function pickOptionForMode(options) {
   return alt === -1 ? 0 : alt;
 }
 
+let _routing = false;
 async function onRoute() {
-  const from = app.state.from || (await resolveInput('fromInput'));
-  const to = app.state.to || (await resolveInput('toInput'));
-  if (!from || !to) {
-    showStatus('Set a start and a destination.', 'warn');
-    return;
-  }
-  setEndpoints(from, to);
-  showStatus('Routing…', 'info');
-  setGoLoading(true);
+  // Re-entrancy guard: a second plan while one is in flight (double-tap,
+  // auto-route + go button racing) lets the loser's failure path wipe the
+  // winner's rendered card. One plan at a time; the in-flight one has the
+  // same endpoints anyway. (Test race + field report 2026-09-27.)
+  if (_routing) return;
+  _routing = true;
   try {
-    await routeWithFallbacks(from, to);
+    const from = app.state.from || (await resolveInput('fromInput'));
+    const to = app.state.to || (await resolveInput('toInput'));
+    if (!from || !to) {
+      showStatus('Set a start and a destination.', 'warn');
+      return;
+    }
+    setEndpoints(from, to);
+    showStatus('Routing…', 'info');
+    setGoLoading(true);
+    try {
+      await routeWithFallbacks(from, to);
+    } finally {
+      setGoLoading(false);
+    }
   } finally {
-    setGoLoading(false);
+    _routing = false;
   }
 }
 

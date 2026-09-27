@@ -86,7 +86,7 @@ try {
   await p.click('#goBtn');
   await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 90000 });
   await p.waitForFunction(
-    "() => { const c = document.querySelector('#route-card'); return c && !c.hidden && c.querySelectorAll('.mode-chip').length >= 2; }",
+    () => { const c = document.querySelector('#route-card'); return c && !c.hidden && c.querySelectorAll('.mode-chip').length >= 2; },
     { timeout: 60000 }
   );
   await wait(500);
@@ -210,7 +210,7 @@ try {
   await p.click('#goBtn');
   await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 90000 });
   await p.waitForFunction(
-    "() => { const c = document.querySelector('#route-card'); return c && !c.hidden && c.querySelectorAll('.mode-chip').length >= 2; }",
+    () => { const c = document.querySelector('#route-card'); return c && !c.hidden && c.querySelectorAll('.mode-chip').length >= 2; },
     { timeout: 60000 }
   );
   await wait(500);

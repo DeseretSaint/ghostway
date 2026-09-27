@@ -127,10 +127,17 @@ export class CameraStore {
       node["deflock"]({s},{w},{n},{e});
     );out center 300;`.replace(/\{(\w)\}/g, (_, k) => ({ w, s, e, n }[k]));
     try {
+      // Bounded: planning must never stall on a slow Overpass mirror (tiles +
+      // snapshot cover the pool meanwhile — the badge can't be blinder than
+      // the map, and the map doesn't wait for Overpass either).
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 6000);
       const res = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
         body: 'data=' + encodeURIComponent(q),
+        signal: ac.signal,
       });
+      clearTimeout(timer);
       if (!res.ok) throw new Error('overpass ' + res.status);
       const j = await res.json();
       const feats = j.elements

@@ -93,9 +93,11 @@ async function routeSetup(attempt = 0) {
     return vis;
   });
   try {
+    // Function-form (NOT a string: `"() => …"` evaluates to a truthy function
+    // object and passes instantly!). Routed AND a rendered card.
     await p.waitForFunction(
-      "() => !document.querySelector('#route-card').hidden || document.querySelector('#status')?.textContent?.includes('failed')",
-      { timeout: 40000 }
+      () => window.__ghostwayDebug?.routed === true && document.querySelectorAll('.mode-chip').length >= 1,
+      { timeout: 45000 }
     );
   } catch (e) {
     if (attempt >= 2) throw e;
@@ -147,8 +149,13 @@ if (editBtn) {
 const strictHit = await hit('.mode-chip[data-mode="strict"]');
 console.log('strict btn hit:', strictHit);
 await p.evaluate(() => document.querySelector('.mode-chip[data-mode="strict"]')?.click());
-await p.waitForFunction("() => !document.querySelector('#route-card').hidden && document.querySelector('.mode-chip.active')", { timeout: 30000 });
-await wait(1500);
+// The re-route is async (chip handler doesn't await it) — wait for the card to
+// SETTLE on a rendered route (chips + start button present) before reading it.
+await p.waitForFunction(
+  () => !!document.querySelector('#startNavBtn') && document.querySelectorAll('.mode-chip .chip-meta').length >= 1 && !!document.querySelector('.mode-chip.active'),
+  { timeout: 30000 }
+);
+await wait(400);
 const afterStrict = await p.evaluate(() => {
   const opts = [...document.querySelectorAll('.mode-chip .chip-meta')].map((e) => e.textContent);
   return opts;
