@@ -37,7 +37,7 @@ jobs:
         env:
           GW_CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
         run: |
-          for f in engine-e2e alert-check camchip-check flock-layer-check; do
+          for f in engine-e2e alert-check camchip-check flock-layer-check camera-truth-check; do
             echo "=== $f"
             node scripts/$f.mjs
           done

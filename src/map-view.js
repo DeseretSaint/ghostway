@@ -479,6 +479,14 @@ export class MapView {
           })),
         };
         window.__gwFlockCount = this._flockData.features.length; // test/debug hook
+        // Road-relevant devices join the routing camera pool — anything the map
+        // shows must be countable by the badge (the pool unions these).
+        globalThis.__gwFlockExtras = this._flockData.features.filter((f) => f.properties.road === 1)
+          .map((f) => ({
+            type: 'Feature',
+            geometry: f.geometry,
+            properties: { brand: 'Flock Safety', source: 'flocksurveillance.org', direction: typeof f.properties.r === 'number' ? f.properties.r : null },
+          }));
       } catch (e) {
         console.warn('flock device layer failed', e.message);
         return;

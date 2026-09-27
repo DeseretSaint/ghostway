@@ -856,22 +856,19 @@ function communityCams() {
 // DeFlock camera list for the routing engine's post-route corridor check.
 // The shipped fallback snapshot covers the Wasatch box; caches after first
 // load. Fails soft to null (corridor check skipped, edge bytes still apply).
-let _deflockCamList = null;
 async function deflockCamsNear(fromC, toC) {
   try {
-    if (!_deflockCamList) {
-      const r = await fetch(CONFIG.cameraGeojson, { cache: 'no-store' });
-      if (!r.ok) return null;
-      const data = await r.json();
-      _deflockCamList = (data.features || [])
-        .map((f) => ({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], direction: f.properties.direction ?? null }))
-        .filter((c) => Number.isFinite(c.lon) && Number.isFinite(c.lat));
-    }
-    // Filter to the corridor bbox (small pad) so the per-segment scan stays cheap.
+    // The unified camera pool (DeFlock tiles ∪ Overpass ∪ snapshot ∪ loaded
+    // Flock road devices) — the same source the map draws and the badge counts.
     const pad = 0.05;
-    const w = Math.min(fromC[0], toC[0]) - pad, e = Math.max(fromC[0], toC[0]) + pad;
-    const s = Math.min(fromC[1], toC[1]) - pad, n = Math.max(fromC[1], toC[1]) + pad;
-    return _deflockCamList.filter((c) => c.lon >= w && c.lon <= e && c.lat >= s && c.lat <= n);
+    const bbox = [
+      Math.min(fromC[0], toC[0]) - pad, Math.min(fromC[1], toC[1]) - pad,
+      Math.max(fromC[0], toC[0]) + pad, Math.max(fromC[1], toC[1]) + pad,
+    ];
+    const pool = await app.cameras.getCameras(bbox);
+    return pool
+      .map((f) => ({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], direction: f.properties?.direction ?? null }))
+      .filter((c) => Number.isFinite(c.lon) && Number.isFinite(c.lat));
   } catch {
     return null;
   }

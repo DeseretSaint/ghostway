@@ -1,9 +1,13 @@
 import { CONFIG } from './config.js';
 import { pointToSegmentM } from './utils.js';
+import { tileCameras } from './camera-tiles.js';
 
-// OpenStreetMap Overpass + DeFlock fallback for finding cameras along a route.
-// The live map uses DeFlock vector tiles; this module is the routing backend's
-// view of cameras (it needs raw coordinates, not tiles).
+// Camera data hub for routing: the pool is the UNION of every source the map
+// can show — DeFlock live tiles (the map's own source), Overpass/OSM, the
+// bundled snapshot, and any loaded Flock research road devices. The badge must
+// never be blinder than the map (Keaton field report 2026-09-26/27: "it claims
+// camera data unavailable despite routing past a camera the map admits is
+// there").
 //
 // Strategy: fetch a camera pool for a bbox once (cached), then the router
 // iterates — re-routing around the cameras that are still on the path until it
@@ -157,14 +161,37 @@ export class CameraStore {
     });
   }
 
-  // Returns the (cached) camera pool for a bbox, used by the iterative router.
-  // Checks in-memory → localStorage → network (overpass/fallback) in order.
+  // Returns the (cached) camera pool for a bbox: Overpass ∪ snapshot ∪ DeFlock
+  // tiles (the map's own source) ∪ loaded Flock road devices. Empty results
+  // are NEVER cached — a failed fetch must not poison the pool for a week.
   async getCameras(bbox) {
     const key = bbox.join(',');
     if (this._poolCache.has(key)) return this._poolCache.get(key);
-    const feats = await this._overpass(bbox);
-    this._poolCache.set(key, feats);
-    this._persist(); // persist after every new fetch
+    const union = new Map(); // dedupe key -> feature
+    const add = (feats) => {
+      for (const f of feats) {
+        const c = f.geometry.coordinates;
+        const k = c[0].toFixed(4) + ',' + c[1].toFixed(4); // ~11 m grid
+        if (!union.has(k)) union.set(k, f);
+      }
+    };
+    const results = await Promise.all([
+      this._overpass(bbox).catch(() => []),
+      tileCameras(bbox).catch(() => []),
+    ]);
+    add(results[0]);
+    add(results[1]);
+    // Bundled snapshot: cheap and offline-proof — always union it.
+    const fb = await this._ensureFallback();
+    if (fb) add(this._inBox(fb.features, bbox));
+    // Loaded Flock research road devices (visible on the map ⇒ countable).
+    const extras = globalThis.__gwFlockExtras;
+    if (Array.isArray(extras)) add(this._inBox(extras, bbox));
+    const feats = [...union.values()];
+    if (feats.length) {
+      this._poolCache.set(key, feats);
+      this._persist(); // persist after every new fetch
+    }
     return feats;
   }
 

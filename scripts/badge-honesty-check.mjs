@@ -23,6 +23,12 @@ const checks = {
   // start field, not only the top-right corner.
   inlineLocate: /fromLocateBtn/.test(readFileSync('index.html', 'utf8'))
     && /fromLocateBtn'\)\.addEventListener\('click', useMyLocation\)/.test(main),
+  // Source-of-truth fix (field report 2026-09-27): the counter reads the same
+  // DeFlock tiles the map draws, and never caches empty failed fetches.
+  tileSourceWired: /tileCameras/.test(readFileSync('src/camera-store.js', 'utf8'))
+    && /camera-tiles/.test(readFileSync('src/camera-store.js', 'utf8'))
+    && /__gwFlockExtras/.test(readFileSync('src/camera-store.js', 'utf8')),
+  noEmptyPoolPoison: !/this\._poolCache\.set\(key, feats\);\s*this\._persist\(\); \/\/ persist after every new fetch\s*return feats;\s*\}\s*\/\/ Cameras from an in-memory list/.test(readFileSync('src/camera-store.js', 'utf8')),
 };
 
 // Behavioral: badgeHtml itself (pure function).
