@@ -43,7 +43,7 @@ async function main() {
       await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: vp.deviceScaleFactor });
       await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
 
-      await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+      await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
       await wait(2600);
 
       // Dismiss splash/onboarding if present.

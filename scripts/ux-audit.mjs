@@ -16,7 +16,7 @@ async function main() {
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   await wait(2500);
   await page.evaluate(() => { const ob = document.querySelector('#obSkip'); if (ob) ob.click(); const sp = document.querySelector('#splash'); if (sp) sp.remove(); });
 

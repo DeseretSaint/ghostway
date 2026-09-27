@@ -22,7 +22,7 @@ try {
   p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 
   await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await p.goto(preview.url, { waitUntil: 'networkidle2', timeout: 90000 });
+  await p.goto(preview.url, { waitUntil: 'load', timeout: 90000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
   // Record every #status text change. Capture the text from the mutation's

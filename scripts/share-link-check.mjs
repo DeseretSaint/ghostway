@@ -16,10 +16,10 @@ try {
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 
   // 1. Deep link: PG → Costco Lehi, moderate mode — must open routed.
-  await page.goto(`${url}?from=-111.759,40.364&to=-111.834,40.394&mode=moderate`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(`${url}?from=-111.759,40.364&to=-111.834,40.394&mode=moderate`, { waitUntil: 'load', timeout: 30000 });
   await page.waitForSelector('#splash.leaving, #topbar', { timeout: 15000 });
   await page.evaluate(() => localStorage.setItem('gw-onboarded', '1'));
-  await page.reload({ waitUntil: 'networkidle2' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('#startNavBtn', { visible: true, timeout: 60000 }); // engine planned the route
   const deep = await page.evaluate(() => ({
     from: document.getElementById('fromInput').value,
@@ -65,7 +65,7 @@ try {
   }));
 
   // 4. Hostile/invalid params are ignored (no crash, no phantom endpoints).
-  await page.goto(`${url}?from=banana&to=999,999&mode=<script>`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(`${url}?from=banana&to=999,999&mode=<script>`, { waitUntil: 'load', timeout: 30000 });
   await page.waitForSelector('#topbar', { timeout: 15000 });
   const hostile = await page.evaluate(() => ({
     from: document.getElementById('fromInput').value,

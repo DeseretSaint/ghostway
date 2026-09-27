@@ -45,7 +45,7 @@ async function main() {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
 
-    await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+    await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
     await wait(2600); // map + camera tiles
 
     // Dismiss splash/onboarding if present.

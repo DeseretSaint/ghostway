@@ -29,6 +29,16 @@ const checks = {
     && /camera-tiles/.test(readFileSync('src/camera-store.js', 'utf8'))
     && /__gwFlockExtras/.test(readFileSync('src/camera-store.js', 'utf8')),
   noEmptyPoolPoison: !/this\._poolCache\.set\(key, feats\);\s*this\._persist\(\); \/\/ persist after every new fetch\s*return feats;\s*\}\s*\/\/ Cameras from an in-memory list/.test(readFileSync('src/camera-store.js', 'utf8')),
+  // Third report: the complete corpus downloads at startup and feeds the pool.
+  corpusWired: /ensureCorpus/.test(readFileSync('src/camera-store.js', 'utf8'))
+    && /allCamerasUrl/.test(readFileSync('src/config.js', 'utf8'))
+    && /ensureCorpus\(\)\.catch/.test(main),
+  // UX round: recenter button, working avoidance pill, encoded feedback link,
+  // in-app updates (no GitHub visit).
+  recenterNotDuplicate: /gpsBtn'\)\.addEventListener\('click', \(\) => \{/.test(main),
+  pillWired: /safety-pill'\)\.addEventListener\('click'/.test(main),
+  feedbackEncoded: /issues\/new\?title=/.test(main),
+  updatesInApp: /checkForUpdates/.test(main) && /data-action="updates"/.test(readFileSync('index.html', 'utf8')),
 };
 
 // Behavioral: badgeHtml itself (pure function).

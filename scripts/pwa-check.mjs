@@ -22,7 +22,7 @@ async function main() {
   const logs = [];
   page.on('console', (m) => logs.push(`${m.type()}: ${m.text()}`));
 
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   await wait(2000);
 
   // 1) Manifest is fetchable + parseable.

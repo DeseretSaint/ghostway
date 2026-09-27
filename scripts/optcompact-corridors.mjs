@@ -17,7 +17,7 @@ const VIEWPORTS = [
 ];
 
 async function captureCorridor(page, vp, from, to, label) {
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   await wait(2600);
 
   await page.evaluate(() => {

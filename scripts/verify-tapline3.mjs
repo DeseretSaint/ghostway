@@ -6,7 +6,7 @@ const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args
 const p = await b.newPage();
 await p.setViewport({ width: 390, height: 844, isMobile: true });
 await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded','1'); localStorage.setItem('gw-mode','moderate'); });
-await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 async function setField(sel, q) {
   await p.focus(sel);

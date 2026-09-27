@@ -74,9 +74,15 @@ async function init() {
   await app.map.ready();
   // Apply the rehydrated camera-layer state now that the source is ready.
   app.map.setCameraLayerVisible(app._camLayerOn);
-  // Flock full-dataset layer (opt-in — ~7 MB research data; default OFF).
-  app._flockOn = localStorage.getItem('gw-flock-layer') === '1';
-  if (app._flockOn) app.map.setFlockVisible(true);
+  // Full camera database layer: ON by default (the corpus ships with the app —
+  // these toggles are pure visibility, there is nothing gated to download).
+  app._flockOn = localStorage.getItem('gw-flock-layer') !== '0';
+  app.map.setFlockVisible(!!app._flockOn);
+  // The complete camera database loads once at startup — the route badge is
+  // never blinder than the map (Keaton field report 2026-09-27).
+  app.cameras.ensureCorpus().catch(() => {});
+  // Android shell: silently offer a newer build in-app when one ships.
+  if (window.AABridge) setTimeout(() => checkForUpdates(false), 4000);
   // Reflect layer state in the Layers sheet checkboxes at boot.
   const lyrCam = $('#lyrCameras'); if (lyrCam) lyrCam.checked = app._camLayerOn;
   const lyrFlock = $('#lyrFlock'); if (lyrFlock) lyrFlock.checked = !!app._flockOn;
@@ -440,7 +446,26 @@ function wireApp() {
   $('#modalClose').addEventListener('click', closeModal);
   document.addEventListener('keydown', trapModalFocus);
 
-  $('#gpsBtn').addEventListener('click', useMyLocation);
+  // Top-right button = Maps-parity "center on my location" (route planning's
+  // "use my location" lives inside the start field — this one only moves the map).
+  $('#gpsBtn').addEventListener('click', () => {
+    if (app.state.userLoc) {
+      app.map.fitTo([app.state.userLoc], true);
+    } else {
+      useMyLocation(); // no fix yet — get one (it also centers)
+    }
+  });
+  // The avoidance pill is a real control now (it read as a dead green dot):
+  // tap = cycle Strict → Balanced → Fastest, re-routing if a route exists.
+  $('#safety-pill').addEventListener('click', () => {
+    const order = ['strict', 'moderate', 'off'];
+    app.state.mode = order[(order.indexOf(app.state.mode) + 1) % order.length];
+    app.state.avoid = app.state.mode !== 'off';
+    try { localStorage.setItem('gw-mode', app.state.mode); } catch {}
+    applyModeUI();
+    showStatus(`Mode: ${app.state.mode === 'strict' ? 'Clearest (strict avoidance)' : app.state.mode === 'moderate' ? 'Balanced (avoid cameras)' : 'Fastest (no avoidance)'}`, 'info');
+    if (app.state.from && app.state.to) onRoute();
+  });
   $('#recenterBtn').addEventListener('click', () => setFollow(true));
   $('#zoomInBtn').addEventListener('click', () => app.map.zoomIn());
   $('#zoomOutBtn').addEventListener('click', () => app.map.zoomOut());
@@ -769,6 +794,46 @@ function updateRouteCardInPlace(app, prevOptions, prevChosen, nextOptions, nextC
     const meta = card.querySelector(`.mode-chip[data-mode="${o.mode}"] .chip-meta`);
     if (meta) meta.textContent = `${fmtDuration(o.duration)} · ${o.cameras || 0} cam`;
   }
+}
+
+// ---- In-app updates (no app store) ----
+// Android shell: compare this build's commit (baked by Vite) against the
+// android-latest release's build marker (appended by android-apk.yml) and
+// offer the APK download in-app — no GitHub visit needed. Web/PWA: the
+// service worker toast covers content; this just pokes it to check now.
+async function checkForUpdates(manual = false) {
+  const apk = `${CONFIG.github}/releases/download/android-latest/ghostway-android.apk`;
+  if (window.AABridge) {
+    try {
+      if (manual) showStatus('Checking for updates…', 'info');
+      const res = await fetch('https://api.github.com/repos/DeseretSaint/ghostway/releases/tags/android-latest');
+      const rel = await res.json();
+      const m = /build: commit ([0-9a-f]{7,})/i.exec(rel.body || '');
+      const remote = m && m[1];
+      const mine = typeof __GW_COMMIT__ !== 'undefined' ? __GW_COMMIT__ : '';
+      if (remote && mine && !remote.startsWith(mine) && !mine.startsWith(remote)) {
+        openModal(`
+          <h3>Update available</h3>
+          <p>A newer Ghostway build is ready (<code>${escHtml(remote)}</code> — you have <code>${escHtml(mine)}</code>).</p>
+          <p><a class="primary-btn" id="dlUpdate" href="${apk}">Download &amp; install</a>
+             <button class="text-link" id="laterUpdate">Later</button></p>
+          <p class="muted small">Android will ask you to confirm the install — same app, your settings stay.</p>
+        `);
+        $('#laterUpdate').addEventListener('click', closeModal);
+        return;
+      }
+    } catch (e) {
+      if (manual) showStatus('Couldn’t check right now — try again later.', 'warn');
+      return;
+    }
+    if (manual) showStatus('You’re on the latest version.', 'info');
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    if (reg) await reg.update();
+  } catch { /* offline */ }
+  if (manual) showStatus('You’re on the latest version.', 'info');
 }
 
 function geoErrorCopy(err) {
@@ -2198,7 +2263,7 @@ function handleDrawer(action) {
     const body = encodeURIComponent(
       '**Describe the bug or feature request**\n…\n\n**What happened instead (bugs)**\n…\n\n---\n_Sent from the Ghostway app feedback link — no personal data attached._'
     );
-    const href = `${CONFIG.github}/issues/new?body=${body}`;
+    const href = `${CONFIG.github}/issues/new?title=${encodeURIComponent('Feedback: ')}&body=${body}`;
     openModal(`
       <h3>Send feedback</h3>
       <p>Ghostway has no accounts and no server — feedback goes straight to the public issue tracker.</p>
@@ -2206,6 +2271,10 @@ function handleDrawer(action) {
       <p class="muted small">The issue body is prefilled and carries no personal data — review it before submitting (the tracker itself needs a GitHub account).</p>
       <p><a class="text-link" href="${CONFIG.github}/issues" target="_blank" rel="noopener">Browse existing issues</a></p>
     `);
+    return;
+  }
+  if (action === 'updates') {
+    checkForUpdates(true);
     return;
   }
   if (action === 'about') {

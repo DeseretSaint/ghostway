@@ -32,7 +32,7 @@ async function main() {
     localStorage.setItem('gw-onboarded', '1');
     localStorage.setItem('gw-units', 'mi');
   });
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   try {
     await page.waitForFunction(() => { const s = document.querySelector('#splash'); return !s || s.hidden; }, { timeout: 8000 });
   } catch {}

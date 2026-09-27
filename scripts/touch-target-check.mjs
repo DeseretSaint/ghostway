@@ -10,7 +10,7 @@ const page = await browser.newPage();
 await page.setViewport({ width: 390, height: 844 });
 const errors = [];
 page.on('pageerror', e => { const s = String(e); if (!s.includes('webglcontextcreationerror')) errors.push(s); });
-await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 await page.waitForFunction(() => !document.querySelector('#splash') || getComputedStyle(document.querySelector('#splash')).opacity === '0' || document.querySelector('#splash').hidden, { timeout: 15000 }).catch(() => {});
 
 // Reveal the clear buttons by typing into both fields.

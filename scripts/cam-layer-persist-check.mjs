@@ -25,7 +25,7 @@ try {
   await p.evaluateOnNewDocument(() => {
     localStorage.setItem('gw-onboarded', '1');
   });
-  await p.goto(preview.url, { waitUntil: 'networkidle2', timeout: 60000 });
+  await p.goto(preview.url, { waitUntil: 'load', timeout: 60000 });
   await p.evaluate(() => localStorage.removeItem('gw-cam-layer'));
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
   await p.waitForSelector('#camLayerBtn', { timeout: 10000 });
@@ -53,7 +53,7 @@ try {
   console.log('after toggle OFF:', JSON.stringify(afterOff));
 
   // --- Reload: should persist OFF ---
-  await p.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+  await p.reload({ waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
   await p.waitForSelector('#camLayerBtn', { timeout: 10000 });
   await p.waitForFunction(() => { const s = document.querySelector('#splash'); return !s || s.hidden; }, { timeout: 20000 });
@@ -80,7 +80,7 @@ try {
   console.log('after toggle ON:', JSON.stringify(afterOn));
 
   // --- Reload: should persist ON ---
-  await p.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+  await p.reload({ waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
   await p.waitForSelector('#camLayerBtn', { timeout: 10000 });
   await p.waitForFunction(() => { const s = document.querySelector('#splash'); return !s || s.hidden; }, { timeout: 20000 });

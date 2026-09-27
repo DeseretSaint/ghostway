@@ -19,10 +19,10 @@ try {
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 
   // 1. Clean boot: SW registers, NO toast.
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForSelector('#splash.leaving, #topbar', { timeout: 15000 });
   await page.evaluate(() => localStorage.setItem('gw-onboarded', '1'));
-  await page.reload({ waitUntil: 'networkidle2' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => navigator.serviceWorker.controller !== undefined && !!navigator.serviceWorker.controller, { timeout: 20000 });
   const bootToast = await page.evaluate(() => !!document.getElementById('swUpdateToast'));
 
@@ -51,13 +51,13 @@ try {
   }));
 
   // 4. Next launch surfaces the deferred update via reg.waiting.
-  await page.reload({ waitUntil: 'networkidle2' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('#swUpdateToast', { visible: true, timeout: 15000 });
 
   // 5. Refresh path: SKIP_WAITING → controllerchange → exactly one reload.
   await page.evaluate(() => { window.__marker = 'pre'; });
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 }),
+    page.waitForNavigation({ waitUntil: 'load', timeout: 20000 }),
     page.click('#swUpdateRefresh'),
   ]);
   await page.waitForSelector('#topbar', { timeout: 15000 });
@@ -73,7 +73,7 @@ try {
     const c = await caches.open('ghostway-v27-tiles');
     await c.put('/junk-cache-probe', new Response('junk'));
   });
-  await page.goto(`${url}?sw-reset=1`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(`${url}?sw-reset=1`, { waitUntil: 'load', timeout: 30000 });
   await page.waitForSelector('#topbar', { timeout: 15000 });
   await page.waitForFunction(() => !location.search, { timeout: 15000 }); // hatch stripped the param
   await new Promise(r => setTimeout(r, 800));

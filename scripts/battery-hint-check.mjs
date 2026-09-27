@@ -45,7 +45,7 @@ await p.evaluateOnNewDocument(() => {
   window.__stubBatteryListeners = listeners;
 });
 
-await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 await wait(800);
 
@@ -137,9 +137,9 @@ async function measureBatteryContrast(browser, vp, theme) {
       deviceScaleFactor: vp.isMobile ? 2 : 1,
     });
     await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
-    await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+    await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
     await page.evaluate(() => localStorage.clear());
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+    await page.reload({ waitUntil: 'load', timeout: 60000 });
     await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
     // Stub getBattery for low battery to trigger the hint.
@@ -150,7 +150,7 @@ async function measureBatteryContrast(browser, vp, theme) {
       };
       Object.defineProperty(navigator, 'getBattery', { value: () => Promise.resolve(battery), configurable: true });
     });
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+    await page.reload({ waitUntil: 'load', timeout: 60000 });
     await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
     await wait(1000);
 

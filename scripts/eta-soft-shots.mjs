@@ -33,7 +33,7 @@ for (const vp of viewports) {
   p.on('pageerror', (e) => console.error(`[${vp.name}] pageerror`, e.message));
   await p.setViewport(vp);
   await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await p.goto(APP_URL, { waitUntil: 'networkidle2', timeout: 60000 });
+  await p.goto(APP_URL, { waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
   // Drive PG → Costco Lehi (same as eta-recompute-check.mjs)

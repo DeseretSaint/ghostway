@@ -47,10 +47,10 @@ async function main() {
     window.__stubBattery = battery;
   });
 
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
   // Clear any previously-set dismissal (first run only — won't re-run on reload).
   await page.evaluate(() => localStorage.removeItem('gw-battery-dismissed'));
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+  await page.reload({ waitUntil: 'load', timeout: 60000 });
   await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 }).catch(() => {});
   await wait(800);
 
@@ -80,7 +80,7 @@ async function main() {
   });
 
   // Reload the page; hint should stay hidden because the dismissal flag is set.
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+  await page.reload({ waitUntil: 'load', timeout: 60000 });
   await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 }).catch(() => {});
   await wait(800);
 

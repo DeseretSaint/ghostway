@@ -22,7 +22,7 @@ async function main() {
   page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
   // Returning user: skip first-run onboarding overlay.
   await page.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   try {
     await page.waitForFunction(() => {
       const s = document.querySelector('#splash');
@@ -117,7 +117,7 @@ async function main() {
   page2.on('pageerror', (e) => errs.push(e.message));
   page2.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
   await page2.evaluateOnNewDocument(() => { localStorage.removeItem('gw-onboarded'); });
-  await page2.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page2.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   try {
     await page2.waitForFunction(() => {
       const ob = document.querySelector('#onboarding');

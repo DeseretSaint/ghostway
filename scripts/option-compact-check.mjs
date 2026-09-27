@@ -37,7 +37,7 @@ try {
 
   await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await p.goto(preview.url, { waitUntil: 'networkidle2', timeout: 60000 });
+  await p.goto(preview.url, { waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
   // --- Corridor 1: Lehi (0-camera Clearest option → "Fully clear" badge) ---
@@ -97,7 +97,7 @@ try {
   must(lehi.fullyClearBadge, `(c) "Fully clear of known cameras" badge rendered (0-cams Strict option)`);
 
   // --- Corridor 2: BYU (Strict falls back → chip meta still honest) ---
-  await p.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+  await p.reload({ waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
   await p.evaluate(() => {
     const app = window.__gw;

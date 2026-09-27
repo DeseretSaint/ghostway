@@ -45,7 +45,7 @@ await p.evaluateOnNewDocument(() => {
   window.SpeechSynthesisUtterance = FakeUtterance;
 });
 
-await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
 async function pick(inputSel, query) {
@@ -63,7 +63,7 @@ async function setupRoute(attempt = 0) {
   try { await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 30000 }); }
   catch (e) {
     if (attempt >= 2) throw e;
-    await p.reload({ waitUntil: 'networkidle2' });
+    await p.reload({ waitUntil: 'load' });
     await wait(1500);
     await setupRoute(attempt + 1);
   }

@@ -56,7 +56,7 @@ async function runOne(viewport, label) {
   };
   page.on('request', onRequest);
 
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   try {
     await page.waitForFunction(() => {
       const s = document.querySelector('#splash');

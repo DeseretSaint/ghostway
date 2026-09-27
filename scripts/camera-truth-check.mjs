@@ -7,7 +7,7 @@
 import { startPreview, crashGuard } from './lib-preview.mjs';
 import puppeteer from 'puppeteer-core';
 
-const WATCHDOG = setTimeout(() => { console.error('watchdog exit'); process.exit(2); }, 150000);
+const WATCHDOG = setTimeout(() => { console.error('watchdog exit'); process.exit(2); }, 240000);
 const { url, kill } = await startPreview();
 let b;
 try {
@@ -19,13 +19,17 @@ try {
   // Kill Overpass at the network layer — the pool must survive on tiles + snapshot.
   await p.setRequestInterception(true);
   p.on('request', (req) => {
-    if (req.url().includes('overpass')) req.abort();
-    else req.continue();
+    // try/catch: an already-handled request makes .abort()/.continue() throw —
+    // one uncaught throw stalls every later fetch (including navigations).
+    try {
+      if (req.url().includes('overpass')) req.abort();
+      else req.continue();
+    } catch { /* already handled */ }
   });
   await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-  await p.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+  await p.goto(url, { waitUntil: 'load', timeout: 30000 });
   await p.evaluate(() => localStorage.setItem('gw-onboarded', '1'));
-  await p.reload({ waitUntil: 'networkidle2' });
+  await p.reload({ waitUntil: 'load' });
   await p.waitForFunction(() => (document.getElementById('status')?.textContent || '').includes('Tap the locate button'), { timeout: 15000 });
 
   // The pool the badge counts: must include tile cameras even with Overpass dead.
@@ -41,6 +45,7 @@ try {
     return {
       total: feats.length,
       fromTiles: feats.filter((f) => f.properties?.source === 'deflock-tiles').length,
+      fromCorpus: feats.filter((f) => f.properties?.source === 'corpus').length,
     };
   });
 
@@ -54,14 +59,26 @@ try {
     } catch { await p.focus(inputSel); await p.keyboard.press('Enter'); }
     await new Promise((r) => setTimeout(r, 500));
   }
-  await pick('#toInput', 'Costco Lehi');
-  await pick('#fromInput', 'Pleasant Grove Utah');
-  await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 40000 });
+  // Photon timing is network-flaky — retry the picks on the same page (no
+  // reload: request interception + reload can deadlock in puppeteer-core).
+  async function setupRoute(attempt = 0) {
+    await pick('#toInput', 'Costco Lehi');
+    await pick('#fromInput', 'Pleasant Grove Utah');
+    try {
+      await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 45000 });
+    } catch (e) {
+      if (attempt >= 2) throw e;
+      await new Promise((r) => setTimeout(r, 1000));
+      await setupRoute(attempt + 1);
+    }
+  }
+  await setupRoute();
   const badge = await p.evaluate(() => document.querySelector('.rc-badge')?.textContent?.trim() || '');
   const chipMeta = await p.evaluate(() => [...document.querySelectorAll('.mode-chip .chip-meta')].map((e) => e.textContent.trim()));
 
   const checks = {
     poolSurvivesOutage: pool.total >= 20,
+    corpusFeedsPool: pool.fromCorpus >= 1,
     // Strict only where the tile host is reachable (CI runners can't always
     // reach tiles.dontgetflocked.com — external network, fails soft).
     tilesFeedPool: probe ? pool.fromTiles >= 1 : 'skipped (tile host unreachable from this network)',

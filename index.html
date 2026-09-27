@@ -33,10 +33,10 @@
           <span class="brand-mark" aria-hidden="true">◈</span>
           <span class="brand-name">Ghostway</span>
         </div>
-        <div id="safety-pill" class="safety-pill" title="Current avoidance setting">
+        <button id="safety-pill" class="safety-pill" title="Camera avoidance — tap to change mode" aria-label="Camera avoidance mode — tap to change">
           <span class="dot"></span><span class="label">Avoid cameras</span>
-        </div>
-        <button id="gpsBtn" class="icon-btn" aria-label="Use my location" title="Use my location">
+        </button>
+        <button id="gpsBtn" class="icon-btn" aria-label="Center map on my location" title="Center map on my location">
           <svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="7.5"/></svg>
         </button>
       </header>
@@ -74,11 +74,11 @@
       <div id="layersSheet" class="layers-sheet" hidden role="group" aria-label="Map layers">
         <label class="layer-row">
           <input type="checkbox" id="lyrCameras" />
-          <span class="lr-text"><span class="lr-title">Cameras</span><span class="lr-desc">Known ALPR &amp; surveillance cameras (DeFlock)</span></span>
+          <span class="lr-text"><span class="lr-title">Cameras</span><span class="lr-desc">Known ALPR &amp; surveillance cameras (DeFlock + camera database)</span></span>
         </label>
         <label class="layer-row">
           <input type="checkbox" id="lyrFlock" />
-          <span class="lr-text"><span class="lr-title">Flock research devices</span><span class="lr-desc">Every published Flock device — road plate readers (red) and indoor / facility / planned (blue). ~7 MB, downloaded once.</span></span>
+          <span class="lr-text"><span class="lr-title">Full camera database</span><span class="lr-desc">Every known camera — plate readers (red) and indoor / facility / planned devices (blue). Included with the app.</span></span>
         </label>
       </div>
 
@@ -194,6 +194,10 @@
           <button data-action="feedback" class="drawer-item">
             <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>
             Send feedback
+          </button>
+          <button data-action="updates" class="drawer-item">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>
+            Check for updates
           </button>
           <hr />
           <button data-action="github" class="drawer-item">

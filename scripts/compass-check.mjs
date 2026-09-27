@@ -22,7 +22,7 @@ try {
   p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 
   await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await p.goto(preview.url, { waitUntil: 'networkidle2', timeout: 60000 });
+  await p.goto(preview.url, { waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
   await p.waitForSelector('#compassBtn', { timeout: 10000 });
   await p.waitForFunction(() => { const s = document.querySelector('#splash'); return !s || s.hidden; }, { timeout: 20000 });

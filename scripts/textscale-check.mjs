@@ -28,10 +28,10 @@ try {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForSelector('#splash.leaving, #topbar', { timeout: 15000 });
   await page.evaluate(() => localStorage.setItem('gw-onboarded', '1'));
-  await page.reload({ waitUntil: 'networkidle2' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => (document.getElementById('status')?.textContent || '').includes('Tap the locate button'), { timeout: 15000 });
 
   const scaleProbe = (rootPx) => page.evaluate((rp) => {

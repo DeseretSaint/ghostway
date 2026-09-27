@@ -33,7 +33,7 @@ try {
   });
 
   const bootReturning = async () => {
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'load', timeout: 30000 });
     await page.waitForSelector('#splash.leaving, #topbar', { timeout: 15000 });
     // Returning user (onboarding skipped) but FIRST geolocation use.
     await page.evaluate(() => {
@@ -42,7 +42,7 @@ try {
       localStorage.clear();
       localStorage.setItem('gw-onboarded', '1');
     });
-    await page.reload({ waitUntil: 'networkidle2' });
+    await page.reload({ waitUntil: 'load' });
     await page.waitForSelector('#topbar', { timeout: 15000 });
     // init() finishes with a locate hint in #status — waiting for it guarantees
     // boot is done before we click (otherwise its late showStatus races ours).

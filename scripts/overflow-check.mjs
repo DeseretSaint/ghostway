@@ -24,7 +24,7 @@ try {
   for (const width of [320, 390, 430]) {
     await p.setViewport({ width, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
     await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-    await p.goto(preview.url, { waitUntil: 'networkidle2', timeout: 60000 });
+    await p.goto(preview.url, { waitUntil: 'load', timeout: 60000 });
     await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
     await p.evaluate(() => {
       const app = window.__gw;

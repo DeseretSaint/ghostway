@@ -10,7 +10,7 @@ const page = await browser.newPage();
 await page.setViewport({ width: 390, height: 844, isMobile: true });
 
 await page.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-await page.goto('http://localhost:4173/?fresh=1', { waitUntil: 'networkidle2', timeout: 45000 });
+await page.goto('http://localhost:4173/?fresh=1', { waitUntil: 'load', timeout: 45000 });
 await wait(800);
 
 // Probe initial state

@@ -33,7 +33,7 @@ await p.evaluateOnNewDocument(() => {
   Object.defineProperty(navigator, 'geolocation', { value: mock, configurable: true });
 });
 
-await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
 async function pickRoute(page, inputSel, query) {
@@ -51,7 +51,7 @@ async function setupRoute(page, attempt = 0) {
   try { await page.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 40000 }); }
   catch (e) {
     if (attempt >= 2) throw e;
-    await page.reload({ waitUntil: 'networkidle2' });
+    await page.reload({ waitUntil: 'load' });
     await wait(1500);
     await setupRoute(page, attempt + 1);
   }
@@ -132,7 +132,7 @@ for (const vp of VIEWPORT_LADDER) {
         Object.defineProperty(navigator, 'geolocation', { value: mock, configurable: true });
       });
 
-      await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
       await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
       // Pick route (retried — Photon timing is network-flaky)

@@ -59,10 +59,10 @@ async function main() {
     for (const vp of VIEWPORTS) {
       const page = await browser.newPage();
       await page.setViewport(vp);
-      await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2' });
+      await page.goto('http://localhost:4173/', { waitUntil: 'load' });
       // Returning user
       await page.evaluate(() => { try { localStorage.setItem('gw-onboarded', '1'); } catch {} });
-      await page.reload({ waitUntil: 'networkidle2' });
+      await page.reload({ waitUntil: 'load' });
       await wait(2000);
       // Drive the app into picker-visible state: setEndpoints() un-hides #avoid-toggle.
       await page.evaluate(() => {

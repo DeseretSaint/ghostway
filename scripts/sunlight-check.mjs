@@ -14,7 +14,7 @@ try {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForSelector('#splash.leaving, #topbar', { timeout: 15000 });
 
   const probe = () => page.evaluate(() => {

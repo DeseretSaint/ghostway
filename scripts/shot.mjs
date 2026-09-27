@@ -26,7 +26,7 @@ async function main() {
   });
   page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
 
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   // Wait for the splash to dismiss (it covers the controls for up to ~4.4s).
   try {
     await page.waitForFunction(() => {

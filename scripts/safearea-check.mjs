@@ -13,7 +13,7 @@ try {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.setViewport({ width: 844, height: 390, isMobile: true, hasTouch: true, isLandscape: true });
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForSelector('#splash.leaving, #topbar', { timeout: 15000 });
   await new Promise(r => setTimeout(r, 800));
 

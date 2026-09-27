@@ -18,6 +18,11 @@ export const CONFIG = {
   cameraTileUrl: 'https://tiles.dontgetflocked.com/cameras/{z}/{x}/{y}.mvt',
   //  2) Full GeoJSON (bundled snapshot) — used as a fallback / for offline & routing.
   cameraGeojson: './cameras/cameras.geojson',
+  // THE local camera corpus (every DeFlock point + every Flock research
+  // device, ~6 MB gz, refreshed monthly by flock-archive.yml). Downloaded
+  // once at startup: the counter and the map read the same local data —
+  // the badge can never be blinder than the map.
+  allCamerasUrl: './cameras/all-cameras.json.gz',
   // ALL Flock devices (every type/status) from the published research dataset
   // — the cohesive "see every camera" map layer. Map-only; routing uses only
   // road-relevant plate readers (see scripts/fetch-cameras.mjs merge policy).

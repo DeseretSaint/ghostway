@@ -69,6 +69,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=android-latest
+          # Build marker for the in-app update check (compared to __GW_COMMIT__).
+          printf '\n\n_build: commit %s_\n' "${GITHUB_SHA:0:7}" >> .github/RELEASE-NOTES-android.md
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$TAG" \
             --title "Ghostway for Android — download & install" \

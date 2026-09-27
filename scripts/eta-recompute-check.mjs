@@ -64,7 +64,7 @@ try {
 
   await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await p.goto(preview.url, { waitUntil: 'networkidle2', timeout: 60000 });
+  await p.goto(preview.url, { waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
   // ---- Corridor: PG → Costco Lehi (≈9 km; live-ETA can move numbers but
@@ -192,7 +192,7 @@ try {
     try { localStorage.setItem('gw-mode', 'off'); } catch {}
   });
   // Reload to apply mode change (mode is read once from localStorage on boot).
-  await p.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+  await p.reload({ waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
   await p.waitForFunction(() => {
     const s = document.querySelector('#splash');

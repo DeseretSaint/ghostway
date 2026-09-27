@@ -7,9 +7,9 @@ const p = await b.newPage();
 p.on('pageerror', (e) => console.log('PAGEERR', String(e).slice(0, 300)));
 p.on('console', (m) => { if (m.type() === 'error' && !/CORS|Failed to load resource/.test(m.text())) console.log('CONSOLE', m.text().slice(0, 300)); });
 await p.setViewport({ width: 390, height: 844 });
-await p.goto(url, { waitUntil: 'networkidle2' });
+await p.goto(url, { waitUntil: 'load' });
 await p.evaluate(() => localStorage.setItem('gw-onboarded', '1'));
-await p.reload({ waitUntil: 'networkidle2' });
+await p.reload({ waitUntil: 'load' });
 await p.waitForFunction(() => (document.getElementById('status')?.textContent || '').includes('Tap the locate button'), { timeout: 15000 });
 
 async function pick(inputSel, query) {

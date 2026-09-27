@@ -33,6 +33,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { isAlprCamera } from '../src/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_OUT = join(__dirname, '..', 'public', 'cameras');
@@ -166,11 +167,13 @@ async function main() {
 
   let matched = 0, added = 0, dirFilled = 0;
   const addedFeatures = [];
+  const matchedRows = new Set();
   for (const c of flock) {
     if (!c.roadRelevant) continue; // indoor/etc: map-only (flock-devices.json.gz)
     const hit = nearDeflock(c.lon, c.lat);
     if (hit !== null) {
       matched++;
+      matchedRows.add(c);
       const f = full.features[hit];
       f.properties = f.properties || {};
       // Fill missing facing metadata (DeFlock direction is sparse).
@@ -272,6 +275,39 @@ async function main() {
   const flockGz = gzipSync(Buffer.from(JSON.stringify(flockAll)), { level: 9 });
   await writeFile(join(PUBLIC_OUT, 'flock-devices.json.gz'), flockGz);
   console.log(`wrote public/cameras/flock-devices.json.gz — ${devices.length} devices, ${(flockGz.length / 1e6).toFixed(1)} MB gz`);
+
+  // 4) THE LOCAL CORPUS — the app's complete camera database. Every DeFlock
+  //    point + every Flock research device, one gzipped file the app downloads
+  //    once and then counts/displays from LOCAL data. No fetch can fail at the
+  //    moment of truth: the badge can never be blinder than the map. (Keaton
+  //    field report 2026-09-27, third report: "still lying — unavailable while
+  //    showing me routed past a camera it documents".)
+  //    rows: [lon5, lat5, cls 'alpr'|'surv'|'device', road 0/1, name48]
+  const rows = [];
+  for (const f of mergedFeatures) {
+    const [lon, lat] = f.geometry.coordinates;
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    const p = f.properties || {};
+    rows.push([
+      Number(lon.toFixed(5)), Number(lat.toFixed(5)),
+      isAlprCamera(p) ? 'alpr' : 'surv', 1,
+      String(p.name || p.brand || '').slice(0, 48),
+    ]);
+  }
+  // Non-road research devices (matched + road-unmatched rows are already in
+  // mergedFeatures above — no double counting).
+  for (const c of flock) {
+    if (matchedRows.has(c) || c.roadRelevant) continue;
+    rows.push([
+      Number(c.lon.toFixed(5)), Number(c.lat.toFixed(5)),
+      'device', 0,
+      (c.name || '').slice(0, 48),
+    ]);
+  }
+  const corpus = { v: 1, asOf: merged._meta.asOf, sources: merged._meta.sources, count: rows.length, rows };
+  const corpusGz = gzipSync(Buffer.from(JSON.stringify(corpus)), { level: 9 });
+  await writeFile(join(PUBLIC_OUT, 'all-cameras.json.gz'), corpusGz);
+  console.log(`wrote public/cameras/all-cameras.json.gz — ${rows.length} rows, ${(corpusGz.length / 1e6).toFixed(1)} MB gz`);
 }
 
 main().catch((e) => {

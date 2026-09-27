@@ -24,9 +24,9 @@ async function runViewport(width, height, isMobile) {
   const errs = [];
   p.on('pageerror', (e) => errs.push(String(e.message)));
 
-  await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+  await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
   await p.evaluate(() => { localStorage.removeItem('gw-onboarded'); });
-  await p.reload({ waitUntil: 'networkidle2' });
+  await p.reload({ waitUntil: 'load' });
 
   const result = { width };
 
@@ -55,7 +55,7 @@ async function runViewport(width, height, isMobile) {
   result.obDone = await p.waitForFunction('window.__ghostwayOnboarded === "done"', { timeout: 5000 }).then(() => true).catch(() => false);
   result.persisted = await p.evaluate(() => localStorage.getItem('gw-onboarded')) === '1';
 
-  await p.reload({ waitUntil: 'networkidle2' });
+  await p.reload({ waitUntil: 'load' });
   await wait(1500);
   result.obHiddenSecond = await p.evaluate(() => document.querySelector('#onboarding').hidden);
 
@@ -72,9 +72,9 @@ async function runTourTrigger() {
   const errs = [];
   p.on('pageerror', (e) => errs.push(String(e.message)));
 
-  await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+  await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
   await p.evaluate(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await p.reload({ waitUntil: 'networkidle2' });
+  await p.reload({ waitUntil: 'load' });
   await p.waitForFunction(() => { const s = document.querySelector('#splash'); return !s || s.hidden; }, { timeout: 8000 }).catch(() => {});
   await wait(500);
 
@@ -135,9 +135,9 @@ for (const vp of VIEWPORT_LADDER) {
         deviceScaleFactor: vp.isMobile ? 2 : 1,
       });
       await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
-      await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
       await page.evaluate(() => localStorage.clear());
-      await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+      await page.reload({ waitUntil: 'load', timeout: 60000 });
       await page.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
       await wait(800);
 

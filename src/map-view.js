@@ -8,13 +8,13 @@ import { CONFIG, CAMERA_LAYER } from './config.js';
 // Flock research-device layers (the cohesive "every camera" view).
 const FLOCK = { sourceId: 'flock-devices', roadId: 'flock-road-pts', otherId: 'flock-other-pts' };
 
-// Compact device props {t,s,a,r,n,road} → the camera-modal property shape.
+// Compact corpus props {t,n,road} → the camera-modal property shape.
 function flockProps(p) {
   return {
-    brand: 'Flock Safety',
-    operator: `${p.t || 'device'} · ${p.s || 'unknown'}${p.a === 1 ? '' : ' (inactive)'}`,
+    brand: 'Camera database',
+    operator: `${({ alpr: 'Plate reader', surv: 'Surveillance camera', device: 'Research device (indoor/facility/planned)' })[p.t] || p.t || 'device'}${p.n ? ' · ' + p.n : ''}`,
     surveillanceZone: p.road === 1 ? 'traffic' : '',
-    direction: typeof p.r === 'number' ? p.r : null,
+    direction: null,
     name: p.n || '',
     mountType: '',
     osmTimestamp: null,
@@ -448,17 +448,18 @@ export class MapView {
     this._applyFlockVisibility();
   }
 
-  // ---- Flock research layer (ALL devices — the cohesive surveillance view) ----
-  // Two circle layers over one source: road-relevant plate readers join the
-  // ALPR-red look; everything else (indoor/facility/drones/planned) renders as
-  // neutral-blue "research" dots. Toggled per CONFIG.flockDevicesUrl (7 MB gz —
-  // opt-in, fetched on first enable, cached by the service worker).
+  // ---- Full camera-database layer (the cohesive surveillance view) ----
+  // Two circle layers over one source from the LOCAL corpus (all-cameras.json.gz
+  // — every DeFlock point + every Flock research device): plate readers join
+  // the ALPR-red look; indoor/facility/planned devices render as neutral-blue
+  // dots. Data downloads ONCE at startup (shared with the routing counter —
+  // no "download" gating; these toggles are pure visibility).
   async setFlockVisible(on) {
     this._flockVisible = on;
     if (on && !this._flockData) {
       try {
-        const res = await fetch(CONFIG.flockDevicesUrl, { cache: 'force-cache' });
-        if (!res.ok) throw new Error('flock data HTTP ' + res.status);
+        const res = await fetch(CONFIG.allCamerasUrl, { cache: 'force-cache' });
+        if (!res.ok) throw new Error('camera corpus HTTP ' + res.status);
         const buf = await res.arrayBuffer();
         const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
         let raw;
@@ -469,26 +470,26 @@ export class MapView {
           raw = buf;
         }
         const data = JSON.parse(new TextDecoder().decode(raw));
+        // rows: [lon, lat, cls 'alpr'|'surv'|'device', road, name]
         this._flockData = {
           type: 'FeatureCollection',
-          features: (data.devices || []).map((d) => ({
+          features: (data.rows || []).map((r) => ({
             type: 'Feature',
-            geometry: { type: 'Point', coordinates: [d[0], d[1]] },
-            // d = [lon, lat, type, status, active, rot, name, roadFlag]
-            properties: { t: d[2], s: d[3], a: d[4], r: d[5], n: d[6], road: d[7] },
+            geometry: { type: 'Point', coordinates: [r[0], r[1]] },
+            properties: { t: r[2], n: r[4] || '', road: r[3] },
           })),
         };
         window.__gwFlockCount = this._flockData.features.length; // test/debug hook
-        // Road-relevant devices join the routing camera pool — anything the map
-        // shows must be countable by the badge (the pool unions these).
+        // Road devices join the routing camera pool — anything the map shows
+        // must be countable by the badge (the pool unions these).
         globalThis.__gwFlockExtras = this._flockData.features.filter((f) => f.properties.road === 1)
           .map((f) => ({
             type: 'Feature',
             geometry: f.geometry,
-            properties: { brand: 'Flock Safety', source: 'flocksurveillance.org', direction: typeof f.properties.r === 'number' ? f.properties.r : null },
+            properties: { brand: f.properties.n || 'Camera', source: 'corpus', direction: null },
           }));
       } catch (e) {
-        console.warn('flock device layer failed', e.message);
+        console.warn('camera corpus layer failed', e.message);
         return;
       }
     }

@@ -19,7 +19,7 @@ async function main() {
   page.on('pageerror', (e) => errs.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
   await page.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   try {
     await page.waitForFunction(() => {
       const s = document.querySelector('#splash');

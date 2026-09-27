@@ -28,7 +28,7 @@ await p.evaluateOnNewDocument(() => {
   Object.defineProperty(navigator, 'geolocation', { value: mock, configurable: true });
 });
 
-await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
 async function pick(inputSel, query) {

@@ -25,7 +25,7 @@ async function main() {
     const page = await browser.newPage();
     await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: vp.deviceScaleFactor });
     
-    await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+    await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
     await wait(3000);
 
     // Dismiss onboarding

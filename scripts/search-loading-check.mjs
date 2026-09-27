@@ -40,7 +40,7 @@ try {
     // delay harness actually holds the real network request.
     if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve();
   });
-  await p.goto(preview.url, { waitUntil: 'networkidle2', timeout: 60000 });
+  await p.goto(preview.url, { waitUntil: 'load', timeout: 60000 });
   await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 
   // Query A: "provo" — fires request #1 (delayed 2.5s by interception).

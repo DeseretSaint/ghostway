@@ -29,7 +29,7 @@ p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 
 // Returning user: skip first-run onboarding overlay.
 await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
 
 // Wait for the app to boot. The road graph loads LAZILY — only when a route
 // enters a shipped coverage region — so we assert engine-ready AFTER routing.
@@ -101,7 +101,7 @@ async function routeSetup(attempt = 0) {
     );
   } catch (e) {
     if (attempt >= 2) throw e;
-    await p.reload({ waitUntil: 'networkidle2' });
+    await p.reload({ waitUntil: 'load' });
     await wait(1500);
     return routeSetup(attempt + 1);
   }

@@ -19,7 +19,7 @@ async function main() {
   page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
   // Test as a RETURNING user so first-run onboarding doesn't cover the map.
   await page.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   // Wait for the splash to dismiss (it hides up to ~4.4s; hit-testing through
   // it yields 'splash' for every control = false FAIL).
   try {

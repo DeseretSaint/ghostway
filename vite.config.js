@@ -1,7 +1,17 @@
 import { defineConfig } from 'vite';
+import { execSync } from 'node:child_process';
+
+// Baked at build time: the in-app update check compares this commit against
+// the android-latest release's build marker (appended by android-apk.yml).
+let commit = 'dev';
+try { commit = execSync('git rev-parse --short HEAD').toString().trim(); } catch { /* tarball builds */ }
 
 export default defineConfig({
   base: './',
+  define: {
+    __GW_COMMIT__: JSON.stringify(commit),
+    __GW_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   server: { host: true, port: 5173 },
   build: {
     target: 'es2020',

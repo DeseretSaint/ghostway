@@ -7,7 +7,7 @@ const p = await b.newPage();
 await p.setViewport({ width: 390, height: 844, isMobile: true });
 p.on('pageerror', (e) => console.log('PAGEERR', String(e.message)));
 await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded','1'); window.__gps={handlers:[]}; const mock={getCurrentPosition:(cb)=>cb({coords:{longitude:-111.759,latitude:40.364,speed:0}}),watchPosition:(cb)=>{window.__gps.handlers.push(cb);return 0;},clearWatch:()=>{}}; Object.defineProperty(navigator,'geolocation',{value:mock,configurable:true}); });
-await p.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
 await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 async function pick(sel,q){ await p.type(sel,q); try{ await p.waitForSelector('#suggestions .sugg',{timeout:8000}); await p.click('#suggestions .sugg'); }catch{ await p.focus(sel); await p.keyboard.press('Enter'); } await wait(500); }
 await pick('#toInput','Costco Lehi');

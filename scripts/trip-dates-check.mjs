@@ -19,10 +19,10 @@ try {
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 
   // Deep-link boot on the PG → Costco corridor (also exercises Q119).
-  await page.goto(`${url}?from=-111.759,40.364&to=-111.834,40.394`, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto(`${url}?from=-111.759,40.364&to=-111.834,40.394`, { waitUntil: 'load', timeout: 30000 });
   await page.waitForSelector('#splash.leaving, #topbar', { timeout: 15000 });
   await page.evaluate(() => localStorage.setItem('gw-onboarded', '1'));
-  await page.reload({ waitUntil: 'networkidle2' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('#startNavBtn', { visible: true, timeout: 60000 });
 
   // 1. Trip dates sheet: calendar renders with APG semantics + 44px cells.

@@ -22,7 +22,7 @@ async function main() {
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
   await page.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
   
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   await wait(2600);
 
   await page.evaluate(() => {

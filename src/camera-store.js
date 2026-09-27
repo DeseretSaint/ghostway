@@ -168,8 +168,45 @@ export class CameraStore {
     });
   }
 
-  // Returns the (cached) camera pool for a bbox: Overpass ∪ snapshot ∪ DeFlock
-  // tiles (the map's own source) ∪ loaded Flock road devices. Empty results
+  // Load the complete local camera corpus (all-cameras.json.gz: every DeFlock
+  // point + every Flock research device). Downloaded ONCE at startup — after
+  // that the counter reads LOCAL data and can never be blinder than the map,
+  // no fetch failing at the moment of truth (Keaton field report 2026-09-27).
+  async ensureCorpus() {
+    // Promise-memo: a bare `[]` sentinel is truthy and would hand empty results
+    // to every caller while the fetch is still in flight.
+    if (!this._corpusPromise) {
+      this._corpusPromise = this._loadCorpus().catch(() => {
+        this._corpusPromise = null; // allow a retry on the next call
+        return [];
+      });
+    }
+    return this._corpusPromise;
+  }
+
+  async _loadCorpus() {
+    const res = await fetch(CONFIG.allCamerasUrl, { cache: 'force-cache' });
+    if (!res.ok) throw new Error('corpus HTTP ' + res.status);
+    const buf = await res.arrayBuffer();
+    const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
+    let raw;
+    if (head[0] === 0x1f && head[1] === 0x8b) {
+      const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+      raw = await new Response(stream).arrayBuffer();
+    } else {
+      raw = buf;
+    }
+    const data = JSON.parse(new TextDecoder().decode(raw));
+    // rows: [lon, lat, cls, road, name]
+    return (data.rows || []).map((r) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [r[0], r[1]] },
+      properties: { brand: r[4] || r[2], source: 'corpus', kind: r[2], road: r[3], name: r[4] || '' },
+    }));
+  }
+
+  // Returns the (cached) camera pool for a bbox: local corpus (complete) ∪
+  // Overpass ∪ snapshot ∪ DeFlock tiles ∪ loaded Flock extras. Empty results
   // are NEVER cached — a failed fetch must not poison the pool for a week.
   async getCameras(bbox) {
     const key = bbox.join(',');
@@ -183,11 +220,13 @@ export class CameraStore {
       }
     };
     const results = await Promise.all([
+      this.ensureCorpus(),
       this._overpass(bbox).catch(() => []),
       tileCameras(bbox).catch(() => []),
     ]);
-    add(results[0]);
+    add(this._inBox(results[0], bbox));
     add(results[1]);
+    add(results[2]);
     // Bundled snapshot: cheap and offline-proof — always union it.
     const fb = await this._ensureFallback();
     if (fb) add(this._inBox(fb.features, bbox));

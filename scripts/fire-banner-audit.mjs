@@ -25,9 +25,9 @@ async function audit(variant) {
     navigator.geolocation.__gwStubbed = true;
   });
   
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
   await page.evaluate(() => { try { localStorage.setItem('gw-onboarded', '1'); } catch {} });
-  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+  await page.reload({ waitUntil: 'load', timeout: 60000 });
   await page.waitForFunction('window.__gw !== undefined', { timeout: 30000 });
   await wait(2000);
   await page.evaluate(() => { document.querySelector('#obSkip')?.click(); });

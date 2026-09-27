@@ -36,7 +36,7 @@ const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args
 const p = await b.newPage();
 const errs = [];
 p.on('pageerror', (e) => errs.push(e.message));
-await p.goto('https://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+await p.goto('https://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
 // Wait for the app to boot, then POLL for the SW registration instead of a
 // fixed sleep: registerSW() fires at the end of wireApp() (after the camera
 // fallback fetch), which can exceed a short fixed wait under headless Chrome.

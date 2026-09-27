@@ -22,7 +22,7 @@ async function main() {
 
   // First-run onboarding path: no gw-onboarded in localStorage.
   await page.evaluateOnNewDocument(() => { localStorage.removeItem('gw-onboarded'); });
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 45000 });
   try {
     await page.waitForFunction(() => {
       const ob = document.querySelector('#onboarding');

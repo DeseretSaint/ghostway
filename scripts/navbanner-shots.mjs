@@ -119,12 +119,12 @@ async function main() {
       }
     });
 
-    await page.goto('http://localhost:4173/', { waitUntil: 'networkidle2', timeout: 60000 });
+    await page.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
     await page.evaluateOnNewDocument(() => { try { localStorage.setItem('gw-onboarded', '1'); } catch {} });
     // Returning-user re-application (the per-page evaluateOnNewDocument above
     // already set it, but repeat for safety after the first navigation):
     await page.evaluate(() => { try { localStorage.setItem('gw-onboarded', '1'); } catch {} });
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+    await page.reload({ waitUntil: 'load', timeout: 60000 });
     await page.waitForFunction('window.__gw !== undefined', { timeout: 30000 });
     console.log('  app booted');
 

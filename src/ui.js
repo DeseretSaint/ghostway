@@ -300,6 +300,7 @@ export function expandSearch(app) {
 export function badgeHtml(sel) {
   const shield = icon('shield', { size: 15 });
   if (sel && sel.camerasKnown === false) return `${shield} Camera data unavailable — route unverified`;
+  if (sel && sel.camerasKnown == null && sel.cameras == null) return `${shield} Checking camera data…`;
   if (!sel || !sel.cameras) return `${shield} Fully clear of known cameras`;
   return `${shield} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`;
 }

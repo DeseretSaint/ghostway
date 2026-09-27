@@ -30,7 +30,7 @@ async function driveCorridor(browser, url, c) {
   });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+  await page.goto(url, { waitUntil: 'load', timeout: 45000 });
   await wait(2600);
   await page.evaluate(() => {
     const ob = document.querySelector('#obSkip'); if (ob) ob.click();
