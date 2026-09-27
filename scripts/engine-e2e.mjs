@@ -101,8 +101,7 @@ async function routeSetup(attempt = 0) {
     );
   } catch (e) {
     if (attempt >= 2) throw e;
-    await p.reload({ waitUntil: 'load' });
-    await wait(1500);
+    await wait(1000); // same-page re-pick — no reload (controllerchange auto-reload deadlock)
     return routeSetup(attempt + 1);
   }
 }

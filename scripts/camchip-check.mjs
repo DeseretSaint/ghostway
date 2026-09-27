@@ -51,8 +51,7 @@ async function setupRoute(page, attempt = 0) {
   try { await page.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 60000 }); }
   catch (e) {
     if (attempt >= 2) throw e;
-    await page.reload({ waitUntil: 'load' });
-    await wait(1500);
+    await wait(1000); // same-page re-pick — no reload (controllerchange auto-reload deadlock)
     await setupRoute(page, attempt + 1);
   }
 }
@@ -113,6 +112,11 @@ for (const vp of VIEWPORT_LADDER) {
     let page;
     try {
       page = await b2.newPage();
+      // The probe measures #camChip contrast, not map data — keep the heavy
+      // camera layers off so 14 app boots stay inside the time budget.
+      await page.evaluateOnNewDocument(() => {
+        try { localStorage.setItem('gw-flock-layer', '0'); localStorage.setItem('gw-cam-layer', '0'); } catch {}
+      });
       await page.setViewport({
         width: vp.width,
         height: vp.height,

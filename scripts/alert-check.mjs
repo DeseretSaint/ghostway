@@ -63,8 +63,7 @@ async function setupRoute(attempt = 0) {
   try { await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 60000 }); }
   catch (e) {
     if (attempt >= 2) throw e;
-    await p.reload({ waitUntil: 'load' });
-    await wait(1500);
+    await wait(1000); // same-page re-pick — no reload (controllerchange auto-reload deadlock)
     await setupRoute(attempt + 1);
   }
 }
