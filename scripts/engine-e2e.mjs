@@ -67,27 +67,44 @@ async function pickSuggestion(inputSel, query) {
         !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'),
       { timeout: 12000 }
     );
-    await p.click('#suggestions .sugg:not(.sugg-recent)');
+    // evaluate-click: the suggestion list re-renders as results stream in, so a
+  // captured handle can be zero-size by click time ("not clickable").
+  await p.evaluate(() => document.querySelector('#suggestions .sugg:not(.sugg-recent)')?.click());
   } catch {
     await p.focus(inputSel);
     await p.keyboard.press('Enter');
   }
   await wait(500);
 }
-await pickSuggestion('#toInput', 'Costco Lehi');
-await pickSuggestion('#fromInput', 'Pleasant Grove Utah');
+// Photon suggestion timing is network-flaky — retry the whole route setup
+// (a missed suggestion leaves an unresolved endpoint and no route).
+async function routeSetup(attempt = 0) {
+  await pickSuggestion('#toInput', 'Costco Lehi');
+  await pickSuggestion('#fromInput', 'Pleasant Grove Utah');
 
-// Real-click the Route button — but only if it's still visible (picking both
-// endpoints may have auto-routed already and collapsed the panel).
-const goVisible = await p.evaluate(() => {
-  const r = document.querySelector('#goBtn').getBoundingClientRect();
-  return r.width > 0 && r.height > 0 && !document.querySelector('#route-actions').hidden;
-});
-if (goVisible) await p.click('#goBtn');
-await p.waitForFunction(
-  "() => !document.querySelector('#route-card').hidden || document.querySelector('#status')?.textContent?.includes('failed')",
-  { timeout: 40000 }
-);
+  // Route button — but only if it's still visible (picking both endpoints may
+  // have auto-routed already and collapsed the panel). Check + click are one
+  // atomic evaluate: the panel can collapse between a separate check and click.
+  const goVisible = await p.evaluate(() => {
+    const go = document.querySelector('#goBtn');
+    const r = go.getBoundingClientRect();
+    const vis = r.width > 0 && r.height > 0 && !document.querySelector('#route-actions').hidden;
+    if (vis) go.click();
+    return vis;
+  });
+  try {
+    await p.waitForFunction(
+      "() => !document.querySelector('#route-card').hidden || document.querySelector('#status')?.textContent?.includes('failed')",
+      { timeout: 40000 }
+    );
+  } catch (e) {
+    if (attempt >= 2) throw e;
+    await p.reload({ waitUntil: 'networkidle2' });
+    await wait(1500);
+    return routeSetup(attempt + 1);
+  }
+}
+await routeSetup();
 const cardText = await p.evaluate(() => document.querySelector('#route-card')?.innerText?.replace(/\s+/g, ' ')?.slice(0, 400) || 'none');
 console.log('card:', cardText);
 
