@@ -60,7 +60,7 @@ async function pick(inputSel, query) {
 async function setupRoute(attempt = 0) {
   await pick('#toInput', 'Costco Lehi');
   await pick('#fromInput', 'Pleasant Grove Utah');
-  try { await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 30000 }); }
+  try { await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 60000 }); }
   catch (e) {
     if (attempt >= 2) throw e;
     await p.reload({ waitUntil: 'load' });

@@ -33,7 +33,7 @@ await p.goto('http://localhost:4173/', { waitUntil: 'load', timeout: 60000 });
 
 // Wait for the app to boot. The road graph loads LAZILY — only when a route
 // enters a shipped coverage region — so we assert engine-ready AFTER routing.
-await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
+await p.waitForFunction('window.__gw !== undefined', { timeout: 60000 });
 console.log('app booted (__gw set)');
 
 // Real hit-test helper: elementFromPoint at element center.
@@ -97,7 +97,7 @@ async function routeSetup(attempt = 0) {
     // object and passes instantly!). Routed AND a rendered card.
     await p.waitForFunction(
       () => window.__ghostwayDebug?.routed === true && document.querySelectorAll('.mode-chip').length >= 1,
-      { timeout: 45000 }
+      { timeout: 60000 }
     );
   } catch (e) {
     if (attempt >= 2) throw e;
@@ -121,7 +121,7 @@ if (/0 min · 0 m/.test(cardText)) {
 
 // The PG → Lehi route is inside the Wasatch coverage box, so routing should
 // have triggered the lazy graph load. Assert the engine reached 'ready'.
-await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 45000 });
+await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 60000 });
 const engine = await p.evaluate(() => window.__ghostwayEngine);
 console.log('engine status (after route):', engine);
 

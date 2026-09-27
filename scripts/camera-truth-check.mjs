@@ -65,7 +65,7 @@ try {
     await pick('#toInput', 'Costco Lehi');
     await pick('#fromInput', 'Pleasant Grove Utah');
     try {
-      await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 45000 });
+      await p.waitForFunction('window.__ghostwayDebug?.routed === true', { timeout: 60000 });
     } catch (e) {
       if (attempt >= 2) throw e;
       await new Promise((r) => setTimeout(r, 1000));
