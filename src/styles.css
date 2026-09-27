@@ -1439,6 +1439,8 @@ details summary {
 #navBanner:not([hidden]) ~ #basemapBtn { top: calc(max(64px, env(safe-area-inset-top) + 58px) + 200px); }
 #unitsBtn { top: calc(max(70px, env(safe-area-inset-top) + 64px) + 156px); font-weight: 600; width: auto; min-width: 44px; padding: 0 8px; }
 #navBanner:not([hidden]) ~ #unitsBtn { top: calc(max(64px, env(safe-area-inset-top) + 58px) + 304px); }
+#flockLayerBtn { top: calc(max(70px, env(safe-area-inset-top) + 64px) + 208px); font-weight: 600; width: auto; min-width: 44px; padding: 0 8px; font-size: 0.75rem; }
+#navBanner:not([hidden]) ~ #flockLayerBtn { top: calc(max(64px, env(safe-area-inset-top) + 58px) + 408px); }
 
 /* Custom zoom control (Maps-parity +/−), right edge above the bottom sheet */
 .zoom-ctrl {
@@ -1535,6 +1537,7 @@ details summary {
 .lg-dot.other { background: #ffaa40; }
 .lg-dot.closure { background: #ff3355; }
 .lg-dot.roadwork { background: #ffd05c; }
+.lg-dot.facility { background: #4c8dff; }
 .lg-halo {
   width: 14px; height: 14px; border-radius: 50%; flex: none;
   background: radial-gradient(circle, rgba(58,214,197,0.7), transparent 70%);

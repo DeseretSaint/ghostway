@@ -66,9 +66,10 @@ Still missing? Ghostway's car screen needs the phone's Android Auto host to
 be reasonably current — update the **Android Auto app itself** in the Play
 Store (it updates independently of the OS), then repeat steps 4–6.
 
-In the car, Ghostway shows the v1 car screen (status + tips). Full
-turn-by-turn on the car screen is the next iteration — routing, camera
-avoidance, and voice all run on the phone, which is the computer.
+In the car, Ghostway shows a **live turn panel** — maneuver icon, instruction,
+road, and distance, mirrored from the phone. Start a route on the phone and
+the panel appears on the car screen by itself; stop and it goes back to the
+home screen. No menus to poke while driving.
 
 ## Updating
 

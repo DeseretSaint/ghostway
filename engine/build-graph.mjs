@@ -84,6 +84,9 @@ const camGrid = new Map();
 for (const f of cams.features) {
   const [lon, lat] = f.geometry.coordinates;
   if (!inBox([lon, lat])) continue;
+  // Hard guard: non-road research devices (indoor/facility centroids) must
+  // never add routing exposure — only cameras facing roads may penalize edges.
+  if (f.properties && f.properties.roadRelevant === false) continue;
   // ALPR classification shares isAlprCamera() with the live map layer
   // (plate-reader brands + traffic-facing cameras), single source of truth.
   const isAlpr = isAlprCamera(f.properties || {});

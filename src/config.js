@@ -18,6 +18,10 @@ export const CONFIG = {
   cameraTileUrl: 'https://tiles.dontgetflocked.com/cameras/{z}/{x}/{y}.mvt',
   //  2) Full GeoJSON (bundled snapshot) — used as a fallback / for offline & routing.
   cameraGeojson: './cameras/cameras.geojson',
+  // ALL Flock devices (every type/status) from the published research dataset
+  // — the cohesive "see every camera" map layer. Map-only; routing uses only
+  // road-relevant plate readers (see scripts/fetch-cameras.mjs merge policy).
+  flockDevicesUrl: './cameras/flock-devices.json.gz',
 
   // --- Geocoding / search (Photon, OpenStreetMap-based, no key) ---
   photon: 'https://photon.komoot.io/api',

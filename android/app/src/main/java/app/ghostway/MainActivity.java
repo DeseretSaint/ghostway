@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.webkit.GeolocationPermissions;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -70,8 +71,19 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+        // Phone→car nav bridge (AA v2): src/nav-bridge.js pushes nav state
+        // JSON here; GhostwayCarAppService mirrors it onto the head unit.
+        web.addJavascriptInterface(new JsBridge(), "AABridge");
         web.loadUrl("file:///android_asset/www/index.html");
         setContentView(web);
+    }
+
+    /** JS → Java: the PWA calls window.AABridge.navState(json). */
+    public static class JsBridge {
+        @JavascriptInterface
+        public void navState(String json) {
+            NavState.set(json);
+        }
     }
 
     @Override

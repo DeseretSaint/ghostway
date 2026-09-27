@@ -19,6 +19,7 @@ import { icon, stepIconSvg } from './icons.js';
 import { registerSW } from './pwa.js';
 import { getShareUrl, applyShareParams, renderShareQr } from './share.js';
 import { speak, phraseManeuver, phraseArrival, cancel as cancelVoice, toggleVoice, voiceEnabled, setVoiceEnabled } from './voice.js';
+import { pushNavState } from './nav-bridge.js';
 
 const app = {
   map: null,
@@ -74,6 +75,11 @@ async function init() {
   // Apply the rehydrated camera-layer state now that the source is ready.
   app.map.setCameraLayerVisible(app._camLayerOn);
   $('#camLayerBtn').classList.toggle('off', !app._camLayerOn);
+  // Flock full-dataset layer (opt-in — ~7 MB research data; default OFF).
+  app._flockOn = localStorage.getItem('gw-flock-layer') === '1';
+  $('#flockLayerBtn').classList.toggle('off', !app._flockOn);
+  $('#flockLayerBtn').setAttribute('aria-pressed', String(!!app._flockOn));
+  if (app._flockOn) app.map.setFlockVisible(true);
   setSplashText('Map ready — loading your route engine…');
   // Apply a saved basemap preference (light/dark) before the splash clears.
   const savedBase = localStorage.getItem('gw-basemap');
@@ -477,6 +483,15 @@ function wireApp() {
     app.map.setCameraLayerVisible(app._camLayerOn);
     $('#camLayerBtn').classList.toggle('off', !app._camLayerOn);
     try { localStorage.setItem('gw-cam-layer', app._camLayerOn ? '1' : '0'); } catch {}
+  });
+  // Full Flock device dataset (every device incl. non-road) — the cohesive
+  // "see every camera" layer. Opt-in: first enable downloads the dataset.
+  $('#flockLayerBtn').addEventListener('click', () => {
+    app._flockOn = !(app._flockOn ?? false);
+    try { localStorage.setItem('gw-flock-layer', app._flockOn ? '1' : '0'); } catch {}
+    $('#flockLayerBtn').classList.toggle('off', !app._flockOn);
+    $('#flockLayerBtn').setAttribute('aria-pressed', String(!!app._flockOn));
+    app.map.setFlockVisible(!!app._flockOn);
   });
 
   // Maps-parity basemap switcher (light/dark). Same open provider — no new
@@ -1363,6 +1378,7 @@ function checkOverSpeed() {
 
 function stopNav(arrived = false) {
   app.state.navigating = false;
+  pushNavState({ active: false, arrived: !!arrived }); // car screen → home
   cancelVoice();
   setFollow(false);
   app.map.unfollow();
@@ -1675,6 +1691,17 @@ function renderNavStep() {
   const road = next && next.name ? ` onto <b>${escHtml(next.name)}</b>` : next && step.name ? ` onto <b>${escHtml(step.name)}</b>` : '';
   const maneuverIcon = next ? stepIcon(next.modifier) : stepIcon(step.modifier);
   const eta = app._totalDuration ? fmtDuration(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0]))) : '';
+  // Mirror the turn instruction to Android Auto (no-op outside the shell).
+  pushNavState({
+    active: true,
+    instruction: dir,
+    road: next?.name || step.name || '',
+    modifier: (next || step).modifier || '',
+    distM: next ? Math.max(0, next.startS - traveled) : Math.max(0, step.distance),
+    remainingM: Math.max(0, (app._routeTotal || 0) - traveled),
+    etaS: app._totalDuration ? Math.round(app._totalDuration * (1 - routeFraction(app.state.userLoc || [0, 0]))) : null,
+    toLabel: app.state.to?.label || '',
+  });
   const voiceOn = voiceEnabled();
   const compact = app.state.compactBanner;
   // C12 #126: compact banner is the active-nav default (driver safety). It
@@ -1902,6 +1929,8 @@ function openCameraModal(props, coords) {
     <h3>📷 ${escHtml(brand)}</h3>
     ${op && op.toLowerCase() !== brand.toLowerCase() ? `<p class="muted">Operator: ${escHtml(op)}</p>` : ''}
     <p>${isAlpr ? '<b>Automated license plate reader (ALPR)</b> — reads every passing plate.' : 'Surveillance camera.'}</p>
+    ${props.name ? `<p>“${escHtml(String(props.name))}”</p>` : ''}
+    ${props.source ? `<p class="muted small">Source: ${escHtml(String(props.source))} (published research dataset)</p>` : ''}
     <p class="muted">
       ${dir ? `Faces ${dir}. ` : ''}${mount ? `Mounted on ${escHtml(mount.replace(/_/g, ' '))}. ` : ''}${age}
     </p>
@@ -2200,6 +2229,8 @@ function handleDrawer(action) {
         <li><span class="lg-dot flock"></span> Plate reader risk (Flock, Motorola, Rekor… or traffic-facing)</li>
         <li><span class="lg-dot other"></span> Other surveillance camera</li>
         <li><span class="lg-dot report"></span> Community-reported camera (purple)</li>
+        <li><span class="lg-dot flock"></span> Flock research dataset — road plate reader (red; "Flock" chip)</li>
+        <li><span class="lg-dot facility"></span> Flock research dataset — indoor / facility / planned device (blue; "Flock" chip)</li>
         <li><span class="lg-halo"></span> Heatmap halo = camera density</li>
         <li><span class="lg-line teal"></span> Your chosen route</li>
         <li><span class="lg-line grey"></span> Alternative route</li>

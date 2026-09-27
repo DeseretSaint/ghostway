@@ -5,6 +5,23 @@ import { CONFIG, CAMERA_LAYER } from './config.js';
 // Wraps MapLibre GL, the OpenFreeMap base style, and the DeFlock camera
 // vector tiles. Exposes simple methods the rest of the app drives.
 
+// Flock research-device layers (the cohesive "every camera" view).
+const FLOCK = { sourceId: 'flock-devices', roadId: 'flock-road-pts', otherId: 'flock-other-pts' };
+
+// Compact device props {t,s,a,r,n,road} → the camera-modal property shape.
+function flockProps(p) {
+  return {
+    brand: 'Flock Safety',
+    operator: `${p.t || 'device'} · ${p.s || 'unknown'}${p.a === 1 ? '' : ' (inactive)'}`,
+    surveillanceZone: p.road === 1 ? 'traffic' : '',
+    direction: typeof p.r === 'number' ? p.r : null,
+    name: p.n || '',
+    mountType: '',
+    osmTimestamp: null,
+    source: 'flocksurveillance.org',
+  };
+}
+
 export class MapView {
   constructor(container) {
     this.map = new maplibregl.Map({
@@ -18,6 +35,7 @@ export class MapView {
       attributionControl: false,
       maxPitch: 60,
     });
+    window.__gwMap = this.map; // test/debug console hook (no telemetry)
     this.map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
     this.routeSource = null;
@@ -234,6 +252,8 @@ export class MapView {
     if (this._incidents) this.setIncidents(this._incidents);
     if (this._userPos) this.setUserPosition(this._userPos, this._userHeading);
     this.setCameraLayerVisible(this._camVisible !== false);
+    if (this._flockData) this._applyFlockLayers();
+    this._applyFlockVisibility();
   }
 
   ready() {
@@ -425,6 +445,104 @@ export class MapView {
     const pts = this.map.getLayer(CAMERA_LAYER.layerId);
     if (heat) this.map.setLayoutProperty(CAMERA_LAYER.heatId, 'visibility', v);
     if (pts) this.map.setLayoutProperty(CAMERA_LAYER.layerId, 'visibility', v);
+    this._applyFlockVisibility();
+  }
+
+  // ---- Flock research layer (ALL devices — the cohesive surveillance view) ----
+  // Two circle layers over one source: road-relevant plate readers join the
+  // ALPR-red look; everything else (indoor/facility/drones/planned) renders as
+  // neutral-blue "research" dots. Toggled per CONFIG.flockDevicesUrl (7 MB gz —
+  // opt-in, fetched on first enable, cached by the service worker).
+  async setFlockVisible(on) {
+    this._flockVisible = on;
+    if (on && !this._flockData) {
+      try {
+        const res = await fetch(CONFIG.flockDevicesUrl, { cache: 'force-cache' });
+        if (!res.ok) throw new Error('flock data HTTP ' + res.status);
+        const buf = await res.arrayBuffer();
+        const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
+        let raw;
+        if (head[0] === 0x1f && head[1] === 0x8b) {
+          const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+          raw = await new Response(stream).arrayBuffer();
+        } else {
+          raw = buf;
+        }
+        const data = JSON.parse(new TextDecoder().decode(raw));
+        this._flockData = {
+          type: 'FeatureCollection',
+          features: (data.devices || []).map((d) => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [d[0], d[1]] },
+            // d = [lon, lat, type, status, active, rot, name, roadFlag]
+            properties: { t: d[2], s: d[3], a: d[4], r: d[5], n: d[6], road: d[7] },
+          })),
+        };
+        window.__gwFlockCount = this._flockData.features.length; // test/debug hook
+      } catch (e) {
+        console.warn('flock device layer failed', e.message);
+        return;
+      }
+    }
+    this._applyFlockLayers();
+    this._applyFlockVisibility();
+  }
+
+  _applyFlockLayers() {
+    if (!this._flockData || !this.map) return;
+    this._addSource(FLOCK.sourceId, { type: 'geojson', data: this._flockData });
+    // Road plate readers: same red as ALPR dots, slightly tighter.
+    this._addLayer({
+      id: FLOCK.roadId,
+      type: 'circle',
+      source: FLOCK.sourceId,
+      minzoom: 11,
+      filter: ['==', ['get', 'road'], 1],
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 14, 6],
+        'circle-color': '#ff4d6d',
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#0b0f17',
+        'circle-opacity': 0.9,
+      },
+    });
+    // Everything else (indoor wings, drones, gateways, planned/decommissioned):
+    // neutral blue "research" dots — visible but never mistaken for ALPR risk.
+    this._addLayer({
+      id: FLOCK.otherId,
+      type: 'circle',
+      source: FLOCK.sourceId,
+      minzoom: 12,
+      filter: ['!=', ['get', 'road'], 1],
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 3, 15, 5.5],
+        'circle-color': '#4c8dff',
+        'circle-stroke-width': 0.5,
+        'circle-stroke-color': '#0b0f17',
+        'circle-opacity': 0.75,
+      },
+    });
+    // Click → same camera modal (wired once per layer).
+    for (const id of [FLOCK.roadId, FLOCK.otherId]) {
+      if (this._flockWired && this._flockWired.has(id)) continue;
+      this._flockWired = this._flockWired || new Set();
+      this._flockWired.add(id);
+      this.map.on('click', id, (e) => {
+        const f = this.map.queryRenderedFeatures(e.point, { layers: [id] });
+        if (!f.length) return;
+        this._clickHandlers.forEach((h) => h(flockProps(f[0].properties), f[0].geometry.coordinates));
+      });
+      this.map.on('mouseenter', id, () => { this.map.getCanvas().style.cursor = 'pointer'; });
+      this.map.on('mouseleave', id, () => { this.map.getCanvas().style.cursor = ''; });
+    }
+  }
+
+  _applyFlockVisibility() {
+    if (!this._flockData || !this.map) return;
+    const v = this._flockVisible && this._camVisible !== false ? 'visible' : 'none';
+    for (const id of [FLOCK.roadId, FLOCK.otherId]) {
+      if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', v);
+    }
   }
 
   // Live traffic incident markers from UDOT (Workstream B).

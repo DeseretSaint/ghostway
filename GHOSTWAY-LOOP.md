@@ -74,6 +74,31 @@ free, privacy-first.
   with fix → inert. smoke/interact/report/camchip/compact/engine-check/
   engine-e2e all PASS, zero console errors.
 - Known remaining: real-drive ETA ground truth (blocked on Keaton's PG→Costco time).
+- 2026-09-26 (flock research data): flocksurveillance.org dataset wired in full.
+  Merge policy: road-relevant plate readers (125,908 of 335,701 rows) feed
+  routing — 79,590 matched to DeFlock points (direction filled on 349), 46,318
+  added as gap-fill ALPR points (source-tagged, dedupe-checked at 30 m);
+  non-road devices (indoor wings, drones, gateways, planned) are MAP-ONLY and
+  hard-blocked from the graph (build-graph guard). New flock-devices.json.gz
+  (335,701 devices, 7.3 MB gz) behind the opt-in "Flock" chip: road plate
+  readers red (ALPR look), everything else blue research dots. camera-merge-
+  check.mjs enforces 12 invariants. Graph rebuilt: 16,923 exposed edges (was
+  16,084). floor-audit / engine-check / avoidance-audit all PASS (min 92 m).
+- 2026-09-26 (Android Auto v2): plug-and-play turn panel. Phone→car bridge:
+  renderNavStep/stopNav push throttled JSON (src/nav-bridge.js) →
+  MainActivity.AABridge → NavState (volatile snapshot + COW listeners) →
+  CarScreen invalidates. One screen, two templates: NavigationTemplate
+  (RoutingInfo.setCurrentStep + Step cue/road/Maneuver from the PWA modifier)
+  while active, home ListTemplate otherwise — the switch is automatic on
+  nav start/stop, no car menus. nav-bridge-check.mjs: 7 contract checks
+  (transition-flush, ≤1/s ticks, wiring fail-guard). Docs:
+  docs/android-auto-setup.md troubleshooting matrix + RELEASE-NOTES v2 text.
+  Verified API surface (androidx.car.app 1.7.0): Step.Builder() no-arg
+  (setCue/setRoad/setManeuver), RoutingInfo.Builder().setCurrentStep(Step,
+  Distance), Distance.create(double, UNIT_METERS), Maneuver.Builder(int type).
+  Follow-up (documented, not built): Trip.Builder.addStep(Step, TravelEstimate)
+  for instrument-cluster feeds + AA prompt muting — TravelEstimate factory
+  needs signature verification first.
 
 ## Improvement Queue
 Research-only runs (locked or warm-deploy) append ideas here. Edit runs pull

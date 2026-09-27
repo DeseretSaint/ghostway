@@ -95,6 +95,7 @@ point `CONFIG.valhallaUrl` at it and nothing else changes.
 |---|---|---|
 | Base map | OpenStreetMap via [OpenFreeMap](https://openfreemap.org) | ODbL |
 | Cameras | [DeFlock](https://deflock.org) (OSM + volunteers) | ODbL / CC-BY |
+| Camera gap-fill + full device map | [Flock Safety public research dataset](https://flocksurveillance.org) (community-collected) | research publication |
 | Live traffic (state DOTs) | Each state's own open feed where available: UDOT events (UT), Idaho 511 WZDx, AZ511 WZDx, NV Roads WZDx, CDOT event reports (CO) — auto-activated for every state your route touches; registry in `src/data/dot-feeds.js` | public |
 | Work zones (national) | Every state's open WZDx feed (data.transportation.gov registry) | public |
 | Search | [Photon](https://photon.komoot.io) (OSM) | AGPL |
