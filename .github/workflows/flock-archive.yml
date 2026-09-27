@@ -1,0 +1,45 @@
+name: flock-archive
+
+# Preservation copy of the published Flock research dataset (flocksurveillance.org):
+# if the upstream ever disappears, this repo keeps the data alive. Monthly refresh
+# captures new device additions; `data-archive/flock-cameras-latest.tsv.gz` is the
+# verbatim source snapshot, and `public/cameras/` gets the app-ready artifacts.
+on:
+  schedule:
+    - cron: '30 6 1 * *' # monthly, 1st at 06:30 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Fetch + archive the dataset
+        run: |
+          mkdir -p data-archive
+          curl -fsSL --retry 3 https://flocksurveillance.org/data/cameras.tsv -o /tmp/cameras.tsv
+          wc -l /tmp/cameras.tsv
+          gzip -9 -c /tmp/cameras.tsv > data-archive/flock-cameras-latest.tsv.gz
+          # App-ready artifacts (also merges DeFlock): public/cameras/*.json(.gz)
+          node scripts/fetch-cameras.mjs
+
+      - name: Commit refreshed snapshots
+        run: |
+          git config user.name "ghostway-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data-archive public/cameras
+          if git diff --cached --quiet; then
+            echo "No dataset changes — nothing to commit."
+          else
+            git commit -m "data: monthly Flock research snapshot ($(date -u +%F))"
+            git push
+          fi

@@ -14,7 +14,7 @@ import { regionCovers } from './engine-region.js';
 import { valhallaPlanRoutes } from './valhalla.js';
 import { loadTraffic, loadNationalWzdx, closurePointsNear, workZonesInWindow } from './traffic.js';
 import { $, el, debounce, escHtml, fmtDistance, fmtDuration, fmtNavDistance, fmtSpeed, fmtArrive, haversine, haptic, pointToSegmentM, getUnits, setUnits } from './utils.js';
-import { buildPanel, renderRouteCard, showStatus, clearStatus, showStatusWithRetry } from './ui.js';
+import { buildPanel, renderRouteCard, showStatus, clearStatus, showStatusWithRetry, badgeHtml } from './ui.js';
 import { icon, stepIconSvg } from './icons.js';
 import { registerSW } from './pwa.js';
 import { getShareUrl, applyShareParams, renderShareQr } from './share.js';
@@ -74,12 +74,12 @@ async function init() {
   await app.map.ready();
   // Apply the rehydrated camera-layer state now that the source is ready.
   app.map.setCameraLayerVisible(app._camLayerOn);
-  $('#camLayerBtn').classList.toggle('off', !app._camLayerOn);
   // Flock full-dataset layer (opt-in — ~7 MB research data; default OFF).
   app._flockOn = localStorage.getItem('gw-flock-layer') === '1';
-  $('#flockLayerBtn').classList.toggle('off', !app._flockOn);
-  $('#flockLayerBtn').setAttribute('aria-pressed', String(!!app._flockOn));
   if (app._flockOn) app.map.setFlockVisible(true);
+  // Reflect layer state in the Layers sheet checkboxes at boot.
+  const lyrCam = $('#lyrCameras'); if (lyrCam) lyrCam.checked = app._camLayerOn;
+  const lyrFlock = $('#lyrFlock'); if (lyrFlock) lyrFlock.checked = !!app._flockOn;
   setSplashText('Map ready — loading your route engine…');
   // Apply a saved basemap preference (light/dark) before the splash clears.
   const savedBase = localStorage.getItem('gw-basemap');
@@ -478,21 +478,44 @@ function wireApp() {
   app.map.onUserPan(() => {
     if (app.state.navigating && app._followActive) setFollow(false);
   });
-  $('#camLayerBtn').addEventListener('click', () => {
-    app._camLayerOn = !(app._camLayerOn ?? true);
+  // Layers sheet — one labelled place for the map layers (Google/Apple
+  // parity). Replaces the bare camera/Flock chips whose purpose read as
+  // unclear (Keaton field report 2026-09-26).
+  const layersSheet = $('#layersSheet');
+  const layersBtn = $('#layersBtn');
+  const syncLayersUi = () => {
+    $('#lyrCameras').checked = !!app._camLayerOn;
+    $('#lyrFlock').checked = !!app._flockOn;
+    layersBtn.setAttribute('aria-expanded', String(!layersSheet.hidden));
+    layersBtn.classList.toggle('on', !!(app._camLayerOn || app._flockOn));
+  };
+  layersBtn.addEventListener('click', () => {
+    layersSheet.hidden = !layersSheet.hidden;
+    syncLayersUi();
+  });
+  document.addEventListener('click', (e) => {
+    if (!layersSheet.hidden && !layersSheet.contains(e.target) && !layersBtn.contains(e.target)) {
+      layersSheet.hidden = true;
+      layersBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  $('#lyrCameras').addEventListener('change', (e) => {
+    app._camLayerOn = e.target.checked;
     app.map.setCameraLayerVisible(app._camLayerOn);
-    $('#camLayerBtn').classList.toggle('off', !app._camLayerOn);
     try { localStorage.setItem('gw-cam-layer', app._camLayerOn ? '1' : '0'); } catch {}
+    syncLayersUi();
   });
-  // Full Flock device dataset (every device incl. non-road) — the cohesive
-  // "see every camera" layer. Opt-in: first enable downloads the dataset.
-  $('#flockLayerBtn').addEventListener('click', () => {
-    app._flockOn = !(app._flockOn ?? false);
+  // Flock research dataset (every device incl. non-road) — the cohesive
+  // "see every camera" layer. Opt-in: first enable downloads ~7 MB.
+  $('#lyrFlock').addEventListener('change', (e) => {
+    app._flockOn = e.target.checked;
     try { localStorage.setItem('gw-flock-layer', app._flockOn ? '1' : '0'); } catch {}
-    $('#flockLayerBtn').classList.toggle('off', !app._flockOn);
-    $('#flockLayerBtn').setAttribute('aria-pressed', String(!!app._flockOn));
     app.map.setFlockVisible(!!app._flockOn);
+    syncLayersUi();
   });
+  // Inline "use my location" in the start field — thumb-reachable beside the
+  // field being filled (the top-right GPS button was a reach across the phone).
+  $('#fromLocateBtn').addEventListener('click', useMyLocation);
 
   // Maps-parity basemap switcher (light/dark). Same open provider — no new
   // third-party dependency. Preference persists in localStorage.
@@ -737,58 +760,14 @@ function updateRouteCardInPlace(app, prevOptions, prevChosen, nextOptions, nextC
     distEl.textContent = distKm < 1 ? `${Math.round(fmtDist)} m` : `${distKm.toFixed(1)} km`;
   }
   if (badgeEl) {
-    badgeEl.innerHTML = sel.cameras === 0
-      ? `${window.__gwIcon ? window.__gwIcon('shield', { size: 15 }) : '🛡️'} Fully clear of known cameras`
-      : `${window.__gwIcon ? window.__gwIcon('shield', { size: 15 }) : '🛡️'} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`;
+    badgeEl.innerHTML = badgeHtml(sel);
   }
-  // Update each option button's meta line + camera-free badge. The button
-  // node identity is preserved; only inner text changes.
-  const fastest = nextOptions.find((o) => o.mode === 'off') || nextOptions[0];
-  for (let i = 0; i < nextOptions.length; i++) {
-    const btn = card.querySelector(`.route-opt[data-opt="${i}"]`);
-    if (!btn) continue;
-    const o = nextOptions[i];
-    // Camera-free badge: add / remove.
-    let badge = btn.querySelector('.opt-clear-badge');
-    if (o.cameras === 0 && !badge) {
-      const span = document.createElement('span');
-      span.className = 'opt-clear-badge';
-      span.textContent = '🛡️ Camera-free route';
-      // Place after .opt-label.
-      const label = btn.querySelector('.opt-label');
-      if (label && label.nextSibling) btn.insertBefore(span, label.nextSibling);
-      else btn.appendChild(span);
-    } else if (o.cameras !== 0 && badge) {
-      badge.remove();
-    }
-    // Camera-count chip: always present, update its number.
-    let cams = btn.querySelector('.opt-cams');
-    const camText = o.cameras === 0 ? '0 cameras' : `${o.cameras} camera${o.cameras === 1 ? '' : 's'}`;
-    if (!cams) {
-      cams = document.createElement('span');
-      cams.className = 'opt-cams';
-      btn.appendChild(cams);
-    }
-    cams.className = o.cameras === 0 ? 'opt-cams clear' : 'opt-cams';
-    cams.textContent = camText;
-    // opt-meta suffix: rebuild the line (duration · distance · cams · hw · delay).
-    const meta = btn.querySelector('.opt-meta');
-    const distNum = o.distance;
-    const durMin2 = Math.round(o.duration / 60);
-    const distKm2 = distNum / 1000;
-    const distStr = distKm2 < 1 ? `${Math.round(distNum)} m` : `${distKm2.toFixed(1)} km`;
-    const durStr = durMin2 < 60 ? `${durMin2} min` : `${Math.floor(durMin2 / 60)} h ${durMin2 % 60} min`;
-    if (meta) {
-      meta.textContent = `${durStr} · ${distStr} · ${camText}`;
-    }
-    // Selected state.
-    if (i === nextChosen) {
-      btn.classList.add('chosen');
-      btn.setAttribute('aria-pressed', 'true');
-    } else {
-      btn.classList.remove('chosen');
-      btn.setAttribute('aria-pressed', 'false');
-    }
+  // Update each mode chip's meta line — options can refresh with live traffic
+  // and the chips must never lag the data. (The old .route-opt block below
+  // went dead with the single-route card redesign in #31.)
+  for (const o of nextOptions) {
+    const meta = card.querySelector(`.mode-chip[data-mode="${o.mode}"] .chip-meta`);
+    if (meta) meta.textContent = `${fmtDuration(o.duration)} · ${o.cameras || 0} cam`;
   }
 }
 

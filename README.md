@@ -106,6 +106,11 @@ The camera snapshot, national work-zone snapshot, and graph data refresh
 automatically via GitHub Actions (`camera-refresh.yml`,
 `wzdx-national-refresh.yml`). No proprietary tile servers anywhere.
 
+**Preservation copy:** the full published Flock research dataset is archived
+in-repo at `data-archive/flock-cameras-latest.tsv.gz` (verbatim TSV) and
+refreshed monthly by `flock-archive.yml` — if the upstream sources ever
+disappear, the data lives on here.
+
 ## Run it yourself
 
 ```bash

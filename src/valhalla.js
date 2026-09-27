@@ -123,25 +123,31 @@ export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'modera
   // Avoid-highways retired (addendum 3): engine decides highway tradeoffs.
   const baseline = await valhallaRoute(from, to, null);
 
-  if (mode === 'off') {
-    const opt = {
-      mode: 'off', label: 'Fastest',
-      route: baseline,
-      coords: baseline.coords,
-      distance: baseline.distance, duration: baseline.duration, delay: 0,
-      cameras: 0, camerasKnown: false,
-      instructions: valhallaInstructions(baseline.maneuvers),
-    };
-    return { options: [opt], source: 'valhalla' };
-  }
-
-  // Camera pool around the corridor (DeFlock tiles + cached fallback).
+  // Camera pool around the corridor (DeFlock tiles + cached fallback) — built
+  // for EVERY mode so every option's camera count comes from the same data the
+  // map draws. (The old mode:'off' fast-path returned a hardcoded cameras: 0
+  // and the card claimed "fully clear" past a visible camera — Keaton field
+  // report 2026-09-26, Highland.)
   const buf = 0.012;
   const bbox = [
     Math.min(from[0], to[0]) - buf, Math.min(from[1], to[1]) - buf,
     Math.max(from[0], to[0]) + buf, Math.max(from[1], to[1]) + buf,
   ];
   const pool = await cameraStore.getCameras(bbox).catch(() => []);
+  const poolKnown = pool.length > 0;
+
+  if (mode === 'off') {
+    const opt = {
+      mode: 'off', label: 'Fastest',
+      route: baseline,
+      coords: baseline.coords,
+      distance: baseline.distance, duration: baseline.duration, delay: 0,
+      cameras: nearRouteFromList(baseline.coords, pool, CONFIG.avoidance.routeCorridorM).length,
+      camerasKnown: poolKnown,
+      instructions: valhallaInstructions(baseline.maneuvers),
+    };
+    return { options: [opt], source: 'valhalla' };
+  }
 
   // Iterative exclusion (Valhalla demo caps ~50 exclude_locations; we use 40).
   const MAX_EXCL = 40;
@@ -206,7 +212,7 @@ export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'modera
       route: current,
       coords: current.coords,
       distance: current.distance, duration: current.duration, delay: 0,
-      cameras: camerasNow.length,
+      cameras: camerasNow.length, camerasKnown: poolKnown,
       instructions: valhallaInstructions(current.maneuvers),
     });
   }
@@ -216,6 +222,7 @@ export async function valhallaPlanRoutes(from, to, cameraStore, { mode = 'modera
     coords: baseline.coords,
     distance: baseline.distance, duration: baseline.duration, delay: 0,
     cameras: nearRouteFromList(baseline.coords, pool, CONFIG.avoidance.routeCorridorM).length,
+    camerasKnown: poolKnown,
     instructions: valhallaInstructions(baseline.maneuvers),
   });
 

@@ -294,6 +294,16 @@ export function expandSearch(app) {
   $('#panel').classList.remove('panel--expanded');
 }
 
+// The badge speaks only what the data supports (tri-state): data missing →
+// hedge, zero → clear-of-KNOWN, n → counted. A hardcoded 0 here once claimed
+// "fully clear" past a visible camera (Keaton field report 2026-09-26).
+export function badgeHtml(sel) {
+  const shield = icon('shield', { size: 15 });
+  if (sel && sel.camerasKnown === false) return `${shield} Camera data unavailable — route unverified`;
+  if (!sel || !sel.cameras) return `${shield} Fully clear of known cameras`;
+  return `${shield} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`;
+}
+
 function renderEngineCard(app, card, result) {
   const { options, chosen } = result;
   const sel = options[chosen];
@@ -319,7 +329,7 @@ function renderEngineCard(app, card, result) {
     const active = sel.mode === mode;
     const label = { strict: 'Clearest', moderate: 'Balanced', off: 'Fastest' }[mode] || mode;
     const cams = o ? (o.cameras === 0 ? '0' : String(o.cameras)) : '—';
-    return `<button class="mode-chip ${active ? 'active' : ''}" data-mode="${mode}" type="button" role="button" tabindex="0" aria-pressed="${active}" aria-label="${escHtml(label + ': ' + (o ? fmtDuration(o.duration) + ', ' + cams + ' cameras' : 'unavailable'))}">${modeEmoji(mode)} ${label}<span class="chip-meta">${o ? fmtDuration(o.duration) + ' · ' + cams + ' cam' : 'n/a'}</span></button>`;
+    return `<button class="mode-chip ${active ? 'active' : ''}" data-mode="${mode}" type="button" role="button" tabindex="0" aria-pressed="${active}" aria-label="${escHtml(label + ': ' + (o ? fmtDuration(o.duration) + ', ' + cams + ' cameras' : 'not routed yet — tap to route'))}">${modeEmoji(mode)} ${label}<span class="chip-meta">${o ? fmtDuration(o.duration) + ' · ' + cams + ' cam' : 'tap to route'}</span></button>`;
   };
 
   card.innerHTML = `
@@ -330,11 +340,7 @@ function renderEngineCard(app, card, result) {
       <div class="rc-arrive">Arrive ${fmtArrive(sel.duration)}</div>
       <div class="rc-dist">${fmtDistance(sel.distance)}</div>
     </div>
-    <div class="rc-badge">${
-      sel.cameras === 0
-        ? `${icon('shield', { size: 15 })} Fully clear of known cameras`
-        : `${icon('shield', { size: 15 })} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`
-    }</div>
+    <div class="rc-badge">${badgeHtml(sel)}</div>
     <div class="rc-trip" id="tripBadge" hidden></div>
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     <button id="densityBtn" class="text-link rc-density" type="button" aria-pressed="${!!app.state.compactBanner}" title="Toggle the active-nav banner density (compact = fewer glance elements)">${icon(app.state.compactBanner ? 'densityFull' : 'densityCompact', { size: 14 })} ${app.state.compactBanner ? 'Compact banner' : 'Full banner'}</button>

@@ -20,11 +20,12 @@ try {
   await page.reload({ waitUntil: 'networkidle2' });
   await page.waitForFunction(() => (document.getElementById('status')?.textContent || '').includes('Tap the locate button'), { timeout: 15000 });
 
-  // 1. Chip off by default (opt-in dataset), then enable → full data loads.
+  // 1. Layers sheet: Flock off by default (opt-in dataset), then enable → full data loads.
+  await page.click('#layersBtn');
   const before = await page.evaluate(() => ({
-    pressed: document.getElementById('flockLayerBtn').getAttribute('aria-pressed'),
+    pressed: document.getElementById('lyrFlock').checked ? 'true' : 'false',
   }));
-  await page.click('#flockLayerBtn');
+  await page.evaluate(() => document.getElementById('lyrFlock').click());
   await page.waitForFunction(() => (window.__gwFlockCount || 0) >= 330000, { timeout: 45000 });
   const loaded = await page.evaluate(() => {
     const m = window.__gwMap;
@@ -39,22 +40,22 @@ try {
       roadLayer: !!m.getLayer('flock-road-pts'),
       otherLayer: !!m.getLayer('flock-other-pts'),
       roadVisible: m.getLayer('flock-road-pts') && m.getLayoutProperty('flock-road-pts', 'visibility'),
-      pressed: document.getElementById('flockLayerBtn').getAttribute('aria-pressed'),
+      pressed: document.getElementById('lyrFlock').checked ? 'true' : 'false',
     };
   });
 
   // 2. Toggle off → layers hidden; toggle back on persists across reload.
-  await page.click('#flockLayerBtn');
+  await page.evaluate(() => document.getElementById('lyrFlock').click());
   await new Promise(r => setTimeout(r, 300));
   const afterOff = await page.evaluate(() => ({
-    pressed: document.getElementById('flockLayerBtn').getAttribute('aria-pressed'),
+    pressed: document.getElementById('lyrFlock').checked ? 'true' : 'false',
     hidden: window.__gwMap.getLayoutProperty('flock-road-pts', 'visibility') === 'none',
   }));
-  await page.click('#flockLayerBtn'); // back on → persisted
+  await page.evaluate(() => document.getElementById('lyrFlock').click()); // back on → persisted
   await page.reload({ waitUntil: 'networkidle2' });
   await page.waitForFunction(() => (window.__gwFlockCount || 0) >= 330000, { timeout: 45000 });
   const persisted = await page.evaluate(() => ({
-    pressed: document.getElementById('flockLayerBtn').getAttribute('aria-pressed'),
+    pressed: document.getElementById('lyrFlock').checked ? 'true' : 'false',
     count: window.__gwFlockCount,
   }));
 

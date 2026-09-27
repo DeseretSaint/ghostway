@@ -1298,6 +1298,9 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   for (const o of uniq) {
     o.instructions = instructionsFor(graph, o.route);
     o.coords = simplify(o.route.coords);
+    // Honesty flag for the badge: known unless we had NO camera data source
+    // for this corridor (list fetch failed AND nothing counted).
+    o.camerasKnown = (deflockCams && deflockCams.length > 0) || (o.cameras || 0) > 0;
     o.cameras = o.route.cameras;
     o.cameraPoints = cameraClusterPositions(graph, o.route);
     o.highwayKm = o.route.highwayKm || 0;
