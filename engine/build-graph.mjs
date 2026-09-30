@@ -90,7 +90,9 @@ for (const f of cams.features) {
   // ALPR classification shares isAlprCamera() with the live map layer
   // (plate-reader brands + traffic-facing cameras), single source of truth.
   const isAlpr = isAlprCamera(f.properties || {});
-  const w = isAlpr ? 1.0 : 0.5;
+  const w = isAlpr ? 1.0 : 0.25;
+  // ^ non-ALPR alone never reaches the strict floor (64): 0.25×255 = 63.75,
+  //   so generic surveillance weighs routes down but never walls them.
   const gx = Math.floor(lon / CELL);
   const gy = Math.floor(lat / CELL);
   for (let dx = -1; dx <= 1; dx++) {

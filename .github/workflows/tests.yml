@@ -31,6 +31,7 @@ jobs:
         run: |
           node scripts/nav-bridge-check.mjs
           node scripts/badge-honesty-check.mjs
+          node scripts/clear-route-check.mjs
           node scripts/camera-merge-check.mjs || echo "merge check needs regenerated engine data — informational"
 
       - name: Map suites

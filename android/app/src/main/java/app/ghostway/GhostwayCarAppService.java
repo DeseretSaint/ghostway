@@ -215,7 +215,7 @@ public class GhostwayCarAppService extends CarAppService {
                     .setTitle(arrived ? "Arrived — trip complete" : "Camera-avoiding navigation")
                     .addText(arrived
                         ? "Start a new route any time from the phone."
-                        : "Strict mode keeps you 30+ m from known ALPR cameras on clearable corridors.")
+                        : "Clearest mode bends the route 75+ m clear of known plate readers.")
                     .build())
                 .build();
             return new ListTemplate.Builder()

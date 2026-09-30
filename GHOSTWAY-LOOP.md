@@ -111,6 +111,22 @@ free, privacy-first.
   suites moved to CI (tests.yml, browser-actions/setup-chrome): engine-e2e +
   ALERTS PASS + CAM-CHIP PASS (14/14 contrast) + NAV BRIDGE PASS green there.
 
+- 2026-09-30 (routing truth round — "Clear needs to be clear"): Keaton's Home
+  Depot corridor routed 22m past F#006 State St @ E Main St WB. TWO root
+  causes: (a) the classifier gated road-relevance on the scraped status field
+  (inPlanning=83k, decommissioned=38k rows — junk in both directions) so the
+  camera never entered the graph; status is not evidence, device CLASS +
+  placement now govern routing (119,406 matched + 208,332 gap-fill, was
+  46k; 22,272 exposed edges, was 16,923). (b) the strict hard floor was 160
+  ≈ 37m — a camera across a wide arterial reads your plate at 50-70m and
+  slipped past. HARD_CAM_EXPOSURE now 64 ≈ 75m: THE SAME RADIUS the honest
+  corridor count uses to say "passes a camera" — counting and avoidance share
+  one definition of clear. Non-ALPR weight 0.5→0.25 (max 63.75) keeps generic
+  surveillance below the floor alone (never walls roads). floor-audit derives
+  its bar from the constant (was hardcoded 31.4m); new scripts/clear-route-
+  check.mjs locks the corridor: fastest passes F#006 at 22m (self-validating),
+  Clearest bends 469m around it at equal speed. Battery green.
+
 ## Improvement Queue
 Research-only runs (locked or warm-deploy) append ideas here. Edit runs pull
 from this queue first when it's non-empty.

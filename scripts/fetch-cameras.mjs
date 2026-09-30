@@ -86,6 +86,16 @@ async function fetchBuf(url, timeoutMs = 300000) {
 // jails, restrooms), drones, gateways etc. sit at facility centroids and would
 // poison avoidance with false exposure. Each row keeps a roadRelevant flag;
 // the graph builder skips roadRelevant === false.
+//
+// STATUS IS NOT EVIDENCE (Keaton field report 2026-09-30): the scraped
+// dataset said "inPlanning" for F#006 State St @ E Main St WB — a plate
+// reader he has personally verified reads plates — and "Clearest" drove
+// straight through it. 83k rows say "inPlanning", 38k "decommissioned": the
+// field is junk in both directions. Routing now keys on DEVICE CLASS +
+// placement only; a device the dataset places on a road is avoided whatever
+// the status column claims. "Clear means clear."
+const NON_ROAD_TYPE = /^(factoryFixture|backhaulBox|talkDown|wingGateway|multiEvidenceDevice|drone|droneControllerBox|droneRadar|droneDockingStation|external)$/i;
+const INDOOR_NAME = /\b(shower|restroom|bathroom|toilet|jail|detention|holding|cell|sally ?port|lobby|hallway|corridor|gym|cafeteria|classroom|interior|indoor|warehouse|kitchen|dorm|ward|clinic|office|server|evidence|locker|laundry|visitation|intake)\b/i;
 function parseFlockTsv(text) {
   const lines = text.split('\n');
   const out = [];
@@ -99,10 +109,7 @@ function parseFlockTsv(text) {
     const rot = c[7] === '' ? null : Number(c[7]);
     const created = c[13] || '';
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) { bad++; continue; }
-    const plate = features.includes('readsLicensePlates') ||
-      features.split(',').includes('lpr') ||
-      type.startsWith('falcon');
-    const roadRelevant = plate && status === 'inService' && active === '1';
+    const roadRelevant = !NON_ROAD_TYPE.test(type) && !INDOOR_NAME.test(name || '');
     if (roadRelevant) road++;
     out.push({
       lon, lat, type, status, active, name,
@@ -185,6 +192,7 @@ async function main() {
       continue;
     }
     // GAP FILL: no DeFlock neighbor — add as a tagged Flock-research point.
+    // Engine props stay lean (name/status detail lives in the corpus file).
     addedFeatures.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
@@ -196,8 +204,6 @@ async function main() {
         source: 'flocksurveillance.org',
         roadRelevant: true,
         flockType: c.type,
-        name: c.name,
-        created: c.created,
       },
     });
     added++;

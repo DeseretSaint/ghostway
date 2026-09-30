@@ -424,7 +424,14 @@ export function nearestNodeInComponent(lon, lat, targetComp) {
 // ALPR read range (~10-23 m at speed) plus buffer. Multiple cameras only add
 // exposure (safe direction); non-ALPR cameras weigh 0.5 and alone stay under
 // the floor, which is intended (they don't read plates).
-export const HARD_CAM_EXPOSURE = 160;
+// Strict ("Clearest") hard floor: edges whose exposure byte reaches this are
+// FORBIDDEN (endpoint roads exempt). 64 ⇔ within ~75 m of an ALPR plate
+// reader — the same radius the honest corridor count uses to say "passes a
+// camera", so counting and avoidance share one definition of clear. (Was 160
+// ≈ 37 m: the State St camera at the far side of a wide arterial still reads
+// your plate at 50-70 m and slipped past it — Keaton field report 2026-09-30.
+// "Clear means clear": Clearest bends over backwards.)
+export const HARD_CAM_EXPOSURE = 64;
 // Generalized cost (engine-rebuild plan step 1): drivers do NOT minimize
 // time — distance carries independent disutility (fuel/wear/perceived effort,
 // Wardman 1985) and <50% of drivers take the fastest route (Ramming 2002).
