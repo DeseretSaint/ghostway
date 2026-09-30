@@ -815,11 +815,24 @@ async function checkForUpdates(manual = false) {
         openModal(`
           <h3>Update available</h3>
           <p>A newer Ghostway build is ready (<code>${escHtml(remote)}</code> — you have <code>${escHtml(mine)}</code>).</p>
-          <p><a class="primary-btn" id="dlUpdate" href="${apk}">Download &amp; install</a>
-             <button class="text-link" id="laterUpdate">Later</button></p>
+          <div class="modal-actions">
+            <button class="primary-btn" id="dlUpdate">Download &amp; install</button>
+            <button class="text-link" id="laterUpdate">Later</button>
+          </div>
           <p class="muted small">Android will ask you to confirm the install — same app, your settings stay.</p>
         `);
         $('#laterUpdate').addEventListener('click', closeModal);
+        $('#dlUpdate').addEventListener('click', () => {
+          // Android shell: DownloadManager + auto-install intent (a plain
+          // anchor download dead-ends in a WebView — field report 2026-09-30).
+          if (window.AABridge && typeof window.AABridge.downloadApk === 'function') {
+            window.AABridge.downloadApk(apk);
+            closeModal();
+            showStatus('Downloading update… the installer opens when it’s done.', 'info');
+          } else {
+            window.open(apk, '_blank', 'noopener');
+          }
+        });
         return;
       }
     } catch (e) {

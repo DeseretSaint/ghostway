@@ -38,7 +38,8 @@ const checks = {
   recenterNotDuplicate: /gpsBtn'\)\.addEventListener\('click', \(\) => \{/.test(main),
   pillWired: /safety-pill'\)\.addEventListener\('click'/.test(main),
   feedbackEncoded: /issues\/new\?title=/.test(main),
-  updatesInApp: /checkForUpdates/.test(main) && /data-action="updates"/.test(readFileSync('index.html', 'utf8')),
+  updatesInApp: /checkForUpdates/.test(main) && /data-action="updates"/.test(readFileSync('index.html', 'utf8'))
+    && /downloadApk/.test(main) && /modal-actions/.test(main),
 };
 
 // Behavioral: badgeHtml itself (pure function).

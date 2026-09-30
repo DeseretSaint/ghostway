@@ -424,6 +424,8 @@ body {
 .primary-btn {
   flex: 1;
   height: 48px;
+  padding: 0 20px; /* label breathing room in any container (flex or not) */
+  text-decoration: none; /* anchor CTAs are buttons, not links */
   border-radius: var(--r-md);
   border: none;
   background: linear-gradient(90deg, var(--accent), #2bb6a8);
@@ -436,6 +438,21 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* Modal action rows: primary CTA + secondary link, 44px touch targets. */
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 10px;
+}
+.modal-actions .primary-btn { flex: 0 1 auto; min-width: 170px; }
+.modal-actions .text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
 }
 .primary-btn:hover {
   filter: brightness(1.1);
