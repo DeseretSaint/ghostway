@@ -60,8 +60,10 @@ try {
   const checks = {
     onByDefault: loaded.checked === 'true',
     fullDatasetLoads: loaded.count >= 330000,
-    // Corpus: ~188k road (DeFlock + road gap-fill) + ~210k non-road devices.
-    roadSplitSane: loaded.roadCount >= 180000 && loaded.roadCount <= 195000 && loaded.otherCount >= 200000,
+    // Corrected classification (2026-09-30): device class + placement govern,
+    // not the junk status field — ~350k rows are road-placed plate readers;
+    // the blue class is now only genuine facility/indoor devices (~9k).
+    roadSplitSane: loaded.roadCount >= 300000 && loaded.otherCount >= 5000 && loaded.otherCount <= 20000,
     bothLayers: loaded.roadLayer && loaded.otherLayer,
     visibleWhenOn: loaded.roadVisible !== 'none',
     toggleHides: afterOff.checked === 'false' && afterOff.hidden,
