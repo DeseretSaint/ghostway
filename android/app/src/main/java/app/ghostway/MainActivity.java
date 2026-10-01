@@ -2,13 +2,15 @@ package app.ghostway;
 
 import android.Manifest;
 import android.app.DownloadManager;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -16,6 +18,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -38,23 +41,53 @@ public class MainActivity extends AppCompatActivity {
     private String pendingGeoOrigin;
     private GeolocationPermissions.Callback pendingGeoCallback;
     private long pendingApkDownload = -1;
+    private Handler apkPollHandler;
 
-    /** Completed APK download → hand the file to the system installer. */
-    private final BroadcastReceiver apkDownloadDone = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-            if (id != pendingApkDownload) return;
-            pendingApkDownload = -1;
-            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            Uri uri = dm != null ? dm.getUriForDownloadedFile(id) : null;
-            if (uri == null) return;
-            Intent install = new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(uri, "application/vnd.android.package-archive");
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            try { startActivity(install); } catch (Exception ignored) { /* no installer */ }
+    /** Open the system installer over DownloadManager's granted content:// URI. */
+    private void openInstaller(DownloadManager dm, long id) {
+        Uri uri = dm.getUriForDownloadedFile(id);
+        if (uri == null) return;
+        Intent install = new Intent(Intent.ACTION_VIEW);
+        install.setDataAndType(uri, "application/vnd.android.package-archive");
+        install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivity(install);
+        } catch (Exception e) {
+            Toast.makeText(this,
+                "Couldn’t open the installer — the APK is in Downloads as ghostway-update.apk",
+                Toast.LENGTH_LONG).show();
         }
-    };
+    }
+
+    /**
+     * Poll the download (2s) until it settles. Deliberately NOT a broadcast
+     * receiver: OEM skins (MIUI etc.) drop background broadcasts, and a silent
+     * miss looked exactly like "nothing happens" (field report 2026-10-01).
+     */
+    private void pollApkDownload() {
+        if (apkPollHandler == null) apkPollHandler = new Handler(Looper.getMainLooper());
+        apkPollHandler.postDelayed(() -> {
+            if (pendingApkDownload < 0) return;
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (dm == null) return;
+            try (Cursor c = dm.query(new DownloadManager.Query().setFilterById(pendingApkDownload))) {
+                if (c == null || !c.moveToFirst()) return;
+                int status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                    long id = pendingApkDownload;
+                    pendingApkDownload = -1;
+                    openInstaller(dm, id);
+                    return;
+                }
+                if (status == DownloadManager.STATUS_FAILED) {
+                    pendingApkDownload = -1;
+                    Toast.makeText(this, "Update download failed — check your connection and try again.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+            pollApkDownload(); // still running — look again in 2s
+        }, 2000);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -114,10 +147,6 @@ public class MainActivity extends AppCompatActivity {
         // Phone→car nav bridge (AA v2): src/nav-bridge.js pushes nav state
         // JSON here; GhostwayCarAppService mirrors it onto the head unit.
         web.addJavascriptInterface(new JsBridge(), "AABridge");
-        // Update downloads (in-app "Download & install") complete → installer.
-        ContextCompat.registerReceiver(this, apkDownloadDone,
-            new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            ContextCompat.RECEIVER_NOT_EXPORTED);
         web.loadUrl("file:///android_asset/www/index.html");
         setContentView(web);
     }
@@ -129,7 +158,12 @@ public class MainActivity extends AppCompatActivity {
             NavState.set(json);
         }
 
-        /** Download the update APK (DownloadManager owns the file + URI grant). */
+        /**
+         * Download the update APK and open the installer when it lands.
+         * GitHub serves release assets as application/octet-stream — without
+         * the explicit APK MIME the completion notification opens nothing
+         * (field report 2026-10-01: "clicking the notification does nothing").
+         */
         @JavascriptInterface
         public void downloadApk(String url) {
             try {
@@ -138,15 +172,27 @@ public class MainActivity extends AppCompatActivity {
                 DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
                 req.setTitle("Ghostway update");
                 req.setDescription("Downloading the latest Ghostway build…");
+                req.setMimeType("application/vnd.android.package-archive");
                 req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                try {
+                    // Land in the visible Downloads folder (file managers can
+                    // see it); fall back to the system store on old Android.
+                    req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "ghostway-update.apk");
+                } catch (Exception ignored) { /* <29 without storage perm — default store */ }
                 pendingApkDownload = dm.enqueue(req);
-            } catch (Exception ignored) { /* bad url — the web fallback handles it */ }
+                pollApkDownload();
+            } catch (Exception e) {
+                // Enqueue failed outright — get the update in the browser instead.
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                } catch (Exception ignored) {}
+            }
         }
     }
 
     @Override
     protected void onDestroy() {
-        try { unregisterReceiver(apkDownloadDone); } catch (Exception ignored) {}
+        if (apkPollHandler != null) apkPollHandler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 
