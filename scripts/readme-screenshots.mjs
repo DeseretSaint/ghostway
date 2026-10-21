@@ -45,32 +45,28 @@ const VIEWPORT = {
   hasTouch: true,
 };
 
-// Candidate corridors inside the shipped graph coverage. Labels are what a user
-// would see in the from/to fields.
+// Screenshot pairs. All validated by --probe (>=2 mode chips, distinct camera
+// counts, banner fields populate, zero console errors) and deliberately FAR
+// from the owner's home metro (Utah Valley / Salt Lake) so a committed
+// screenshot never pins a personal location. Selection is RANDOM; each run
+// picks 2 distinct drives.
 const PAIRS = [
-  { id: 'pg-slc', from: { label: 'Pleasant Grove, Utah', coords: [-111.7386, 40.3644] }, to: { label: 'Salt Lake City, Utah', coords: [-111.891, 40.7608] } },
-  { id: 'provo-slc', from: { label: 'Provo, Utah', coords: [-111.6585, 40.2338] }, to: { label: 'Salt Lake City, Utah', coords: [-111.891, 40.7608] } },
-  { id: 'orem-lehi', from: { label: 'Orem, Utah', coords: [-111.6946, 40.2969] }, to: { label: 'Lehi, Utah', coords: [-111.8508, 40.3916] } },
-  { id: 'pg-slcairport', from: { label: 'Pleasant Grove, Utah', coords: [-111.7386, 40.3644] }, to: { label: 'Salt Lake City International Airport', coords: [-111.9791, 40.7899] } },
+  { id: 'ogden-roy', from: { label: 'Ogden, Utah', coords: [-111.9738, 41.2230] }, to: { label: 'Roy, Utah', coords: [-112.0263, 41.1619] } },
+  { id: 'sg-washington', from: { label: 'St. George, Utah', coords: [-113.5684, 37.0965] }, to: { label: 'Washington, Utah', coords: [-113.5083, 37.1305] } },
+  { id: 'cedarcity-enoch', from: { label: 'Cedar City, Utah', coords: [-113.0619, 37.6775] }, to: { label: 'Enoch, Utah', coords: [-113.0233, 37.7736] } },
 ];
 
-// This host has 3.7 GB RAM and runs other worker chromium sessions, so a probe
-// that opens every pair in one process grows memory. Probe one pair per
-// process: GW_PAIR=<id> node scripts/readme-screenshots.mjs --probe
-if (PROBE && !process.env.GW_PAIR) {
-  console.error(
-    'FAIL: --probe requires GW_PAIR (one pair per process). Candidates: ' +
-      PAIRS.map((p) => p.id).join(', ')
-  );
-  process.exit(1);
-}
-
-const pickPair = () => {
+const pickPair = (excludeId) => {
   const wanted = process.env.GW_PAIR;
-  if (!wanted) return PAIRS[0];
-  const p = PAIRS.find((x) => x.id === wanted);
-  if (!p) throw new Error(`GW_PAIR=${wanted} not in list: ${PAIRS.map((x) => x.id).join(', ')}`);
-  return p;
+  if (wanted) {
+    const p = PAIRS.find((x) => x.id === wanted);
+    if (!p) throw new Error(`GW_PAIR=${wanted} not in list: ${PAIRS.map((x) => x.id).join(', ')}`);
+    return p;
+  }
+  // Random pick from candidates, optionally excluding the pair already used so
+  // the two screenshots show two DIFFERENT random drives.
+  const pool = PAIRS.filter((x) => x.id !== excludeId);
+  return pool[Math.floor(Math.random() * pool.length)] || PAIRS[0];
 };
 
 async function readCard(page) {
@@ -140,31 +136,38 @@ async function route(page, pair) {
   await wait(2500);
 }
 
-async function newPage(browser) {
+async function newPage(browser, pair = PAIRS[0]) {
   const page = await browser.newPage();
   await page.setViewport(VIEWPORT);
-  // No GPS headless: startNav() would otherwise wait on a fix.
-  await page.evaluateOnNewDocument(() => {
-    try {
-      const stub = {
-        watchPosition: (ok) => {
-          try {
-            ok && ok({ coords: { longitude: -111.7386, latitude: 40.3644, speed: 0, heading: 0, accuracy: 5 }, timestamp: Date.now() });
-          } catch {}
-          return 1;
-        },
-        clearWatch: () => {},
-        getCurrentPosition: (ok) => {
-          try {
-            ok && ok({ coords: { longitude: -111.7386, latitude: 40.3644, speed: 0, heading: 0, accuracy: 5 }, timestamp: Date.now() });
-          } catch {}
-        },
-      };
-      Object.defineProperty(navigator, 'geolocation', { value: stub, configurable: true });
-      localStorage.setItem('gw-onboarded', '1');
-      localStorage.setItem('gw-mode', 'strict');
-    } catch {}
-  });
+  // No GPS headless: startNav() would otherwise wait on a fix. The stub
+  // reports the RANDOM drive's origin so the nav screenshot centers on that
+  // drive — never on a personal/real location.
+  const [lon, lat] = pair.from.coords;
+  await page.evaluateOnNewDocument(
+    (originLon, originLat) => {
+      try {
+        const stub = {
+          watchPosition: (ok) => {
+            try {
+              ok && ok({ coords: { longitude: originLon, latitude: originLat, speed: 0, heading: 0, accuracy: 5 }, timestamp: Date.now() });
+            } catch {}
+            return 1;
+          },
+          clearWatch: () => {},
+          getCurrentPosition: (ok) => {
+            try {
+              ok && ok({ coords: { longitude: originLon, latitude: originLat, speed: 0, heading: 0, accuracy: 5 }, timestamp: Date.now() });
+            } catch {}
+          },
+        };
+        Object.defineProperty(navigator, 'geolocation', { value: stub, configurable: true });
+        localStorage.setItem('gw-onboarded', '1');
+        localStorage.setItem('gw-mode', 'strict');
+      } catch {}
+    },
+    lon,
+    lat
+  );
   const errors = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
@@ -244,10 +247,12 @@ async function main() {
     }
 
     const pair = pickPair();
+    const navPair = pickPair(pair.id); // second random drive for the nav shot
     console.log(`pair: ${pair.id} (${pair.from.label} -> ${pair.to.label})`);
+    console.log(`nav pair: ${navPair.id} (${navPair.from.label} -> ${navPair.to.label})`);
 
     // --- route-options.png: route card with Clearest / Balanced / Fastest chips
-    const page = await newPage(browser);
+    const page = await newPage(browser, pair);
     await route(page, pair);
     const card = await readCard(page);
     console.log('card:', JSON.stringify(card, null, 1));
@@ -261,9 +266,14 @@ async function main() {
 
     await page.screenshot({ path: `${OUT_DIR}/route-options.png` });
     console.log('saved', `${OUT_DIR}/route-options.png`);
+    await page.close();
 
-    // --- navigation.png: active nav, real banner, live camera counter
-    const navReady = await page.evaluate(() => {
+    // --- navigation.png: active nav, real banner, live camera counter.
+    // Uses a SECOND random drive (navPair) so the two screenshots show two
+    // different, non-personal start/stop locations.
+    const navPage = await newPage(browser, navPair);
+    await route(navPage, navPair);
+    const navReady = await navPage.evaluate(() => {
       const a = window.__gw;
       if (!a || !a.state || !a.state.route) return { ok: false, why: 'no route in state' };
       try {
@@ -274,14 +284,14 @@ async function main() {
       return { ok: true };
     });
     if (!navReady.ok) throw new Error('startNav failed: ' + navReady.why);
-    await page.waitForFunction(() => !document.querySelector('#navBanner').hidden, { timeout: 20000 });
+    await navPage.waitForFunction(() => !document.querySelector('#navBanner').hidden, { timeout: 20000 });
     // startNav() calls setFollow(true), which re-centers/pitches the camera.
     // 1.5 s was not enough for the new view's tiles: the first capture
     // (15:23) came out with a blank basemap behind the route line. Poll
     // areTilesLoaded() rather than trusting MapLibre 'idle': one of the app's
     // sources keeps the map from ever going idle, so 'idle' never fires under
     // a live route (observed: 25 s timeout, zoom 16.5, pitch 55).
-    const settled = await page.evaluate(
+    const settled = await navPage.evaluate(
       () =>
         new Promise((res) => {
           const m = window.__gw?.map?.map;
@@ -299,24 +309,24 @@ async function main() {
           tick();
         })
     );
-    const view = await page.evaluate(() => {
+    const view = await navPage.evaluate(() => {
       const m = window.__gw.map.map;
       return { zoom: +m.getZoom().toFixed(2), pitch: +m.getPitch().toFixed(1), bearing: Math.round(m.getBearing()) };
     });
     console.log(`map tiles: ${JSON.stringify(settled)}`, JSON.stringify(view));
     // Extra beat for the symbol/road layers to paint after tiles arrive.
     await wait(3000);
-    const banner = await readBanner(page);
+    const banner = await readBanner(navPage);
     console.log('banner:', JSON.stringify(banner));
     if (banner.hidden) throw new Error('nav banner hidden');
     for (const k of ['dist', 'dir', 'eta', 'chip']) {
       if (!banner[k]) throw new Error(`nav banner #${k} empty — renderNavStep did not run`);
     }
     if (!banner.voice || !banner.stop) throw new Error('nav banner missing voice/stop controls');
-    await page.screenshot({ path: `${OUT_DIR}/navigation.png` });
+    await navPage.screenshot({ path: `${OUT_DIR}/navigation.png` });
     console.log('saved', `${OUT_DIR}/navigation.png`);
 
-    const errs = page.__errors.filter((e) => !/favicon|404/.test(e));
+    const errs = navPage.__errors.filter((e) => !/favicon|404/.test(e));
     console.log('ERRORS', JSON.stringify(errs.slice(0, 8)));
     if (errs.length) failure = `console errors: ${errs.slice(0, 3).join(' | ')}`;
   } finally {
