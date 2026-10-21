@@ -2,14 +2,34 @@
 // share sheet (link + QR). The QR is verified by DECODING it (jsqr round-trip
 // must return exactly the shared link) — a rendered-but-wrong QR fails here.
 import { startPreview } from './lib-preview.mjs';
+import { existsSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import jsQR from 'jsqr';
 
-const WATCHDOG = setTimeout(() => { console.error('watchdog exit'); process.exit(2); }, 150000);
+// Chrome path: env override, else the first binary that exists on this box.
+// The old hardcoded macOS path made this check unrunnable on Linux CI.
+const CHROME = [
+  process.env.GW_CHROME_PATH,
+  '/usr/lib/chromium/chromium',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/google-chrome',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+].filter(Boolean).find((p) => existsSync(p));
+if (!CHROME) {
+  console.error('No Chrome/Chromium binary found; set GW_CHROME_PATH');
+  process.exit(2);
+}
+
+// Cold start on a fresh profile downloads ~14 MB of map data and then builds
+// the route network (17 s observed on this box). 150 s total was razor thin;
+// the earlier 60 s wait for the start button failed on slow runs, not on a
+// real regression.
+const WATCHDOG = setTimeout(() => { console.error('watchdog exit'); process.exit(2); }, 300000);
 const { url, kill } = await startPreview();
 let browser;
 try {
-  browser = await puppeteer.launch({ executablePath: process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -20,7 +40,7 @@ try {
   await page.waitForSelector('#splash.leaving, #topbar', { timeout: 15000 });
   await page.evaluate(() => localStorage.setItem('gw-onboarded', '1'));
   await page.reload({ waitUntil: 'load' });
-  await page.waitForSelector('#startNavBtn', { visible: true, timeout: 60000 }); // engine planned the route
+  await page.waitForSelector('#startNavBtn', { visible: true, timeout: 120000 }); // engine planned the route
   const deep = await page.evaluate(() => ({
     from: document.getElementById('fromInput').value,
     to: document.getElementById('toInput').value,
@@ -31,12 +51,20 @@ try {
 
   // 2. Share sheet: QR renders and round-trips to the exact link.
   await page.click('#menuBtn');
+  // Menu opens with an animation; clicking the item before it is on screen
+  // silently misses and the share sheet never mounts.
+  await page.waitForSelector('[data-action="share"]', { visible: true, timeout: 10000 });
+  await new Promise((r) => setTimeout(r, 400));
   await page.click('[data-action="share"]');
-  await page.waitForSelector('#shareQr', { visible: true, timeout: 5000 });
+  await page.waitForSelector('#shareQr', { visible: true, timeout: 15000 });
+  // The encoder is a lazy chunk: the canvas exists at its default 300x150 for a
+  // few frames before renderShareQr sets width and draws. Waiting only on
+  // width>0 read a blank canvas and failed the decode as a false regression.
   await page.waitForFunction(() => {
     const c = document.getElementById('shareQr');
-    return c && c.width > 0;
-  }, { timeout: 5000 });
+    return c && c.width > 100 && c.width === c.height;
+  }, { timeout: 8000 });
+  await new Promise((r) => setTimeout(r, 300));
   const sheet = await page.evaluate(() => {
     const c = document.getElementById('shareQr');
     const img = c.getContext('2d').getImageData(0, 0, c.width, c.height);
