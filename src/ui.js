@@ -114,7 +114,7 @@ export function buildPanel(app) {
       // with a retry path (don't lie "No results" when it's actually offline).
       box.hidden = true;
       showStatusWithRetry(
-        'Search needs a connection — try again when online.',
+        'Search needs a connection. Try again when online.',
         'warn',
         () => { clearStatus(); render(q, which); }
       );
@@ -125,7 +125,7 @@ export function buildPanel(app) {
       // instead of silently vanishing the panel.
       const empty = el('div', { class: 'sugg-empty', role: 'status' }, [
         el('span', { class: 'sugg-name', text: 'No results' }),
-        el('span', { class: 'sugg-sub', text: `Nothing matches “${q}”. Try a different name or address.` }),
+        el('span', { class: 'sugg-sub', text: `Nothing matches "${q}". Try a different name or address.` }),
       ]);
       box.appendChild(empty);
       box.hidden = false;
@@ -299,7 +299,7 @@ export function expandSearch(app) {
 // "fully clear" past a visible camera (Keaton field report 2026-09-26).
 export function badgeHtml(sel) {
   const shield = icon('shield', { size: 15 });
-  if (sel && sel.camerasKnown === false) return `${shield} Camera data unavailable — route unverified`;
+  if (sel && sel.camerasKnown === false) return `${shield} Camera data unavailable: route unverified`;
   if (sel && sel.camerasKnown == null && sel.cameras == null) return `${shield} Checking camera data…`;
   if (!sel || !sel.cameras) return `${shield} Fully clear of known cameras`;
   return `${shield} Passes <b>${sel.cameras}</b> camera${sel.cameras === 1 ? '' : 's'} on this route`;
@@ -329,8 +329,8 @@ function renderEngineCard(app, card, result) {
     const o = options.find((x) => x.mode === mode);
     const active = sel.mode === mode;
     const label = { strict: 'Clearest', moderate: 'Balanced', off: 'Fastest' }[mode] || mode;
-    const cams = o ? (o.cameras === 0 ? '0' : String(o.cameras)) : '—';
-    return `<button class="mode-chip ${active ? 'active' : ''}" data-mode="${mode}" type="button" role="button" tabindex="0" aria-pressed="${active}" aria-label="${escHtml(label + ': ' + (o ? fmtDuration(o.duration) + ', ' + cams + ' cameras' : 'not routed yet — tap to route'))}">${modeEmoji(mode)} ${label}<span class="chip-meta">${o ? fmtDuration(o.duration) + ' · ' + cams + ' cam' : 'tap to route'}</span></button>`;
+    const cams = o ? (o.cameras === 0 ? '0' : String(o.cameras)) : '-';
+    return `<button class="mode-chip ${active ? 'active' : ''}" data-mode="${mode}" type="button" role="button" tabindex="0" aria-pressed="${active}" aria-label="${escHtml(label + ': ' + (o ? fmtDuration(o.duration) + ', ' + cams + ' cameras' : 'not routed yet, tap to route'))}">${modeEmoji(mode)} ${label}<span class="chip-meta">${o ? fmtDuration(o.duration) + ' · ' + cams + ' cam' : 'tap to route'}</span></button>`;
   };
 
   // G-71: a walled destination (camera-secured lot) cannot be driven into without
@@ -449,13 +449,13 @@ function renderLegacyCard(app, card, result) {
 
   let headline;
   if (result.routerDown) {
-    headline = `${icon('warning', { size: 15 })} Avoidance offline — routing server down. Showing a normal route; cameras still shown on the map.`;
+    headline = `${icon('warning', { size: 15 })} Avoidance offline: routing server down. Showing a normal route; cameras still shown on the map.`;
   } else if (result.avoid && result.applied) {
     headline = `${icon('shield', { size: 15 })} Routed clear of <b>${result.avoidedCount}</b> camera${result.avoidedCount === 1 ? '' : 's'}`;
   } else if (result.avoid && result.avoidedCount === 0) {
     headline = `${icon('check', { size: 15 })} No known cameras along the way`;
   } else if (result.avoid && !result.applied) {
-    headline = `${icon('warning', { size: 15 })} No clear detour — showing fastest (${result.avoidedCount} camera${result.avoidedCount === 1 ? '' : 's'} nearby)`;
+    headline = `${icon('warning', { size: 15 })} No clear detour. Showing fastest (${result.avoidedCount} camera${result.avoidedCount === 1 ? '' : 's'} nearby)`;
   } else {
     headline = `${icon('rocket', { size: 15 })} Fastest route (avoidance off)`;
   }

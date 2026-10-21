@@ -86,7 +86,7 @@ async function init() {
   // Reflect layer state in the Layers sheet checkboxes at boot.
   const lyrCam = $('#lyrCameras'); if (lyrCam) lyrCam.checked = app._camLayerOn;
   const lyrFlock = $('#lyrFlock'); if (lyrFlock) lyrFlock.checked = !!app._flockOn;
-  setSplashText('Map ready — loading your route engine…');
+  setSplashText('Map ready. Loading your route engine…');
   // Apply a saved basemap preference (light/dark) before the splash clears.
   const savedBase = localStorage.getItem('gw-basemap');
   if (savedBase && savedBase !== 'standard' && CONFIG.basemaps[savedBase]) {
@@ -172,7 +172,7 @@ async function init() {
     if (!rec) return;
     openModal(`
       <h3>📷 Community report</h3>
-      <p><b>${{ alpr: 'ALPR / plate reader', redlight: 'Red-light camera', speed: 'Speed camera', fixed: 'Fixed camera', other: 'Camera (type unknown)' }[rec.kind] || 'Camera'}</b>${rec.brand ? ` — ${escHtml(rec.brand)}` : ''}</p>
+      <p><b>${{ alpr: 'ALPR / plate reader', redlight: 'Red-light camera', speed: 'Speed camera', fixed: 'Fixed camera', other: 'Camera (type unknown)' }[rec.kind] || 'Camera'}</b>${rec.brand ? `: ${escHtml(rec.brand)}` : ''}</p>
       ${rec.note ? `<p class="muted">${escHtml(rec.note)}</p>` : ''}
       <p class="muted small">Reported ${new Date(rec.createdAt).toLocaleDateString()} · ${rec.publishedNoteId ? `Published to OSM note ${escHtml(rec.publishedNoteId)}` : 'Not yet published to OSM'}</p>
       <div class="rp-actions">
@@ -194,7 +194,7 @@ async function init() {
         console.warn('OSM publish failed', e);
         pub.disabled = false;
         pub.textContent = 'Publish to OSM';
-        showStatus('Publish failed — report stays local.', 'warn');
+        showStatus('Publish failed. Report stays local.', 'warn');
       }
     });
     $('#rptDel').addEventListener('click', () => {
@@ -292,7 +292,7 @@ async function wireBatteryHint() {
       return;
     }
     const pct = Math.round(level * 100);
-    msg.textContent = `Battery low (${pct}%) — keep phone plugged in for nav.`;
+    msg.textContent = `Battery low (${pct}%). Keep phone plugged in for nav.`;
     banner.hidden = false;
   };
 
@@ -347,7 +347,7 @@ async function checkCameraStale() {
   } catch { /* offline / missing — can't determine staleness, stay silent */ }
 
   if (ageDays !== null && ageDays > STALE_MAX_DAYS) {
-    msg.textContent = `Camera data is ${ageDays} days old — refresh pending.`;
+    msg.textContent = `Camera data is ${ageDays} days old. Refresh pending.`;
     banner.hidden = false;
     dismiss.addEventListener('click', () => {
       banner.hidden = true;
@@ -813,12 +813,12 @@ async function checkForUpdates(manual = false) {
       if (remote && mine && !remote.startsWith(mine) && !mine.startsWith(remote)) {
         openModal(`
           <h3>Update available</h3>
-          <p>A newer Ghostway build is ready (<code>${escHtml(remote)}</code> — you have <code>${escHtml(mine)}</code>).</p>
+          <p>A newer Ghostway build is ready (<code>${escHtml(remote)}</code>, you have <code>${escHtml(mine)}</code>).</p>
           <div class="modal-actions">
             <button class="primary-btn" id="dlUpdate">Download &amp; install</button>
             <button class="text-link" id="laterUpdate">Later</button>
           </div>
-          <p class="muted small">Android will ask you to confirm the install — same app, your settings stay.</p>
+          <p class="muted small">Android will ask you to confirm the install. Same app, your settings stay.</p>
         `);
         $('#laterUpdate').addEventListener('click', closeModal);
         $('#dlUpdate').addEventListener('click', () => {
@@ -827,7 +827,7 @@ async function checkForUpdates(manual = false) {
           if (window.AABridge && typeof window.AABridge.downloadApk === 'function') {
             window.AABridge.downloadApk(apk);
             closeModal();
-            showStatus('Downloading update… the installer opens when it’s done.', 'info');
+            showStatus("Downloading update… the installer opens when it's done.", 'info');
           } else {
             window.open(apk, '_blank', 'noopener');
           }
@@ -835,23 +835,23 @@ async function checkForUpdates(manual = false) {
         return;
       }
     } catch (e) {
-      if (manual) showStatus('Couldn’t check right now — try again later.', 'warn');
+      if (manual) showStatus("Couldn't check right now. Try again later.", 'warn');
       return;
     }
-    if (manual) showStatus('You’re on the latest version.', 'info');
+    if (manual) showStatus("You're on the latest version.", 'info');
     return;
   }
   try {
     const reg = await navigator.serviceWorker?.getRegistration?.();
     if (reg) await reg.update();
   } catch { /* offline */ }
-  if (manual) showStatus('You’re on the latest version.', 'info');
+  if (manual) showStatus("You're on the latest version.", 'info');
 }
 
 function geoErrorCopy(err) {
-  if (err && err.code === 1) return 'Location is blocked for Ghostway. To allow it, tap the ⓘ/lock beside the address bar and set Location to Allow — or just type a start place.';
-  if (err && err.code === 2) return 'Your device can’t get a location right now (GPS unavailable). Try again — or type a start place.';
-  if (err && err.code === 3) return 'Location lookup timed out. Tap the GPS button to retry — or type a start place.';
+  if (err && err.code === 1) return 'Location is blocked for Ghostway. To allow it, tap the ⓘ/lock beside the address bar and set Location to Allow, or just type a start place.';
+  if (err && err.code === 2) return "Your device can't get a location right now (GPS unavailable). Try again, or type a start place.";
+  if (err && err.code === 3) return 'Location lookup timed out. Tap the GPS button to retry, or type a start place.';
   return 'Could not get location: ' + (err && err.message ? err.message : 'unknown error') + '. You can type a start place instead.';
 }
 
@@ -894,7 +894,7 @@ function useMyLocation() {
   openModal(`
     <h3>Use your location?</h3>
     <p>Ghostway would like to use your location so it can start routes from where you are.</p>
-    <p class="muted small">Your position stays on this device — it only plans routes here and is never sent anywhere.</p>
+    <p class="muted small">Your position stays on this device. It only plans routes here and is never sent anywhere.</p>
     <p><button id="geoAllow" class="primary-btn">Use my location</button>
        <button id="geoManual" class="text-link">Type a place instead</button></p>
   `);
@@ -1153,7 +1153,7 @@ async function routeWithFallbacks(from, to) {
     // F3: Recovery path, not a dead end. Explain what happened and offer
     // a clear next step so the user isn't left guessing (NN/g error recovery).
     showStatusWithRetry(
-      'Routing failed — check your start and destination, or try a different route.',
+      'Routing failed. Check your start and destination, or try a different route.',
       'warn',
       () => {
         clearStatus();
@@ -2054,8 +2054,8 @@ function openCameraModal(props, coords) {
   openModal(`
     <h3>📷 ${escHtml(brand)}</h3>
     ${op && op.toLowerCase() !== brand.toLowerCase() ? `<p class="muted">Operator: ${escHtml(op)}</p>` : ''}
-    <p>${isAlpr ? '<b>Automated license plate reader (ALPR)</b> — reads every passing plate.' : 'Surveillance camera.'}</p>
-    ${props.name ? `<p>“${escHtml(String(props.name))}”</p>` : ''}
+    <p>${isAlpr ? '<b>Automated license plate reader (ALPR)</b>: reads every passing plate.' : 'Surveillance camera.'}</p>
+    ${props.name ? `<p>"${escHtml(String(props.name))}"</p>` : ''}
     ${props.source ? `<p class="muted small">Source: ${escHtml(String(props.source))} (published research dataset)</p>` : ''}
     <p class="muted">
       ${dir ? `Faces ${dir}. ` : ''}${mount ? `Mounted on ${escHtml(mount.replace(/_/g, ' '))}. ` : ''}${age}
@@ -2074,10 +2074,10 @@ function openReportModal(stage, coords) {
   if (!stage) {
     openModal(`
       <h3>📷 Report a camera</h3>
-      <p>Spotted a camera that's not on the map? Report it — it protects
+      <p>Spotted a camera that's not on the map? Report it. It protects
       everyone who uses Ghostway, and (if you choose) gets submitted to
       OpenStreetMap so the DeFlock project can verify it.</p>
-      <p class="muted">Nothing leaves your device unless you publish to OSM —
+      <p class="muted">Nothing leaves your device unless you publish to OSM,
       and even then it's an anonymous map note, no account.</p>
       <button id="reportPick" class="primary-btn" style="margin-top:8px">📍 Pick location on map</button>
     `);
@@ -2108,7 +2108,7 @@ function openReportModal(stage, coords) {
         <button id="rpSave" class="primary-btn" type="button">Save report</button>
         <button id="rpCancel" class="ghost-btn" type="button">Cancel</button>
       </div>
-      <p class="muted small" style="margin-top:10px">After saving you can optionally publish it to OpenStreetMap (anonymous, no account) — that's how it reaches the DeFlock map.</p>
+      <p class="muted small" style="margin-top:10px">After saving you can optionally publish it to OpenStreetMap (anonymous, no account). That's how it reaches the DeFlock map.</p>
     `);
     $('#rpCancel').addEventListener('click', closeModal);
     $('#rpSave').addEventListener('click', () => {
@@ -2131,7 +2131,7 @@ function offerPublish(rec) {
     <h3>✅ Report saved</h3>
     <p>Ghostway already routes around it on this device.</p>
     <p>Want to publish it to <b>OpenStreetMap</b> as an anonymous note?
-    Mappers can then verify it and add it to OSM — which feeds the DeFlock
+    Mappers can then verify it and add it to OSM, which feeds the DeFlock
     camera map for everyone.</p>
     <div class="rp-actions">
       <button id="pubYes" class="primary-btn" type="button">Publish to OSM</button>
@@ -2157,7 +2157,7 @@ function offerPublish(rec) {
       console.warn('OSM publish failed', e);
       btn.disabled = false;
       btn.textContent = 'Publish to OSM';
-      showStatus('Publish failed — report is saved locally and still protects routes.', 'warn');
+      showStatus('Publish failed. Report is saved locally and still protects routes.', 'warn');
     }
   });
 }
@@ -2192,7 +2192,7 @@ function refreshReportLayer() {
 function openWhyModal() {
   openModal(`
     <h3>Why avoid these cameras?</h3>
-    <p>Automated license plate readers (ALPRs) — Flock Safety and others — photograph every
+    <p>Automated license plate readers (ALPRs), Flock Safety and others, photograph every
     passing vehicle and log its location, time, and identifying details, then share that data
     with thousands of agencies nationwide, usually without a warrant.</p>
     <p>Ghostway uses the open <a href="https://deflock.org" target="_blank" rel="noopener">DeFlock</a>
@@ -2218,7 +2218,7 @@ async function openTripDates() {
   const trip = getTrip();
   openModal(`
     <h3>Trip dates</h3>
-    <p class="muted small">When are you driving? Ghostway counts work zones scheduled along your route during those dates — so a closure that starts next month won't surprise you today.</p>
+    <p class="muted small">When are you driving? Ghostway counts work zones scheduled along your route during those dates, so a closure that starts next month won't surprise you today.</p>
     <div id="tripCal" class="trip-cal"></div>
     <p id="tripSummary" class="trip-summary" aria-live="polite">${trip ? `Selected: ${trip.start} → ${trip.end}` : 'No dates selected.'}</p>
     <p>
@@ -2235,13 +2235,13 @@ async function openTripDates() {
     onChange: (r) => {
       draft = r;
       summary.textContent =
-        r.start && r.end ? `Selected: ${r.start} → ${r.end}` : r.start ? `Start: ${r.start} — pick an end date.` : 'No dates selected.';
+        r.start && r.end ? `Selected: ${r.start} → ${r.end}` : r.start ? `Start: ${r.start}. Pick an end date.` : 'No dates selected.';
     },
   });
   $('#tripSave').addEventListener('click', () => {
     if (draft.start && draft.end) {
       localStorage.setItem(TRIP_KEY, JSON.stringify(draft));
-      showStatus(`Trip dates saved — ${draft.start} → ${draft.end}.`, 'info');
+      showStatus(`Trip dates saved: ${draft.start} → ${draft.end}.`, 'info');
     } else {
       localStorage.removeItem(TRIP_KEY);
       showStatus('Pick a start and an end date to save trip dates.', 'warn');
@@ -2284,7 +2284,7 @@ async function updateTripBadge() {
     badge.textContent =
       hits.length === 0
         ? `No work zones scheduled on your trip dates (${trip.start} → ${trip.end})`
-        : `${hits.length} work zone${hits.length === 1 ? '' : 's'} active on your trip dates (${trip.start} → ${trip.end})${hard ? ` — ${hard} full closure${hard === 1 ? '' : 's'}` : ''}`;
+        : `${hits.length} work zone${hits.length === 1 ? '' : 's'} active on your trip dates (${trip.start} → ${trip.end})${hard ? `, ${hard} full closure${hard === 1 ? '' : 's'}` : ''}`;
   } catch {
     badge.hidden = true;
   }
@@ -2372,7 +2372,7 @@ function handleDrawer(action) {
   }
   if (action === 'share') {
     if (!app.state.from || !app.state.to) {
-      showStatus('Set a start and destination first — then share the route.', 'info');
+      showStatus('Set a start and destination first, then share the route.', 'info');
       return;
     }
     const url = getShareUrl({ from: app.state.from, to: app.state.to, mode: app.state.mode });
@@ -2390,7 +2390,7 @@ function handleDrawer(action) {
         await navigator.clipboard.writeText(url);
         showStatus('Route link copied.', 'info');
       } catch {
-        showStatus('Could not copy — select the link to copy it manually.', 'warn');
+        showStatus('Could not copy. Select the link to copy it manually.', 'warn');
       }
     });
     const native = $('#shareNative');
@@ -2414,14 +2414,14 @@ function handleDrawer(action) {
     // invisible honeypot (aria-hidden + tabindex=-1 + autocomplete=off) +
     // rate limit + ALTCHA/Cap fallback — never a visible CAPTCHA.
     const body = encodeURIComponent(
-      '**Describe the bug or feature request**\n…\n\n**What happened instead (bugs)**\n…\n\n---\n_Sent from the Ghostway app feedback link — no personal data attached._'
+      '**Describe the bug or feature request**\n…\n\n**What happened instead (bugs)**\n…\n\n---\n_Sent from the Ghostway app feedback link. No personal data attached._'
     );
     const href = `${CONFIG.github}/issues/new?title=${encodeURIComponent('Feedback: ')}&body=${body}`;
     openModal(`
       <h3>Send feedback</h3>
-      <p>Ghostway has no accounts and no server — feedback goes straight to the public issue tracker.</p>
+      <p>Ghostway has no accounts and no server. Feedback goes straight to the public issue tracker.</p>
       <p><a class="primary-btn feedback-link" id="feedbackIssue" href="${href}" target="_blank" rel="noopener">Report a bug or request a feature</a></p>
-      <p class="muted small">The issue body is prefilled and carries no personal data — review it before submitting (the tracker itself needs a GitHub account).</p>
+      <p class="muted small">The issue body is prefilled and carries no personal data. Review it before submitting (the tracker itself needs a GitHub account).</p>
       <p><a class="text-link" href="${CONFIG.github}/issues" target="_blank" rel="noopener">Browse existing issues</a></p>
     `);
     return;
@@ -2438,8 +2438,8 @@ function handleDrawer(action) {
         <li><span class="lg-dot flock"></span> Plate reader risk (Flock, Motorola, Rekor… or traffic-facing)</li>
         <li><span class="lg-dot other"></span> Other surveillance camera</li>
         <li><span class="lg-dot report"></span> Community-reported camera (purple)</li>
-        <li><span class="lg-dot flock"></span> Flock research dataset — road plate reader (red; "Flock" chip)</li>
-        <li><span class="lg-dot facility"></span> Flock research dataset — indoor / facility / planned device (blue; "Flock" chip)</li>
+        <li><span class="lg-dot flock"></span> Flock research dataset: road plate reader (red; "Flock" chip)</li>
+        <li><span class="lg-dot facility"></span> Flock research dataset: indoor / facility / planned device (blue; "Flock" chip)</li>
         <li><span class="lg-halo"></span> Heatmap halo = camera density</li>
         <li><span class="lg-line teal"></span> Your chosen route</li>
         <li><span class="lg-line grey"></span> Alternative route</li>
@@ -2463,7 +2463,7 @@ function handleDrawer(action) {
     openModal(`
       <h3>Privacy & how it works</h3>
       <p>Where Ghostway ships a road graph (currently the Wasatch Front), routing happens
-      <b>entirely on your device</b> — your destination never leaves your phone.</p>
+      <b>entirely on your device</b>. Your destination never leaves your phone.</p>
       <p>Everywhere else, routes fall back to public open-source servers (Valhalla, Photon, BRouter, OSRM).
       Ghostway itself stores nothing about you.</p>
     `);
@@ -2477,7 +2477,7 @@ function handleDrawer(action) {
 function openDonate() {
   const d = CONFIG.donate;
   const methods = d.methods
-    .map((m) => `<li><a href="${m.url}" target="_blank" rel="noopener">${m.label}</a> <span class="muted">— ${m.note}</span></li>`)
+    .map((m) => `<li><a href="${m.url}" target="_blank" rel="noopener">${m.label}</a> <span class="muted">: ${m.note}</span></li>`)
     .join('');
   const crypto = d.crypto
     .map((c) => `<li><b>${c.label}</b><br><code class="addr">${c.addr}</code></li>`)

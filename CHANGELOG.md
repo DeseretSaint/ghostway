@@ -78,11 +78,10 @@ internal update-flow verification builds (code 9 and 10), so a sideloaded
   appears showing engine state, app version, route summary and the camera
   snapshot date. Turning it off hides the row immediately.
 - House style pass on shipping copy: em and en dashes replaced with plain
-  punctuation in `index.html` and in the user-facing strings of `src/config.js`;
-  curly apostrophes straightened. The `CONFIG` source comments still carry
-  them and are stripped from the bundle. Em dashes remain inside strings in
-  `src/ui.js`; that file is outside this release's edit scope and is listed as
-  open work below.
+  punctuation in `index.html` and in the user-facing strings of
+  `src/config.js`, `src/main.js` and `src/ui.js`; curly apostrophes
+  straightened. The `CONFIG` source comments and code comments still carry
+  them and are stripped from the bundle.
 
 ### Release engineering
 
@@ -108,11 +107,12 @@ internal update-flow verification builds (code 9 and 10), so a sideloaded
   head unit was available, so a bound `CarAppService` on the Auto host was not
   observed. The Auto wiring is asserted statically by `aa-manifest-check.mjs`
   plus the APK build.
-- Em dashes remain in the built bundle (41 occurrences, plus one en dash).
-  Almost all are user-facing status and dialog strings from `src/main.js` and
-  `src/ui.js`; one is a character-map table inside a bundled dependency. House
-  style is not fully met on that surface yet. Fixing the copy is a UI-lane
-  change, not a routing or release-engineering one.
+- One em dash, one en dash and four curly quote characters remain in the built
+  bundle. All are keys in the punctuation table of the bundled `maplibre-gl`
+  dependency (`src/util/verticalize_punctuation.ts`, v4.7.1), which maps them
+  to vertical text forms. No Ghostway copy ships a dash or a curly quote: the
+  counts across `dist/assets/*.js` and `dist/index.html` are 1, 1 and 4, and
+  every occurrence is in that table.
 - Destinations that are genuinely camera-walled, or whose clear path breaks
   the detour budget, are still served as honest best-effort. Cases K2 and K5
   in the audit corpus are that shape by design.
