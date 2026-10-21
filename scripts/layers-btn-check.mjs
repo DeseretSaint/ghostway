@@ -138,11 +138,19 @@ async function readState(page) {
 async function openPage(width, pref = {}) {
   const page = await browser.newPage();
   const errors = [];
-  page.on('pageerror', (e) => errors.push(String(e.message)));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  const record = (kind, text) => {
+    const s = String(text ?? '');
+    errors.push(s);
+    console.log(`[cap:${kind}] ${s}`);
+  };
+  page.on('pageerror', (e) => {
+    const msg = e && e.message !== undefined ? e.message : e;
+    record('pageerror', msg);
+  });
+  page.on('console', (m) => { if (m.type() === 'error') record('console', m.text()); });
   page.on('requestfailed', (r) => {
     const u = r.url();
-    if (!/favicon|\.png$|\.ico$/.test(u)) errors.push(`requestfailed ${u} ${r.failure()?.errorText || ''}`);
+    if (!/favicon|\.png$|\.ico$/.test(u)) record('requestfailed', `${u} ${r.failure()?.errorText || ''}`);
   });
   await page.evaluateOnNewDocument((p) => {
     try {
