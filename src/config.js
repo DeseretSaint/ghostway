@@ -2,6 +2,9 @@
 // Every dependency is an open, non-proprietary service. No API keys required.
 
 export const CONFIG = {
+  // Single release version for the app surface (kept in lockstep with
+  // package.json and android/app/build.gradle versionName at release time).
+  version: '1.0.0',
   // --- Base map tiles (OpenStreetMap data, served by OpenFreeMap — free, no key) ---
   mapStyle: 'https://tiles.openfreemap.org/styles/liberty',
   // Basemap switcher (Maps parity: light/dark). Same open provider, no new
@@ -64,7 +67,7 @@ export const CONFIG = {
     title: 'Support Ghostway',
     blurb:
       'Ghostway is free and always will be. It runs on open data and open infrastructure. ' +
-      'If it helps you move freely, a small donation keeps it alive — no pressure.',
+      'If it helps you move freely, a small donation keeps it alive. No pressure.',
     methods: [
       { label: 'Ko-fi', url: 'https://ko-fi.com/ghostway', note: 'One-off or monthly' },
       { label: 'GitHub Sponsors', url: 'https://github.com/sponsors/ghostway', note: 'Recurring' },
@@ -109,7 +112,7 @@ export const CONFIG = {
     body:
       'Ghostway is a free, open-source navigation app built on OpenStreetMap and DeFlock data. ' +
       'Its core mission: get you where you need to go without being logged by automated license ' +
-      'plate readers (ALPRs) — the Flock Safety cameras and others that photograph every passing ' +
+      'plate readers (ALPRs), the Flock Safety cameras and others that photograph every passing ' +
       'vehicle and share the data with thousands of agencies. By default, Ghostway routes you around ' +
       'known camera locations. You stay in control: flip the toggle to take the fastest road instead.',
   },
