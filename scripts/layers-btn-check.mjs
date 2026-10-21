@@ -147,7 +147,13 @@ async function openPage(width, pref = {}) {
     const msg = e && e.message !== undefined ? e.message : e;
     record('pageerror', msg);
   });
-  page.on('console', (m) => { if (m.type() === 'error') record('console', m.text()); });
+  page.on('console', async (m) => {
+    if (m.type() !== 'error') return;
+    const argvals = [];
+    for (const a of m.args()) { try { const v = await a.jsonValue(); argvals.push(typeof v === 'string' ? v : JSON.stringify(v)); } catch { argvals.push('<unserializable>'); } }
+    console.log('[DETAIL-console] ' + JSON.stringify(argvals));
+    record('console', m.text());
+  });
   page.on('requestfailed', (r) => {
     const u = r.url();
     if (!/favicon|\.png$|\.ico$/.test(u)) record('requestfailed', `${u} ${r.failure()?.errorText || ''}`);
