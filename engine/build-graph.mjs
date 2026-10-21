@@ -81,6 +81,14 @@ const nodeCount = ni;
 // ---- 3. Camera spatial grid (~180m cells, 1-cell halo) ----
 const CELL = 0.002;
 const camGrid = new Map();
+// Duplicate records collapse (Keaton audit 2026-10-20): the research snapshot
+// lists many physical cameras twice at the SAME coordinate under different
+// type tags (e.g. "picard" + "falcon" at -111.821206,40.385683; 37,066 such
+// coordinate groups nationally, 67 in Utah County). Summing both doubled the
+// exposure byte, which both invented "1 cam" badges for cameras 89 m off the
+// road and forbade strict routes beside a camera 87 m away. One physical
+// device = one contribution, keeping the strongest weight.
+const camSeen = new Map();
 for (const f of cams.features) {
   const [lon, lat] = f.geometry.coordinates;
   if (!inBox([lon, lat])) continue;
@@ -93,6 +101,10 @@ for (const f of cams.features) {
   const w = isAlpr ? 1.0 : 0.25;
   // ^ non-ALPR alone never reaches the strict floor (64): 0.25×255 = 63.75,
   //   so generic surveillance weighs routes down but never walls them.
+  const dupKey = lon.toFixed(6) + ',' + lat.toFixed(6);
+  const seenW = camSeen.get(dupKey);
+  if (seenW !== undefined && seenW >= w) continue;
+  camSeen.set(dupKey, w);
   const gx = Math.floor(lon / CELL);
   const gy = Math.floor(lat / CELL);
   for (let dx = -1; dx <= 1; dx++) {

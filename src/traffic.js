@@ -106,6 +106,11 @@ async function loadDotFeeds(bbox, existingEvents) {
     for (const feed of DOT_FEEDS[st] || []) {
       // Skip a feed if the primary layer (e.g. UDOT) already covers this state.
       if (st === 'UT' && existingEvents.length) continue;
+      // Skip feeds the page cannot read: no Access-Control-Allow-Origin means
+      // the fetch fails before any byte arrives and the browser logs a CORS
+      // console error on every boot (verified 2026-10-20 for ID/AZ/NV/CO).
+      // The national WZDx snapshot below carries the same work zones.
+      if (feed.browser === false) continue;
       jobs.push(
         (async () => {
           const ctrl = new AbortController();
@@ -161,12 +166,27 @@ let wzdxCache = null;
 export async function loadNationalWzdx(bbox, force = false) {
   if (wzdxCache && !force && Date.now() - wzdxCache.at < 30 * 60 * 1000) return wzdxCache;
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 25000);
-    const res = await fetch(WZDX_URL, { signal: ctrl.signal });
-    clearTimeout(t);
-    if (!res.ok) throw new Error(`wzdx fetch ${res.status}`);
-    const buf = await res.arrayBuffer();
+    // Android packaging: aapt2 gunzips assets whose name ends in .gz and
+    // stores them without the suffix, so the APK ships wzdx-national.json and
+    // the .gz request 404s. Try the configured URL, then the raw sibling.
+    const urls = [WZDX_URL, WZDX_URL.replace(/\.gz$/, '')].filter((v, i, a) => a.indexOf(v) === i);
+    let buf = null;
+    let firstErr = null;
+    for (const url of urls) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 25000);
+      try {
+        const res = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!res.ok) throw new Error(`wzdx fetch ${res.status}`);
+        buf = await res.arrayBuffer();
+        break;
+      } catch (err) {
+        clearTimeout(t);
+        if (!firstErr) firstErr = err;
+      }
+    }
+    if (!buf) throw firstErr || new Error('wzdx fetch failed');
     // Hosts may serve .gz pre-inflated (Content-Encoding: gzip) — sniff magic.
     const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
     let raw;

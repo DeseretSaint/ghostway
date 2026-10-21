@@ -74,37 +74,56 @@ export async function loadGraph(lon, lat, onProgress) {
   if (loadPromise) return loadPromise;
   graphStats = { progressEvents: [], loadStart: Date.now(), loadEnd: 0 };
   loadPromise = (async () => {
-    const res = await fetch(region.url);
-    if (!res.ok) throw new Error(`graph fetch ${res.status}`);
-    const total = res.headers ? Number(res.headers.get('content-length') || 0) : 0;
     // Stream the response body so we can surface byte-level download
     // progress. Each chunk fires {loaded, total, stage:'download'} so the
     // UI can show "Downloading map data… (N.N MB / M.MM MB)".
-    let buf;
-    if (res.body && typeof res.body.getReader === 'function') {
-      const reader = res.body.getReader();
-      const chunks = [];
-      let loaded = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        loaded += value.byteLength;
-        const ev = { loaded, total, stage: 'download' };
-        graphStats.progressEvents.push(ev);
-        fireProgress(ev);
+    const fetchGraphBytes = async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`graph fetch ${res.status}`);
+      const total = res.headers ? Number(res.headers.get('content-length') || 0) : 0;
+      if (res.body && typeof res.body.getReader === 'function') {
+        const reader = res.body.getReader();
+        const chunks = [];
+        let loaded = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          loaded += value.byteLength;
+          const ev = { loaded, total, stage: 'download' };
+          graphStats.progressEvents.push(ev);
+          fireProgress(ev);
+        }
+        // Reassemble chunks into a single ArrayBuffer.
+        const out = new Uint8Array(loaded);
+        let o = 0;
+        for (const c of chunks) { out.set(c, o); o += c.byteLength; }
+        return out.buffer;
       }
-      // Reassemble chunks into a single ArrayBuffer.
-      buf = new Uint8Array(loaded);
-      let o = 0;
-      for (const c of chunks) { buf.set(c, o); o += c.byteLength; }
-      buf = buf.buffer;
-    } else {
-      buf = await res.arrayBuffer();
+      const buf = await res.arrayBuffer();
       const ev = { loaded: buf.byteLength, total, stage: 'download' };
       graphStats.progressEvents.push(ev);
       fireProgress(ev);
+      return buf;
+    };
+    // Android packaging: aapt2 gunzips assets whose name ends in .gz and
+    // stores them without the suffix, so the APK ships graph/…bin and the
+    // .gz request 404s. Try the configured URL first (web/PWA path, keeps
+    // byte-level progress), then the uncompressed sibling.
+    const candidates = [region.url];
+    const rawUrl = region.url.replace(/\.gz$/, '');
+    if (rawUrl !== region.url) candidates.push(rawUrl);
+    let buf = null;
+    let firstErr = null;
+    for (const url of candidates) {
+      try {
+        buf = await fetchGraphBytes(url);
+        break;
+      } catch (err) {
+        if (!firstErr) firstErr = err;
+      }
     }
+    if (!buf) throw firstErr || new Error('graph fetch failed');
     // Some hosts (GitHub Pages, vite preview) serve .gz with Content-Encoding:
     // gzip, so the browser already inflated the response. Sniff the magic to
     // tell whether we still hold gzip bytes (1f 8b) or the raw graph (GWR1).
@@ -536,6 +555,22 @@ export function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { soft
   gScore[startNode] = 0;
   heap.push(h(startNode), startNode);
 
+  // Endpoint exemption, narrowed (Keaton field report 2026-10-20): exempting
+  // EVERY road that touches the origin let a strict route start down the one
+  // street with a Flock on it even when a clear street left the same corner.
+  // Only exempt an endpoint road when the endpoint is genuinely boxed — i.e.
+  // every road out of the origin (or into the destination) is above the floor.
+  let startBoxed = true;
+  let endBoxed = true;
+  if (hardFloor) {
+    for (let p = g.outStart[startNode]; p < g.outStart[startNode + 1]; p++) {
+      if (g.eCam[g.arcEdge[p]] < hardFloor) { startBoxed = false; break; }
+    }
+    for (let p = 0; p < g.arcTo.length; p++) {
+      if (g.arcTo[p] === endNode && g.eCam[g.arcEdge[p]] < hardFloor) { endBoxed = false; break; }
+    }
+  }
+
   let expansions = 0;
   const MAX_EXPANSIONS = 900000;
 
@@ -572,7 +607,11 @@ export function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { soft
 // 74 (not 80): the 40 m builder sampling POINT-measures camera distance, so
 // a camera between samples reads up to ~sqrt(20²+d²) away — a true 68 m pass
 // can carry byte as low as 74. The floor must catch the under-read.
-      if (hardFloor && g.eCam[e] >= hardFloor && u !== startNode && v !== endNode) continue;
+      if (hardFloor && g.eCam[e] >= hardFloor) {
+        const startExempt = u === startNode && startBoxed;
+        const endExempt = v === endNode && endBoxed;
+        if (!startExempt && !endExempt) continue;
+      }
       const len = g.eLen[e];
       const spd = g.eSpd[e];
       // Effective speed: posted speed derated for signals/urban friction.
@@ -815,6 +854,45 @@ function cameraClusterPositions(g, route) {
     pts.push({ at: Math.round((clusterStart + acc) / 2), lon: g.nodeLon[toNode] / 1e6, lat: g.nodeLat[toNode] / 1e6 });
   }
   return pts;
+}
+
+// Cameras the served polyline actually passes, measured on the ground.
+// The badge must never report an edge-byte cluster: the builder samples every
+// ~40 m and a duplicated record (same coordinate listed as both falcon and
+// picard) doubles the byte, so a camera 89 m off the road could still read
+// "1 cam" while nothing is within the 75 m floor. Distance is the only honest
+// unit for a driver deciding whether a plate reader can see the car.
+function camerasWithin(coords, cams, radius = 75) {
+  const out = [];
+  if (!coords || coords.length < 2 || !cams || !cams.length) return out;
+  const rad = Math.PI / 180;
+  const midLat = (coords[0][1] + coords[coords.length - 1][1]) / 2;
+  const kx = 111320 * Math.cos(midLat * rad), ky = 110540;
+  const r2 = radius * radius;
+  // Distance along the route to each vertex, so a measured pass keeps the
+  // "camera ahead in 200 m" timing the nav chip and voice prompt rely on.
+  const cum = [0];
+  for (let i = 1; i < coords.length; i++) {
+    const dLon = (coords[i][0] - coords[i - 1][0]) * kx;
+    const dLat = (coords[i][1] - coords[i - 1][1]) * ky;
+    cum.push(cum[i - 1] + Math.hypot(dLon, dLat));
+  }
+  for (const c of cams) {
+    const cx = c.lon * kx, cy = c.lat * ky;
+    let best = Infinity, bestAt = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const x1 = coords[i][0] * kx, y1 = coords[i][1] * ky;
+      const x2 = coords[i + 1][0] * kx, y2 = coords[i + 1][1] * ky;
+      const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+      let t = L2 ? ((cx - x1) * dx + (cy - y1) * dy) / L2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const px = x1 + t * dx, py = y1 + t * dy;
+      const d2 = (cx - px) ** 2 + (cy - py) ** 2;
+      if (d2 < best) { best = d2; bestAt = cum[i] + t * (cum[i + 1] - cum[i]); }
+    }
+    if (best < r2) out.push({ at: Math.round(bestAt), d: Math.round(Math.sqrt(best)), lon: c.lon, lat: c.lat });
+  }
+  return out;
 }
 
 function turnFor(deg) {
@@ -1337,9 +1415,14 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     o.coords = simplify(o.route.coords);
     // Honesty flag for the badge: known unless we had NO camera data source
     // for this corridor (list fetch failed AND nothing counted).
-    o.camerasKnown = (deflockCams && deflockCams.length > 0) || (o.cameras || 0) > 0;
-    o.cameras = o.route.cameras;
-    o.cameraPoints = cameraClusterPositions(graph, o.route);
+    // Badge = measured passes on the served polyline, not edge-byte clusters
+    // (see camerasWithin): a camera 89 m off the road must read as clear.
+    const measured = Array.isArray(deflockCams) && deflockCams.length
+      ? camerasWithin(o.route.coords, deflockCams, 75)
+      : null;
+    o.camerasKnown = measured !== null || (o.cameras || 0) > 0;
+    o.cameras = measured !== null ? measured.length : (o.route.cameras || 0);
+    o.cameraPoints = measured !== null ? measured : cameraClusterPositions(graph, o.route);
     o.highwayKm = o.route.highwayKm || 0;
     o.distance = o.route.distance;
     o.duration = o.route.duration;

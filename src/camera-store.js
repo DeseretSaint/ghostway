@@ -185,9 +185,24 @@ export class CameraStore {
   }
 
   async _loadCorpus() {
-    const res = await fetch(CONFIG.allCamerasUrl, { cache: 'force-cache' });
-    if (!res.ok) throw new Error('corpus HTTP ' + res.status);
-    const buf = await res.arrayBuffer();
+    // Android packaging: aapt2 gunzips assets whose name ends in .gz and
+    // stores them without the suffix, so the APK ships all-cameras.json and
+    // the .gz request 404s. Try the configured URL, then the raw sibling.
+    const urls = [CONFIG.allCamerasUrl, CONFIG.allCamerasUrl.replace(/\.gz$/, '')]
+      .filter((v, i, a) => a.indexOf(v) === i);
+    let buf = null;
+    let firstErr = null;
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { cache: 'force-cache' });
+        if (!res.ok) throw new Error('corpus HTTP ' + res.status);
+        buf = await res.arrayBuffer();
+        break;
+      } catch (err) {
+        if (!firstErr) firstErr = err;
+      }
+    }
+    if (!buf) throw firstErr || new Error('corpus fetch failed');
     const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
     let raw;
     if (head[0] === 0x1f && head[1] === 0x8b) {
