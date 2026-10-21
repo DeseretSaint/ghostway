@@ -213,10 +213,9 @@ body {
   backdrop-filter: blur(8px);
   box-shadow: var(--shadow-1);
 }
-.brand-mark {
-  color: var(--accent);
-  font-size: 1.125rem;
-}
+/* Wordmark only: the decorative ◈ glyph was removed 2026-10-20 (UI delta D1).
+   Nothing dot-shaped belongs in the top bar; the map's camera markers are the
+   only dots on screen. */
 .brand-name {
   font-size: 1.0625rem;
   color: var(--ink);
@@ -236,13 +235,9 @@ body {
   backdrop-filter: blur(8px);
   box-shadow: var(--shadow-1);
 }
-.safety-pill .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
-}
+/* Text-only pill: the leading dot was removed 2026-10-20 (UI delta D1). The
+   border and panel tint carry the "this is a control" signal, and the label
+   names the current mode. */
 /* The label is part of the control at every width (release UX spec D2): it
    names the current state in place, and truncates rather than vanishing when
    the topbar crowds on a 360px phone. */
@@ -251,10 +246,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.safety-pill.off .dot {
-  background: var(--muted);
-  box-shadow: none;
 }
 .safety-pill.off .label {
   color: var(--muted);
@@ -916,11 +907,10 @@ details summary {
   }
 }
 
-/* Small phones: the topbar row overflows ~384px — collapse to icons. */
+/* Small phones: the wordmark stays. With the decorative glyph gone the row
+   measures 242px at 411px wide, so the brand no longer needs to collapse to a
+   lone icon (UI delta D1, 2026-10-20). */
 @media (max-width: 420px) {
-  .brand-name {
-    display: none;
-  }
   /* The label stays visible at every width: a lone dot reads as a dead
      indicator (release UX spec 2026-10-20 D2). It truncates instead. */
   .safety-pill {
