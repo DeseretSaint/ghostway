@@ -25,6 +25,7 @@ import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -33,6 +34,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.webkit.WebViewAssetLoader;
 
 /**
  * Phone activity: runs the Ghostway PWA (bundled dist assets) in a WebView.
@@ -56,6 +58,12 @@ public class MainActivity extends AppCompatActivity {
     private static final String EXTRA_INSTALL_ID = "install_download_id";
     private static final String NOTIF_CHANNEL = "gw_updates";
     private static final int NOTIF_ID = 4101;
+    // Secure pseudo-origin WebViewAssetLoader serves assets/www from. Real
+    // https origin => fetch(), service worker and geolocation work like web.
+    private static final String ASSET_HOST = "appassets.androidplatform.net";
+    private static final String APP_URL =
+            "https://" + ASSET_HOST + "/assets/www/index.html";
+    private WebViewAssetLoader assetLoader;
     private WebView web;
     private String pendingGeoOrigin;
     private GeolocationPermissions.Callback pendingGeoCallback;
@@ -237,18 +245,30 @@ public class MainActivity extends AppCompatActivity {
         s.setDomStorageEnabled(true);
         s.setGeolocationEnabled(true);
         // The PWA fetches bundled assets (graph .bin.gz, cameras.geojson,
-        // wzdx json.gz) with relative fetch() URLs. On file:// Android WebView
-        // blocks those (CORS: origin 'null' cannot read file://), leaving the
-        // app stuck on "Loading your map…". Allow file access + universal
-        // access from file so same-origin asset fetches work offline.
+        // wzdx json.gz) with relative fetch() URLs. Chromium's Fetch API
+        // refuses the file: scheme outright — the allowFileAccess* flags only
+        // affect XHR/`<img>`, never fetch() — so under file:// every asset
+        // fetch throws. That silently disabled the on-device engine (loadGraph
+        // failed, routes fell back to Valhalla) and the bundled camera
+        // snapshot. Serve the same assets over https via WebViewAssetLoader:
+        // a real secure origin, so fetch(), the service worker and
+        // geolocation all behave exactly as they do on the web build.
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
-        s.setAllowFileAccessFromFileURLs(true);
-        s.setAllowUniversalAccessFromFileURLs(true);
+        assetLoader = new WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
         web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
+                // In-app navigation (route links, reloads) stays in the WebView.
+                if (ASSET_HOST.equals(uri.getHost())) return false;
                 String scheme = uri.getScheme();
                 if ("http".equals(scheme) || "https".equals(scheme)) {
                     // External links open in the system browser — a WebView
@@ -286,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
         // Phone→car nav bridge (AA v2): src/nav-bridge.js pushes nav state
         // JSON here; GhostwayCarAppService mirrors it onto the head unit.
         web.addJavascriptInterface(new JsBridge(), "AABridge");
-        web.loadUrl("file:///android_asset/www/index.html");
+        web.loadUrl(APP_URL);
         setContentView(web);
 
         // Completion broadcast: fires even when the 2s poll was lost with the

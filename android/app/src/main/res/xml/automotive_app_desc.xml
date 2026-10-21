@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Auto capability declaration (read by the AA host through the
+  com.google.android.gms.car.application meta-data in AndroidManifest.xml).
+
+  MUST be "template": Ghostway uses the Android for Cars App Library
+  (androidx.car.app). Per developer.android.com/training/cars/apps/auto:
+
+    "Apps using the Android for Cars App Library must declare the `template`
+     capability in the automotive_app_desc.xml file"
+
+  History: this file used to declare name="navigation", which is the legacy
+  Auto navigation-app capability, not the Car App Library one. The AA host
+  therefore never surfaced Ghostway's CarAppService on the head unit: the app
+  did not appear at all, no matter how "Unknown sources" was set. Fixed
+  2026-10-20. scripts/aa-manifest-check.mjs guards this declaration.
+-->
 <automotiveApp>
-    <uses name="navigation" />
+    <uses name="template" />
 </automotiveApp>

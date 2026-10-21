@@ -11,7 +11,11 @@ android {
         minSdk 23
         targetSdk 34
         versionCode 11
-        versionName '1.0.3'
+        // 1.0.0 is the public release version. It must match package.json and
+        // src/config.js CONFIG.version; scripts/release-version-check.mjs
+        // asserts all three agree. versionCode stays above the internal 1.0.2
+        // / 1.0.3 update-flow verification builds (codes 9 and 10).
+        versionName '1.0.0'
     }
 
     signingConfigs {
@@ -44,6 +48,11 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
+    // Asset loader: serves assets/www over https://appassets.androidplatform.net
+    // so the PWA's fetch() calls (graph, camera snapshot, traffic cache) work.
+    // Under file:// Chromium rejects fetch() outright, which silently disabled
+    // the on-device routing engine and forced every route onto Valhalla.
+    implementation 'androidx.webkit:webkit:1.12.1'
     implementation 'androidx.car.app:app:1.7.0'
     implementation 'androidx.car.app:app-projected:1.7.0'
     // kotlin-stdlib 1.8 folds jdk7/jdk8 variants — force alignment to kill

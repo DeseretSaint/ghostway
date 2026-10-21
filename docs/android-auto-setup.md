@@ -1,4 +1,4 @@
-# Android Auto — install & enable (Ghostway sideload path)
+# Android Auto: install and enable (Ghostway sideload path)
 
 **TL;DR:** Download `ghostway-android.apk` from
 [Releases](https://github.com/DeseretSaint/ghostway/releases/tag/android-latest)
@@ -22,19 +22,31 @@ plus a nightly 04:00 UTC build as a safety net.
    Confirm → Developer settings open.
 5. In Developer settings, enable **"Unknown sources"**.
 6. Open the downloaded APK and install it (allow "install unknown apps" if
-   prompted — this is the standard sideload permission, Ghostway has no store).
+   prompted; this is the standard sideload permission, Ghostway has no store).
 7. Confirm Ghostway shows as installed (and toggled on in AA → Customize
    launcher), then plug the phone into the head unit (or open the AA app →
    drive mode). Ghostway appears in the AA launcher's navigation apps.
-8. First launch on the head unit may ask to allow the app — accept once.
+8. First launch on the head unit may ask to allow the app. Accept once.
 
-## What works in v2 (plug-and-play turn-by-turn)
+## What works in 1.0.0 (plug-and-play turn-by-turn)
 
 - AA handshake + navigation-category declaration (appears on the head unit).
+  Version 1.0.0 fixes the reason it did not: `automotive_app_desc.xml` used to
+  declare the legacy `navigation` capability, which the Android for Cars App
+  Library does not accept. The Auto host therefore never discovered the
+  `CarAppService` and the app was absent from the launcher with no error on the
+  phone. The file now declares `template`, and `scripts/aa-manifest-check.mjs`
+  fails the build if any host-checked declaration regresses.
+- Verification status: the wiring above is checked statically by
+  `scripts/aa-manifest-check.mjs` and the APK is built in CI. It has not been
+  confirmed on a physical head unit in this release cycle. If the tile is
+  still missing with a 1.0.0 APK installed, capture `adb logcat` filtered on
+  `car` and `GhostwayCarAppService` while opening the Auto launcher and open an
+  issue with that log.
 - The phone app (WebView) runs the full Ghostway PWA: routing, Strict camera
   avoidance, live map, voice.
 - **Turn panel (NavigationTemplate) on the car screen, automatically:** maneuver
-  icon, instruction, road name, and distance to the maneuver — mirrored live
+  icon, instruction, road name, and distance to the maneuver, mirrored live
   from the phone session (`src/nav-bridge.js` → `AABridge.navState()` →
   `NavState`). Start navigation on the phone → the panel replaces the home list
   within ~1 s. Stop → the home list returns. No menus to poke in the car.
@@ -45,19 +57,19 @@ plus a nightly 04:00 UTC build as a safety net.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Ghostway tile missing from the AA launcher | Sideload + "Unknown sources" off, or launcher not refreshed | Do step 5 (AA Developer settings → Unknown sources ON), toggle Ghostway off/on in Customize launcher, replug. |
+| Ghostway tile missing from the AA launcher | Sideload + "Unknown sources" off, or launcher not refreshed, or an APK from before 1.0.0 (wrong capability declaration) | Do step 5 (AA Developer settings → Unknown sources ON), toggle Ghostway off/on in Customize launcher, replug. Confirm the installed version is 1.0.0 or later; install the current `android-latest` APK. |
 | Tile opens but only shows the home list | Navigation not active on the phone | Start a route in the phone app (home screen's row says so). The panel takes over automatically. |
 | Turn panel froze on an old instruction | Phone WebView suspended in the background | Bring Ghostway on the phone to the foreground once; exclude it from battery optimisation to prevent it. |
-| Navigation stopped but car still shows the panel | Car session died between pushes | Reopen the Ghostway tile — the session restarts on the current state. |
+| Navigation stopped but car still shows the panel | Car session died between pushes | Reopen the Ghostway tile; the session restarts on the current state. |
 | Install refused on the phone | "Install unknown apps" not granted for your file manager/browser | Grant it once in the install prompt (step 6). |
-| Map or route planning inside the car | By design | AA is a mirror, not a second UI — the phone computes, the car displays. |
+| Map or route planning inside the car | By design | AA is a mirror, not a second UI. The phone computes, the car displays. |
 
 ## Trip feeds (instrument cluster / HUD)
 
 The car screen also sends `NavigationManager` trip updates (`Trip` with step +
 destination `TravelEstimate`s) on the same phone-state pushes: vehicles that
 support it show the maneuver in the instrument cluster / HUD, and Android Auto
-mutes its own prompts while Ghostway navigates. Best-effort — hosts without
+mutes its own prompts while Ghostway navigates. Best-effort: hosts without
 cluster support ignore it and the turn panel works regardless. The host's stop
 button ends the trip feed (the phone owns navigation).
 
@@ -70,7 +82,7 @@ button ends the trip feed (the phone owns navigation).
 
 The phone app's camera layer includes the published Flock Safety research
 dataset (`flocksurveillance.org`): road plate readers (red dots) feed avoidance
-routing, and the full device set (indoor/facility/planned — blue dots) is a
+routing, and the full device set (indoor/facility/planned, blue dots) is a
 map-only "Flock" toggle. See `scripts/fetch-cameras.mjs` for the merge policy.
 
 ## CarPlay (iPhone)
