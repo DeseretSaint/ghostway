@@ -5,6 +5,16 @@
     <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES" />
     <uses-permission android:name="androidx.car.app.MAP_TEMPLATES" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- In-app updates install the downloaded APK. Without this declaration
+         PackageInstaller's InstallStart aborts before showing anything
+         ("Requesting uid N needs to declare permission
+         android.permission.REQUEST_INSTALL_PACKAGES"), which is exactly the
+         "installer never opens" field report of 2026-10-20. The user still
+         grants "install unknown apps" for Ghostway once on Android 8+. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 13+ needs this to show Ghostway's own "tap to install"
+         notification; requested at update time only. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
@@ -20,6 +30,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
