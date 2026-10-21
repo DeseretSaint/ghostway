@@ -139,7 +139,15 @@ async function openPage(width, pref = {}) {
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e.message)));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('console', async (m) => {
+    if (m.type() !== 'error') return;
+    const args = await Promise.all(m.args().map((a) => a.jsonValue().catch(() => null)));
+    const detail = args
+      .filter((v) => v != null)
+      .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)))
+      .join(' ') || m.text();
+    errors.push(detail);
+  });
   page.on('requestfailed', (r) => {
     const u = r.url();
     if (!/favicon|\.png$|\.ico$/.test(u)) errors.push(`requestfailed ${u} ${r.failure()?.errorText || ''}`);
