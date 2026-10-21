@@ -97,20 +97,29 @@ export function parseCarsReports(reports, bbox) {
   return events;
 }
 
-// Registry: state → array of { name, url, parse } fetch jobs. All verified
-// 2026-08-28. WY/NM: no verified key-free feed — absent on purpose.
+// Registry: state → array of { name, url, parse, browser } fetch jobs.
+// `browser: false` means the endpoint sends no Access-Control-Allow-Origin, so
+// a page fetch can never read it: the browser logs a CORS console error on
+// every boot and the layer gets nothing. Verified with curl -H "Origin: ..."
+// on 2026-10-20 (the 2026-08-28 CORS-open claim no longer holds for ID/AZ/CO).
+// Those feeds stay in the registry because the node-side gate
+// (scripts/dot-feeds-check.mjs) still verifies their live shape, and the
+// bundled national WZDx snapshot (traffic.js WZDX_URL) carries the same
+// work-zone coverage to the app. Re-enable `browser` only when the state
+// actually returns an ACAO header or ships through a same-origin proxy.
+// All verified 2026-08-28. WY/NM: no verified key-free feed — absent on purpose.
 export const DOT_FEEDS = {
   ID: [
-    { name: 'Idaho 511 WZDx', url: 'https://511.idaho.gov/api/wzdx', parse: parseWzdx },
+    { name: 'Idaho 511 WZDx', url: 'https://511.idaho.gov/api/wzdx', parse: parseWzdx, browser: false },
   ],
   AZ: [
-    { name: 'AZ511 WZDx', url: 'https://az511.gov/api/wzdx', parse: parseWzdx },
+    { name: 'AZ511 WZDx', url: 'https://az511.gov/api/wzdx', parse: parseWzdx, browser: false },
   ],
   NV: [
-    { name: 'NV Roads WZDx', url: 'https://www.nvroads.com/api/wzdx', parse: parseWzdx },
+    { name: 'NV Roads WZDx', url: 'https://www.nvroads.com/api/wzdx', parse: parseWzdx, browser: false },
   ],
   CO: [
-    { name: 'CDOT TG event reports', url: 'https://cotg.carsprogram.org/tgevents/api/eventReports', parse: parseCarsReports },
+    { name: 'CDOT TG event reports', url: 'https://cotg.carsprogram.org/tgevents/api/eventReports', parse: parseCarsReports, browser: false },
   ],
   UT: [], // UT has its own primary path (UDOT ArcGIS, loadTraffic) — kept there.
   WY: [], // No verified key-free feed; WZDx national snapshot covers work zones.
