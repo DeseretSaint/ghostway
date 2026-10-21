@@ -501,11 +501,17 @@ function wireApp() {
   // unclear (Keaton field report 2026-09-26).
   const layersSheet = $('#layersSheet');
   const layersBtn = $('#layersBtn');
+  // The chip is a disclosure toggle, not a layer-state lamp: its pressed
+  // visual tracks whether the sheet is OPEN (aria-expanded). Layer state has
+  // its own honest indicator inside the sheet (the row checkboxes and the
+  // layer visibility itself). Keying the class to layer state is what made
+  // the chip light up and never go back out (Keaton field report 2026-10-21).
   const syncLayersUi = () => {
     $('#lyrCameras').checked = !!app._camLayerOn;
     $('#lyrFlock').checked = !!app._flockOn;
-    layersBtn.setAttribute('aria-expanded', String(!layersSheet.hidden));
-    layersBtn.classList.toggle('on', !!(app._camLayerOn || app._flockOn));
+    const open = !layersSheet.hidden;
+    layersBtn.setAttribute('aria-expanded', String(open));
+    layersBtn.classList.toggle('on', open);
   };
   layersBtn.addEventListener('click', () => {
     layersSheet.hidden = !layersSheet.hidden;
@@ -514,7 +520,7 @@ function wireApp() {
   document.addEventListener('click', (e) => {
     if (!layersSheet.hidden && !layersSheet.contains(e.target) && !layersBtn.contains(e.target)) {
       layersSheet.hidden = true;
-      layersBtn.setAttribute('aria-expanded', 'false');
+      syncLayersUi();
     }
   });
   $('#lyrCameras').addEventListener('change', (e) => {

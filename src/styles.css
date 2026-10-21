@@ -1421,7 +1421,11 @@ details summary {
 #unitsBtn { top: calc(max(70px, env(safe-area-inset-top) + 64px) + 104px); font-weight: 600; width: auto; min-width: 44px; padding: 0 8px; }
 #navBanner:not([hidden]) ~ #unitsBtn { top: calc(max(64px, env(safe-area-inset-top) + 58px) + 304px); }
 #layersBtn { top: calc(max(70px, env(safe-area-inset-top) + 64px) + 156px); }
-#layersBtn.on { color: #3ad6c5; }
+/* The Layers glyph is an SVG whose strokes are currentColor. On the accent
+   fill the strokes must go dark; setting them to the accent colour made the
+   icon merge into its own background and read as a solid block (Keaton field
+   report 2026-10-21). */
+#layersBtn.on { color: #0b0f17; }
 #navBanner:not([hidden]) ~ #layersBtn { top: calc(max(64px, env(safe-area-inset-top) + 58px) + 408px); }
 
 /* Layers sheet — labelled toggles for every map layer (the bare camera/Flock
