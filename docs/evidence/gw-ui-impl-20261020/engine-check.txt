@@ -1,0 +1,9 @@
+planning routes (loads graph first)…
+[CAM-COUNT] mode=strict corridor=0 stillNear=1 badge=0
+total 4244ms
+
+Fastest   10.2 km  13 min  cameras: 2  steps: 13  pts: 51
+Balanced  7.9 km  15 min  cameras: 3  steps: 7  pts: 30
+Clearest  10.7 km  20 min  cameras: 1  steps: 23  pts: 63
+
+ENGINE PASS ✅ — modes produce distinct options with camera accounting

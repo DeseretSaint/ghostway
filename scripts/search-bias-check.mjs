@@ -32,7 +32,7 @@ await p.waitForFunction('window.__gw !== undefined', { timeout: 45000 });
 await wait(1500);
 
 // Set GPS location first (like Keaton did — "My location" as start).
-await p.click('#gpsBtn');
+await p.click('#fromLocateBtn');
 await wait(1200);
 
 // Type bare "Costco" — the exact query from the bug report.

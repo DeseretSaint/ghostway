@@ -57,7 +57,7 @@ try {
   const callsOnLoad = await page.evaluate(() => window.__geoCalls);
 
   // First tap → pre-prompt (NOT the native prompt).
-  await page.click('#gpsBtn');
+  await page.click('#fromLocateBtn');
   await page.waitForSelector('#geoAllow', { visible: true, timeout: 5000 });
   const prePrompt = await page.evaluate(() => ({
     copy: document.querySelector('#modalBody')?.textContent || '',
@@ -75,7 +75,7 @@ try {
   }));
 
   // Flag set → next tap goes straight to lookup (no modal), succeeds.
-  await page.click('#gpsBtn');
+  await page.click('#fromLocateBtn');
   await new Promise(r => setTimeout(r, 400));
   const secondTap = await page.evaluate(() => ({
     modalHidden: document.getElementById('modal').hidden,
@@ -90,7 +90,7 @@ try {
       localStorage.setItem('gw-geo-explained', '1'); // skip pre-prompt: error path under test
       window.__geoErrCode = c;
     }, code);
-    await page.click('#gpsBtn');
+    await page.click('#fromLocateBtn');
     await page.waitForFunction(
       () => document.getElementById('status')?.classList.contains('warn'),
       { timeout: 5000 }

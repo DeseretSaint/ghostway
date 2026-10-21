@@ -35,7 +35,11 @@ const checks = {
     && /ensureCorpus\(\)\.catch/.test(main),
   // UX round: recenter button, working avoidance pill, encoded feedback link,
   // in-app updates (no GitHub visit).
-  recenterNotDuplicate: /gpsBtn'\)\.addEventListener\('click', \(\) => \{/.test(main),
+  // One locate affordance (release UX spec D2): the duplicate top-right gpsBtn
+  // is gone from both markup and wiring; the start field owns "use my location".
+  recenterNotDuplicate: !/gpsBtn/.test(main)
+    && !/id="gpsBtn"/.test(readFileSync('index.html', 'utf8'))
+    && /fromLocateBtn'\)\.addEventListener\('click', useMyLocation\)/.test(main),
   pillWired: /safety-pill'\)\.addEventListener\('click'/.test(main),
   feedbackEncoded: /issues\/new\?title=/.test(main),
   updatesInApp: /checkForUpdates/.test(main) && /data-action="updates"/.test(readFileSync('index.html', 'utf8'))

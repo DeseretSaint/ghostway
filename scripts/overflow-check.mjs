@@ -22,6 +22,7 @@ try {
 
   let ok = true;
   for (const width of [320, 390, 430]) {
+    console.log(`-- width ${width}px`);
     await p.setViewport({ width, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
     await p.evaluateOnNewDocument(() => { localStorage.setItem('gw-onboarded', '1'); });
     await p.goto(preview.url, { waitUntil: 'load', timeout: 60000 });
@@ -34,10 +35,20 @@ try {
       document.querySelector('#toInput').value = 'Costco, Lehi';
       document.querySelector('#route-actions').hidden = false;
     });
-    await p.waitForFunction(() => {
-      const s = document.querySelector('#splash');
-      return !s || s.classList.contains('hidden') || getComputedStyle(s).opacity === '0';
-    }, { timeout: 15000 });
+    try {
+      await p.waitForFunction(() => {
+        const s = document.querySelector('#splash');
+        return !s || s.classList.contains('hidden') || getComputedStyle(s).opacity === '0';
+      }, { timeout: 15000, polling: 200 });
+    } catch (e) {
+      const dump = await p.evaluate(() => {
+        const s = document.querySelector('#splash');
+        const cs = s && getComputedStyle(s);
+        return { url: location.href, gw: typeof window.__gw, splash: s ? [s.className, s.hidden, cs.opacity, cs.display] : null };
+      }).catch((err) => ({ evalError: String(err) }));
+      console.error('splash wait failed:', JSON.stringify(dump), JSON.stringify(errs));
+      throw e;
+    }
     await wait(300);
     await p.click('#goBtn');
     await p.waitForFunction('window.__ghostwayEngine === "ready"', { timeout: 90000 });

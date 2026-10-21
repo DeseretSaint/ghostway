@@ -154,6 +154,11 @@ async function init() {
   // First-run onboarding (Workstream D).
   if (!localStorage.getItem('gw-onboarded')) startOnboarding();
 
+  // Developer mode row state (release UX spec section 2). The drawer is built
+  // from static markup, so the persisted switch state is applied once at boot
+  // and again on every drawer open.
+  applyDevMode();
+
   // Camera click -> info modal.
   app.map.onCameraClick(async (props, coords) => {
     openCameraModal(props, coords);
@@ -446,15 +451,11 @@ function wireApp() {
   $('#modalClose').addEventListener('click', closeModal);
   document.addEventListener('keydown', trapModalFocus);
 
-  // Top-right button = Maps-parity "center on my location" (route planning's
-  // "use my location" lives inside the start field — this one only moves the map).
-  $('#gpsBtn').addEventListener('click', () => {
-    if (app.state.userLoc) {
-      app.map.fitTo([app.state.userLoc], true);
-    } else {
-      useMyLocation(); // no fix yet — get one (it also centers)
-    }
-  });
+  // Locate affordances are singular now (release UX spec D2): the start field
+  // carries "use my location" (#fromLocateBtn -> useMyLocation, which centers
+  // the map on the fix), and #recenterBtn resumes follow during navigation.
+  // The duplicate top-right #gpsBtn is gone, so there is no second control
+  // that only moves the map.
   // The avoidance pill is a real control now (it read as a dead green dot):
   // tap = cycle Strict → Balanced → Fastest, re-routing if a route exists.
   $('#safety-pill').addEventListener('click', () => {
@@ -590,6 +591,13 @@ function wireApp() {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
+    // The developer switch commits in place: keep the drawer open so the new
+    // state and note are visible, per the release UX spec (no Save, instant
+    // feedback). Every other row closes first, as before.
+    if (action === 'devmode') {
+      handleDevModeToggle();
+      return;
+    }
     closeDrawer();
     setTimeout(() => handleDrawer(action), 180);
   });
@@ -599,8 +607,18 @@ function applyModeUI() {
   const pill = $('#safety-pill');
   const mode = app.state.mode;
   pill.classList.toggle('off', mode === 'off');
-  pill.querySelector('.label').textContent =
-    mode === 'strict' ? 'Strict avoidance' : mode === 'moderate' ? 'Avoid cameras' : 'Fastest route';
+  // Short visible labels that fit the phone topbar; the full state and the tap
+  // action stay available to assistive tech and long-press (spec D2 strings).
+  const visible = mode === 'strict' ? 'Strict' : mode === 'moderate' ? 'Avoiding' : 'Fastest';
+  const spoken =
+    mode === 'strict'
+      ? 'Camera avoidance Strict, tap to change mode'
+      : mode === 'moderate'
+        ? 'Camera avoidance Balanced, tap to change mode'
+        : 'Camera avoidance off, tap to change mode';
+  pill.querySelector('.label').textContent = visible;
+  pill.setAttribute('aria-label', spoken);
+  pill.title = spoken;
   document.querySelectorAll('.mode-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.mode === mode);
     b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false');
@@ -982,6 +1000,39 @@ function pickOptionForMode(options) {
   return alt === -1 ? 0 : alt;
 }
 
+// Start-from-here, without the hidden precondition. "Route me clear" used to
+// require app.state.from, which only the locate control ever set: a fresh
+// session with the empty start field (it shows the "Your location"
+// placeholder) silently did nothing. Now the route action resolves the
+// user's position itself, so picking a destination and tapping Route me clear
+// is enough (field report 2026-10-20).
+const START_LOC_WAIT_MS = 8000;
+function currentLocationStart(timeoutMs = START_LOC_WAIT_MS) {
+  const instant = app.state.userLoc || cachedLoc();
+  if (instant) return Promise.resolve({ coords: instant, label: 'My location', isMyLoc: true });
+  if (!navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (v) => {
+      if (settled) return;
+      settled = true;
+      resolve(v);
+    };
+    const timer = setTimeout(() => done(null), timeoutMs + 500);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timer);
+        done({ coords: [pos.coords.longitude, pos.coords.latitude], label: 'My location', isMyLoc: true });
+      },
+      () => {
+        clearTimeout(timer);
+        done(null);
+      },
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: timeoutMs }
+    );
+  });
+}
+
 let _routing = false;
 async function onRoute() {
   // Re-entrancy guard: a second plan while one is in flight (double-tap,
@@ -990,22 +1041,40 @@ async function onRoute() {
   // same endpoints anyway. (Test race + field report 2026-09-27.)
   if (_routing) return;
   _routing = true;
+  setGoLoading(true);
   try {
-    const from = app.state.from || (await resolveInput('fromInput'));
+    let from = app.state.from;
+    if (!from) {
+      const typed = $('#fromInput').value.trim();
+      if (!typed || /^(your location|my location)$/i.test(typed)) {
+        showStatus('Locating you…', 'info');
+        if ($('#goBtn')) $('#goBtn').textContent = 'Locating you…';
+        from = await currentLocationStart();
+        if (from) {
+          // Center the map on the fix and publish it as the start point.
+          // applyMyLocation also calls maybeAutoRoute, which is a no-op here
+          // because this plan already holds the re-entrancy guard.
+          applyMyLocation(from.coords);
+        }
+      } else {
+        from = await resolveInput('fromInput');
+      }
+    }
     const to = app.state.to || (await resolveInput('toInput'));
     if (!from || !to) {
-      showStatus('Set a start and a destination.', 'warn');
+      showStatus(
+        !to
+          ? 'Pick a destination first.'
+          : 'Could not find your location. Type a start place, or allow location access.',
+        'warn'
+      );
       return;
     }
     setEndpoints(from, to);
     showStatus('Routing…', 'info');
-    setGoLoading(true);
-    try {
-      await routeWithFallbacks(from, to);
-    } finally {
-      setGoLoading(false);
-    }
+    await routeWithFallbacks(from, to);
   } finally {
+    setGoLoading(false);
     _routing = false;
   }
 }
@@ -1884,6 +1953,7 @@ function clearRoute() {
 
 // ---- Modal / drawer helpers ----
 function openDrawer() {
+  applyDevMode();
   $('#drawer').hidden = false;
   $('#scrim').hidden = false;
 }
@@ -2229,6 +2299,81 @@ async function updateTripBadge() {
   }
 }
 
+// ---- Developer mode (release UX spec 2026-10-20, section 2) ----
+// One visible switch in the drawer (the spec's sanctioned fallback placement
+// when no Settings sheet ships), default off, commits on tap, persists next to
+// gw-mode / gw-onboarded. Turning on asks once; turning off is immediate. Dev
+// rows stay hidden while the switch is off (role gating, never a wall of
+// disabled buttons).
+const DEV_KEY = 'gw-devmode';
+function isDevMode() {
+  try { return localStorage.getItem(DEV_KEY) === '1'; } catch { return false; }
+}
+function applyDevMode() {
+  const on = isDevMode();
+  const row = $('#devModeRow');
+  if (row) row.setAttribute('aria-checked', on ? 'true' : 'false');
+  const state = $('#devModeState');
+  if (state) state.textContent = on ? 'On' : 'Off';
+  const note = $('#devModeNote');
+  if (note) note.hidden = !on;
+  const engineRow = $('#devEngineRow');
+  if (engineRow) engineRow.hidden = !on;
+  // Future dev rows gate off this attribute rather than inventing a new flag.
+  document.documentElement.dataset.devmode = on ? 'on' : 'off';
+}
+function setDevMode(on) {
+  try { localStorage.setItem(DEV_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+  applyDevMode();
+}
+function handleDevModeToggle() {
+  if (!isDevMode()) {
+    openModal(`
+      <h3>Turn on Developer mode</h3>
+      <p>This shows raw engine data and test tools that can clutter a normal trip. Your routes avoid known cameras the same way with it on or off.</p>
+      <p class="modal-actions"><button id="devTurnOn" class="primary-btn" type="button">Turn on</button> <button id="devNotNow" class="ghost-btn" type="button">Not now</button></p>
+    `);
+    $('#devTurnOn').addEventListener('click', () => {
+      setDevMode(true);
+      closeModal();
+      showStatus('Developer mode on. Test tools added to the menu.', 'info');
+    });
+    $('#devNotNow').addEventListener('click', closeModal);
+    return;
+  }
+  setDevMode(false);
+  showStatus('Developer mode off.', 'info');
+}
+
+/** Engine details: the one dev-only tool this release ships. Reads live state. */
+async function openEngineDetails() {
+  const status = window.__ghostwayEngine || (window.__gwRouter ? 'ready' : 'idle');
+  const s = app.state;
+  const opt = s.options && s.options[s.chosen];
+  let camAsOf = 'unknown';
+  try {
+    const r = await fetch(CONFIG.cameraGeojson + '?t=' + Date.now(), { cache: 'no-store' });
+    if (r.ok) {
+      const d = await r.json();
+      camAsOf = d._meta?.asOf || d.asOf || 'unknown';
+    }
+  } catch { /* offline — leave unknown */ }
+  const routeLine = opt
+    ? `${(opt.distance / 1000).toFixed(1)} km, ${Math.round(opt.duration / 60)} min, ${opt.cameras} camera${opt.cameras === 1 ? '' : 's'}, mode ${opt.mode}`
+    : 'no route planned';
+  openModal(`
+    <h3>Engine details</h3>
+    <ul class="src-list">
+      <li><b>Engine:</b> ${escHtml(String(status))}</li>
+      <li><b>App version:</b> ${escHtml(String(CONFIG.version || 'dev'))}</li>
+      <li><b>Mode:</b> ${escHtml(String(s.mode))}</li>
+      <li><b>Route:</b> ${escHtml(routeLine)}</li>
+      <li><b>Camera snapshot:</b> ${escHtml(camAsOf)}</li>
+    </ul>
+    <p class="muted small">For debugging only. Routes avoid known cameras the same way while this is open.</p>
+  `);
+}
+
 function handleDrawer(action) {
   if (action === 'report') {
     openReportModal();
@@ -2265,6 +2410,10 @@ function handleDrawer(action) {
   }
   if (action === 'tour') {
     startOnboarding();
+    return;
+  }
+  if (action === 'enginedetails') {
+    openEngineDetails();
     return;
   }
   if (action === 'feedback') {
@@ -2379,21 +2528,19 @@ function startOnboarding() {
   const stepEl = $('#obStep');
   if (!wrap || !stepEl) return;
 
+  // Two task-based screens (release UX spec 2026-10-20 section 1.3). The old
+  // third "navigate like a pro" screen is gone on purpose: the empty route
+  // card already pitches the first action, per playbook Q41/Q233.
   const steps = [
     {
       icon: icon('shield', { size: 44 }),
-      title: 'Avoid surveillance cameras',
-      body: 'Ghostway routes you around Flock and ALPR cameras by default. You pick how hard it tries: Strict, Moderate, or Off.',
+      title: 'Plan a route that skips cameras',
+      body: 'Type a start and a destination. Ghostway picks a path that avoids known plate readers. You choose how strict it is.',
     },
     {
       icon: icon('lock', { size: 44 }),
-      title: 'Your data stays with you',
-      body: 'Routing and search run in your browser against open data. No account, no telemetry, no history sent anywhere.',
-    },
-    {
-      icon: icon('compass', { size: 44 }),
-      title: 'Navigate like a pro',
-      body: 'Pick a destination, choose a route, then start navigation for voice guidance, live speed, and camera-ahead warnings.',
+      title: 'Nothing about you leaves this phone',
+      body: 'No account. No tracking. Routing runs on your device where coverage exists. Skip the tour and try one search to see it work.',
     },
   ];
   let i = 0;

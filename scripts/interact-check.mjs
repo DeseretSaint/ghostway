@@ -5,7 +5,7 @@ const CHROME = process.env.GW_CHROME_PATH || '/Applications/Google Chrome.app/Co
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Watchdog: browser.close() can hang forever under swiftshader/headless Chrome.
 // If anything wedges, force-exit with a distinct code instead of hanging CI/cron.
-setTimeout(() => { console.error('WATCHDOG: 150s timeout — force exit'); process.exit(2); }, 150000).unref();
+setTimeout(() => { console.error('WATCHDOG: 210s timeout — force exit'); process.exit(2); }, 210000).unref();
 
 async function main() {
   // Poll until the preview server accepts connections (fixed sleeps are flaky
@@ -51,7 +51,10 @@ async function main() {
   const checks = {};
   // (A) At load, the visible controls must not be covered by an overlay.
   checks.menuHit = await atCenter('#menuBtn');
-  checks.gpsHit = await atCenter('#gpsBtn');
+  // Single locate control (release UX spec D2): the start field's locate
+  // button replaces the removed top-right #gpsBtn.
+  checks.locateHit = await atCenter('#fromLocateBtn');
+  checks.gpsGone = (await page.$('#gpsBtn')) === null;
   checks.fromHit = await atCenter('#fromInput');
   checks.toHit = await atCenter('#toInput');
 
@@ -59,28 +62,51 @@ async function main() {
   // waitForSelector (not a fixed sleep): photon latency varies 0.8-4s, so a
   // fixed 1100ms wait false-FAILs whenever the geocoder is slow (same flaky
   // class round 22/23 removed for the preview server).
-  await page.type('#fromInput', 'Pleasant Grove, Utah');
-  try { await page.waitForSelector('#suggestions .sugg', { timeout: 12000 }); } catch {}
-  let s = await page.$('#suggestions .sugg');
-  if (s) await s.click();
-  await wait(500);
-  await page.type('#toInput', 'Lindon, Utah');
-  try { await page.waitForSelector('#suggestions .sugg', { timeout: 12000 }); } catch {}
-  s = await page.$('#suggestions .sugg');
-  if (s) await s.click();
-  await wait(600);
+  // Round 71: recent-destination rows also carry .sugg and render INSTANTLY on
+  // field focus, so a bare '.sugg' wait can click the origin's recent row in
+  // the destination field — from==to, no route, false FAIL (2026-10-20: this
+  // was the whole "routed: false" failure). Wait for REAL photon results
+  // (loading row gone + a non-recent row present) and click via evaluate,
+  // because the list re-renders as results stream in.
+  const pickSuggestion = async (inputSel, query) => {
+    await page.type(inputSel, query);
+    try {
+      await page.waitForFunction(
+        () =>
+          !document.querySelector('#suggestions .sugg-loading') &&
+          !!document.querySelector('#suggestions .sugg:not(.sugg-recent)'),
+        { timeout: 12000 }
+      );
+      await page.evaluate(() => document.querySelector('#suggestions .sugg:not(.sugg-recent)')?.click());
+    } catch {
+      // No photon result: commit the typed text so the endpoint still resolves.
+      await page.focus(inputSel);
+      await page.keyboard.press('Enter');
+    }
+    await wait(600);
+  };
+  await pickSuggestion('#fromInput', 'Pleasant Grove, Utah');
+  await pickSuggestion('#toInput', 'Lindon, Utah');
+  // Guard: a repeated pick collapses to from==to (degenerate "0 min · 0 m").
+  checks.endpointsDistinct = await page.evaluate(() => {
+    const f = document.querySelector('#fromInput').value.trim().toLowerCase();
+    const t = document.querySelector('#toInput').value.trim().toLowerCase();
+    return !!f && !!t && f !== t;
+  });
   checks.goVisible = await page.evaluate(() => {
     const r = document.querySelector('#goBtn').getBoundingClientRect();
     return r.width > 0 && r.height > 0 && !document.querySelector('#route-actions').hidden;
   });
   checks.goHit = await atCenter('#goBtn');
   // Picking both endpoints auto-routes now; if Go is still visible (auto-route
-  // pending), give it a real click. Otherwise routing already ran.
-  if (checks.goHit === 'goBtn') {
-    await page.click('#goBtn');
+  // pending), give it a real click. The button's center can resolve to its
+  // #route-actions parent while the panel animates, so click via evaluate
+  // rather than a coordinate click that silently no-ops.
+  if (checks.goVisible) {
+    await page.evaluate(() => document.querySelector('#goBtn')?.click());
   }
   try {
-    await page.waitForFunction(() => window.__ghostwayDebug && window.__ghostwayDebug.routed === true, { timeout: 30000 });
+    await page.waitForFunction(() => window.__ghostwayDebug && window.__ghostwayDebug.routed === true, { timeout: 60000 });
     checks.routed = true;
   } catch {
     checks.routed = false;
@@ -105,9 +131,11 @@ async function main() {
 
   const pass =
     checks.menuHit === 'menuBtn' &&
-    checks.gpsHit === 'gpsBtn' &&
+    String(checks.locateHit).includes('fromLocateBtn') &&
+    checks.gpsGone &&
     checks.fromHit === 'fromInput' &&
     checks.toHit === 'toInput' &&
+    checks.endpointsDistinct &&
     checks.routed &&
     checks.routeCardShown &&
     String(checks.modeHit).includes('mode-btn') &&

@@ -1,0 +1,17 @@
+{
+ "menuHit": "menuBtn",
+ "locateHit": "fromLocateBtn",
+ "gpsGone": true,
+ "fromHit": "fromInput",
+ "toHit": "toInput",
+ "endpointsDistinct": true,
+ "goVisible": true,
+ "goHit": "route-actions",
+ "routed": true,
+ "routeCardShown": true,
+ "startNavHit": "startNavBtn",
+ "modeHit": "mode-btn active"
+}
+page errors: []
+
+INTERACTION PASS ✅ — full flow clickable + routes

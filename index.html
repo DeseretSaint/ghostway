@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="theme-color" content="#0b0f17" />
-    <title>Ghostway — Navigate beyond surveillance</title>
+    <title>Ghostway: navigate beyond surveillance</title>
     <meta
       name="description"
       content="Free, open-source turn-by-turn navigation that keeps you clear of ALPR and Flock surveillance cameras by default."
@@ -33,17 +33,18 @@
           <span class="brand-mark" aria-hidden="true">◈</span>
           <span class="brand-name">Ghostway</span>
         </div>
-        <button id="safety-pill" class="safety-pill" title="Camera avoidance — tap to change mode" aria-label="Camera avoidance mode — tap to change">
-          <span class="dot"></span><span class="label">Avoid cameras</span>
-        </button>
-        <button id="gpsBtn" class="icon-btn" aria-label="Center map on my location" title="Center map on my location">
-          <svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="7.5"/></svg>
+        <!-- One locate affordance, labelled in place. The redundant top-right
+             "Center map on my location" button (gpsBtn) was removed; the start
+             field carries "use my location" and the contextual recenter button
+             resumes follow during navigation (release UX spec D2). -->
+        <button id="safety-pill" class="safety-pill" title="Camera avoidance Strict, tap to change mode" aria-label="Camera avoidance Strict, tap to change mode">
+          <span class="dot"></span><span class="label">Strict</span>
         </button>
       </header>
 
       <div id="navBanner" class="nav-banner" hidden></div>
       <div id="navLive" class="sr-only" role="status" aria-live="polite"></div>
-      <div id="offlineBanner" class="offline-banner" role="status" hidden>You’re offline — routes still work on-device. Search and live traffic need a connection.</div>
+      <div id="offlineBanner" class="offline-banner" role="status" hidden>You're offline. Routes still work on-device. Search and live traffic need a connection.</div>
       <div id="staleBanner" class="stale-banner" role="status" hidden>
         <span id="staleMsg"></span>
         <button id="staleDismiss" class="stale-dismiss" aria-label="Dismiss stale data warning">×</button>
@@ -78,7 +79,7 @@
         </label>
         <label class="layer-row">
           <input type="checkbox" id="lyrFlock" />
-          <span class="lr-text"><span class="lr-title">Full camera database</span><span class="lr-desc">Every known camera — plate readers (red) and indoor / facility / planned devices (blue). Included with the app.</span></span>
+          <span class="lr-text"><span class="lr-title">Full camera database</span><span class="lr-desc">Every known camera: plate readers (red) and indoor / facility / planned devices (blue). Included with the app.</span></span>
         </label>
       </div>
 
@@ -104,7 +105,7 @@
 
       <div id="legendPanel" class="legend-panel" role="note" aria-label="Camera legend" hidden>
         <div class="legend-title">Camera types</div>
-        <div class="legend-row"><span class="legend-dot" style="background:#ff4d6d"></span>Flock Safety ALPR — reads plates at speed</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ff4d6d"></span>Flock Safety ALPR, reads plates at speed</div>
         <div class="legend-row"><span class="legend-dot" style="background:#ffaa40"></span>Other ALPR cameras</div>
         <div class="legend-row"><span class="legend-swatch"></span>Camera density (more = redder)</div>
         <div class="legend-note">Ghostway routes you around these. Tap a dot for details.</div>
@@ -200,6 +201,20 @@
             Check for updates
           </button>
           <hr />
+          <!-- Developer mode (release UX spec 2026-10-20 section 2): visible
+               switch, default off, commits on tap. Engine details row only
+               appears while the switch is on (role gating, spec Q103). -->
+          <button data-action="devmode" id="devModeRow" class="drawer-item" type="button" role="switch" aria-checked="false">
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg>
+            Developer mode
+            <span class="muted small" id="devModeState">Off</span>
+          </button>
+          <p class="muted small dev-sub" id="devModeSub">Shows engine details and test tools. For debugging only.</p>
+          <p class="muted small dev-note" id="devModeNote" hidden>On. Extra tools are for testing. Turn off for normal trips.</p>
+          <button data-action="enginedetails" id="devEngineRow" class="drawer-item" type="button" hidden>
+            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="7.5" width="17" height="9" rx="2"/><path d="M7 16.5v2M17 16.5v2M7.5 12h2M12 12h2M16.5 12h0.5"/></svg>
+            Engine details
+          </button>
           <button data-action="github" class="drawer-item">
             <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a9 9 0 0 0-2.85 17.54c.45.08.62-.2.62-.43v-1.7c-2.5.54-3.03-1.06-3.03-1.06-.41-1.04-1-1.32-1-1.32-.82-.56.06-.55.06-.55.9.06 1.38.93 1.38.93.8 1.38 2.11.98 2.63.75.08-.58.31-.98.57-1.2-2-.23-4.1-1-4.1-4.45 0-.98.35-1.79.93-2.42-.1-.23-.4-1.15.08-2.4 0 0 .76-.24 2.48.92a8.6 8.6 0 0 1 4.52 0c1.72-1.16 2.47-.92 2.47-.92.49 1.25.18 2.17.09 2.4.58.63.92 1.44.92 2.42 0 3.47-2.1 4.22-4.11 4.44.32.28.61.83.61 1.67v2.48c0 .24.16.52.62.43A9 9 0 0 0 12 3z" fill="currentColor" stroke="none"/></svg>
             View source on GitHub
@@ -245,7 +260,7 @@
           <button id="obSkip" class="ob-skip" type="button">Skip</button>
           <div id="obStep" class="ob-step"></div>
           <div class="ob-dots">
-            <span class="ob-dot on"></span><span class="ob-dot"></span><span class="ob-dot"></span>
+            <span class="ob-dot on"></span><span class="ob-dot"></span>
           </div>
           <div class="ob-actions">
             <button id="obBack" class="ghost-btn" type="button" hidden>Back</button>
