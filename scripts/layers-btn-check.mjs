@@ -156,6 +156,7 @@ async function openPage(width, pref = {}) {
   });
   page.on('requestfailed', (r) => {
     const u = r.url();
+    console.log('[REQ-FAIL] ' + u + ' -> ' + (r.failure()?.errorText || '?'));
     if (!/favicon|\.png$|\.ico$/.test(u)) record('requestfailed', `${u} ${r.failure()?.errorText || ''}`);
   });
   await page.evaluateOnNewDocument((p) => {
