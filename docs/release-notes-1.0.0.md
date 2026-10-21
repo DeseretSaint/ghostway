@@ -18,11 +18,13 @@ holds the same 75 m floor the engine promises.
 Camera avoidance is audited at the promise, not below it. The engine already
 refused strict routes within about 75 m of a plate reader; the audit only
 checked 30 m, so a route could pass review while being inside the promise's
-failure band. Both audits now assert 75 m over the full served polyline, with
-no endpoint tolerance, and the fixed corpus carries seven named regression
-cases (K1 to K6 plus the Home Depot American Fork case) tied to the field
-reports they protect. A clear corridor that collapses to best-effort fails
-with the report id in the message.
+failure band. The fixed-corpus audit now asserts 75 m over the full served
+polyline with no endpoint tolerance; the randomized sweep still asserts 75 m
+mid-route with the endpoint segment excluded, so the two do not yet measure the
+same thing. The fixed corpus carries seven named regression cases (K1 to K6
+plus the Home Depot American Fork case) tied to the field reports they protect.
+A clear corridor that collapses to best-effort fails with the report id in the
+message.
 
 Android Auto was broken by a one-line capability typo, and it failed
 silently. `automotive_app_desc.xml` declared `navigation`, which is the legacy
@@ -33,8 +35,9 @@ and `scripts/aa-manifest-check.mjs` pins every declaration the host validates
 so the mistake cannot ship again.
 
 Camera data is current to 2026-10-20T23:01:30Z: 351,914 camera features in the
-national snapshot, and the Wasatch routing graph was rebuilt from that
-snapshot so its camera exposure bytes match it.
+national snapshot, expanded by the router into a pool of 359,877 camera
+records. The Wasatch routing graph was rebuilt from that snapshot so its
+camera exposure bytes match it.
 
 First run is shorter. Onboarding is two task-based screens instead of three
 instructional ones, and it still never asks for location. Developer mode is a

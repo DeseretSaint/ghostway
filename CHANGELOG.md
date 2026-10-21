@@ -16,13 +16,14 @@ internal update-flow verification builds (code 9 and 10), so a sideloaded
 ### Routing and camera avoidance
 
 - The shipped Strict floor is now the audited floor. `scripts/avoidance-audit.mjs`
-  and `scripts/avoidance-audit-random.mjs` assert a 75 m minimum over the full
-  served polyline with no endpoint tolerance (mid-route figure is reported for
-  information only, G-71). The engine's `HARD_CAM_EXPOSURE` of 64 forbids strict
-  edges within about 75 m of a plate reader. This replaces the old 30 m
-  threshold that passed routes
-  the product calls clear. The random audit takes `FLOOR` and `NEAR_CAM` from
-  the environment but defaults to the shipped promise.
+  asserts a 75 m minimum over the full served polyline with no endpoint
+  tolerance (G-71). `scripts/avoidance-audit-random.mjs` still asserts a 75 m
+  mid-route minimum with the endpoint segment excluded, so the randomized
+  sweep and the fixed corpus do not yet measure the same thing. The engine's
+  `HARD_CAM_EXPOSURE` of 64 forbids strict edges within about 75 m of a plate
+  reader. This replaces the old 30 m threshold that passed routes the product
+  calls clear. The random audit takes `FLOOR` and `NEAR_CAM` from the
+  environment but defaults to the shipped promise.
 - The fixed audit corpus now carries named regression cases keyed to the field
   reports they protect: K1 PG to Costco Lehi, K2 PG to BYU Provo, K3 Lehi to
   SLC Downtown, K4 Orem to SLC Airport, K5 American Fork to Park City,
@@ -39,7 +40,8 @@ internal update-flow verification builds (code 9 and 10), so a sideloaded
 
 - Flock camera snapshot refreshed to `2026-10-20T23:01:30Z` (in-repo was
   `2026-10-01T13:38:52Z`). The snapshot carries 351,914 camera features
-  (`_meta`: 143,912 DeFlock + 208,002 Flock research, 119,736 matched).
+  (`_meta`: 143,912 DeFlock + 208,002 Flock research, 119,736 matched), which
+  the router expands into a 359,877-record camera pool.
 - The Wasatch routing graph was rebuilt from the new snapshot
   (`public/graph/wasatch-graph.bin.gz`, sha256
   `6197852f4c4ddf05729d0d7e1da098a9dfe241678deeb3229dafe19132fe4af5`), built
@@ -94,6 +96,10 @@ internal update-flow verification builds (code 9 and 10), so a sideloaded
   and Android version strings in lockstep). The `v1.0.0` tag is not cut until
   every one of those exits 0 on the tagged commit; this entry does not claim
   a green result for a check that has not produced one.
+- On the release-prep commit the whole list above was run on Linux and every
+  check exited 0, with a fresh seed for the randomized audit. That is evidence
+  for the commit it ran on, not for a tag: no tag, release or Pages deploy has
+  been cut yet.
 
 ### Known limitations
 
@@ -102,10 +108,11 @@ internal update-flow verification builds (code 9 and 10), so a sideloaded
   head unit was available, so a bound `CarAppService` on the Auto host was not
   observed. The Auto wiring is asserted statically by `aa-manifest-check.mjs`
   plus the APK build.
-- Em dashes remain in the built bundle (41 occurrences), mostly user-facing
-  strings in `src/ui.js` plus one character-map table inside a bundled
-  dependency. House style is not fully met on that surface yet; fixing the
-  copy is a UI-lane change, not a routing or release-engineering one.
+- Em dashes remain in the built bundle (41 occurrences, plus one en dash).
+  Almost all are user-facing status and dialog strings from `src/main.js` and
+  `src/ui.js`; one is a character-map table inside a bundled dependency. House
+  style is not fully met on that surface yet. Fixing the copy is a UI-lane
+  change, not a routing or release-engineering one.
 - Destinations that are genuinely camera-walled, or whose clear path breaks
   the detour budget, are still served as honest best-effort. Cases K2 and K5
   in the audit corpus are that shape by design.
