@@ -10,12 +10,14 @@ android {
         applicationId 'app.ghostway'
         minSdk 23
         targetSdk 34
-        versionCode 11
-        // 1.0.0 is the public release version. It must match package.json and
+        versionCode 12
+        // 1.0.1 is the public release version. It must match package.json and
         // src/config.js CONFIG.version; scripts/release-version-check.mjs
-        // asserts all three agree. versionCode stays above the internal 1.0.2
-        // / 1.0.3 update-flow verification builds (codes 9 and 10).
-        versionName '1.0.0'
+        // asserts all three agree. versionCode 12 stays above every build that
+        // has shipped or been installed on a device: the internal 1.0.2 / 1.0.3
+        // update-flow verification builds (codes 9, 10) and the published
+        // android-latest 1.0.3 (code 11).
+        versionName '1.0.1'
     }
 
     signingConfigs {

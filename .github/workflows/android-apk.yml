@@ -53,6 +53,37 @@ jobs:
           sha256sum release/ghostway-android.apk debug/ghostway-android-debug.apk > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      - name: Guard release artifact signature (CN=Ghostway)
+        # Blocking: the file about to be uploaded and published as
+        # ghostway-android.apk must carry the release key. Android refuses to
+        # replace a package across signatures (INSTALL_FAILED_UPDATE_INCOMPATIBLE,
+        # 2026-10-20), so a debug- or wrong-key artifact must never ship under
+        # the release name. A release build with no injected keystore silently
+        # falls back to the debug key, which is exactly what this catches.
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/ghostway-android.apk
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          BT=$(ls "$SDK/build-tools/" | sort -V | tail -1)
+          APKSIGNER="$SDK/build-tools/$BT/apksigner"
+          echo "apksigner: $("$APKSIGNER" version)"
+          echo "artifact: $(sha256sum "$APK")"
+          if ! CERTS=$("$APKSIGNER" verify --print-certs "$APK" 2>&1); then
+            echo "$CERTS"
+            echo "::error::apksigner verify failed on $APK"
+            exit 1
+          fi
+          echo "$CERTS" | grep -E 'certificate DN|certificate SHA-256 digest'
+          if ! echo "$CERTS" | grep -q 'CN=Ghostway'; then
+            echo "::error::$APK is not signed by CN=Ghostway; refusing to publish it as ghostway-android.apk"
+            exit 1
+          fi
+          if echo "$CERTS" | grep -q 'CN=Android Debug'; then
+            echo "::error::$APK carries the Android debug certificate; refusing to publish it"
+            exit 1
+          fi
+          echo "PASS: ghostway-android.apk is release-signed (CN=Ghostway)"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

@@ -4,7 +4,7 @@
 export const CONFIG = {
   // Single release version for the app surface (kept in lockstep with
   // package.json and android/app/build.gradle versionName at release time).
-  version: '1.0.0',
+  version: '1.0.1',
   // --- Base map tiles (OpenStreetMap data, served by OpenFreeMap — free, no key) ---
   mapStyle: 'https://tiles.openfreemap.org/styles/liberty',
   // Basemap switcher (Maps parity: light/dark). Same open provider, no new

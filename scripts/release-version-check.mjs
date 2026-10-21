@@ -49,11 +49,12 @@ if (cfgMatch && nameMatch && cfgMatch[1] !== nameMatch[1]) {
   fail.push(`version mismatch: src/config.js ${cfgMatch[1]} != build.gradle versionName ${nameMatch[1]}`);
 }
 
-// versionCode must stay above the internal update-flow verification builds
-// (codes 9 and 10) so a sideloaded release installs over them.
-const CODE_FLOOR = 11;
+// versionCode must stay above every code that has shipped or been installed:
+// the internal update-flow verification builds (9, 10) and the published
+// android-latest 1.0.3 (11), so a sideloaded release installs over them.
+const CODE_FLOOR = 12;
 if (codeMatch && Number(codeMatch[1]) < CODE_FLOOR) {
-  fail.push(`versionCode ${codeMatch[1]} is below the floor ${CODE_FLOOR} (internal builds used 9 and 10)`);
+  fail.push(`versionCode ${codeMatch[1]} is below the floor ${CODE_FLOOR} (codes 9, 10 and the published 11 already exist)`);
 }
 
 // Semver shape, so a stray "1.0" cannot pass as a release version.

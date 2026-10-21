@@ -1,6 +1,6 @@
 {
   "name": "ghostway",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Ghostway, open-source navigation that routes you clear of ALPR / Flock surveillance cameras by default.",
   "type": "module",

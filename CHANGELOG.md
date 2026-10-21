@@ -3,6 +3,22 @@
 All notable changes to Ghostway. Format follows Keep a Changelog; versions
 follow Semantic Versioning. Dates are UTC.
 
+## [1.0.1] - 2026-10-21
+
+Version lockstep bump to 1.0.1 and a CI guard on the published APK signature.
+`package.json`, `src/config.js` (`CONFIG.version`) and
+`android/app/build.gradle` (`versionName`) all read 1.0.1, and `versionCode`
+moves from 11 to 12, above every code already installed on a device (internal
+builds 9 and 10, published 1.0.3 at code 11). `scripts/release-version-check.mjs`
+now uses a floor of 12 so a regression below it fails the check.
+
+The `android-apk` workflow gains a blocking step after the checksums: the file
+that ships as `ghostway-android.apk` must verify with `apksigner` as
+`CN=Ghostway`. A wrong-key or debug-signed artifact fails the job before it can
+be uploaded or published. This is the guard against the 2026-10-20 incident
+where a debug-signed build carried the release artifact name and Android
+refused the cross-signature update with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+
 ## [1.0.0] - 2026-10-20
 
 First public release. The app version is now a single number carried by
