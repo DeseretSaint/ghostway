@@ -106,7 +106,10 @@ for (const [name, re] of jsChecks) {
 // 6b. Behavioral signals survive minization
 step('Checking (6b): battery hint behavioral signals');
 const behavioralChecks = [
-  ['"Battery low (%) — keep phone plugged in"', /Battery low.*keep phone plugged in/],
+  // Copy pass cac00af turned the em dash into a full stop and capitalised
+  // "Keep"; the matcher stays case-insensitive so it tracks the shipped
+  // sentence instead of one stale punctuation form.
+  ['"Battery low (%) ... Keep phone plugged in"', /Battery low.*keep phone plugged in/i],
   ['levelchange', /levelchange/],
   ['chargingchange', /chargingchange/],
 ];
