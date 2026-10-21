@@ -2461,16 +2461,16 @@ function handleDrawer(action) {
         <li><b>Cameras:</b> DeFlock (OpenStreetMap + volunteer ALPR map)</li>
         <li><b>Live traffic:</b> UDOT open events (Utah) + WZDx work-zone data (nationwide)</li>
         <li><b>Search:</b> Photon (OpenStreetMap)</li>
-        <li><b>Routing:</b> Ghostway engine (on-device, where a road graph ships) · Valhalla (national) · BRouter + OSRM fallback</li>
+        <li><b>Routing:</b> Ghostway engine (on-device, in regions with a built-in road graph) · Valhalla (national) · BRouter + OSRM fallback</li>
       </ul>
       <p class="muted small">All sources are open and free to use. No account, no tracking.</p>
     `);
   } else if (action === 'privacy') {
     openModal(`
       <h3>Privacy & how it works</h3>
-      <p>Where Ghostway ships a road graph (currently the Wasatch Front), routing happens
+      <p>In regions where Ghostway includes a built-in road graph, routing happens
       <b>entirely on your device</b>. Your destination never leaves your phone.</p>
-      <p>Everywhere else, routes fall back to public open-source servers (Valhalla, Photon, BRouter, OSRM).
+      <p>In all other regions, routes use public open-source servers (Valhalla, Photon, BRouter, OSRM).
       Ghostway itself stores nothing about you.</p>
     `);
   } else if (action === 'donate') {
