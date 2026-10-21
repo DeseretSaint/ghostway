@@ -151,7 +151,7 @@ async function openPage(width, pref = {}) {
     if (m.type() !== 'error') return;
     const argvals = [];
     for (const a of m.args()) { try { const v = await a.jsonValue(); argvals.push(typeof v === 'string' ? v : JSON.stringify(v)); } catch { argvals.push('<unserializable>'); } }
-    console.log('[DETAIL-console] ' + JSON.stringify(argvals));
+    console.log('[DETAIL-console] loc=' + JSON.stringify(m.location()) + ' args=' + JSON.stringify(argvals));
     record('console', m.text());
   });
   page.on('requestfailed', (r) => {
