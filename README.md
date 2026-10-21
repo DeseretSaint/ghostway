@@ -65,19 +65,21 @@ to keep you off those roads by default.
 
 | Tier | Engine | Coverage | Notes |
 |---|---|---|---|
-| 1 | **Ghostway's own graph** | Utah statewide, 1.5M road edges | On-device A*, camera + traffic costs + OSM turn restrictions, 9–300 ms per route |
+| 1 | **Ghostway's own graph** | Utah statewide (one shipped region), 1,528,472 road edges | On-device A*, camera + traffic costs + OSM turn restrictions. More regions are a graph build plus one `CONFIG.engineRegions` entry |
 | 2 | **Valhalla** (public demo) | Worldwide | Key-free, CORS-open; camera avoidance via `exclude_locations` |
 | 3 | **BRouter + OSRM** | Worldwide | Legacy fallback of last resort (flaky public servers) |
 
-Tier selection is automatic per corridor. Self-hosting Valhalla for higher
-limits is documented in [`docs/valhalla-docker.md`](docs/valhalla-docker.md) —
-point `CONFIG.valhallaUrl` at it and nothing else changes.
+Tier selection is automatic per corridor. The graph downloads lazily: only a
+route that touches a shipped region fetches that region's graph, so users
+elsewhere never pay for it. Self-hosting Valhalla for higher limits is
+documented in [`docs/valhalla-docker.md`](docs/valhalla-docker.md): point
+`CONFIG.valhallaUrl` at it and nothing else changes.
 
 ## How camera avoidance works (own engine)
 
 1. OpenStreetMap roads are filtered to drivable ways and compiled into a
-   compact binary graph (`engine/build-graph.mjs`, ~7 MB gzipped for the
-   Wasatch Front).
+   compact binary graph (`engine/build-graph.mjs`; 1,477,863 nodes and
+   1,528,472 edges, ~19.5 MB gzipped, covering the state of Utah).
 2. Every DeFlock camera is scored onto nearby road segments: ALPR brands
    (Flock, Motorola, Rekor, …) and traffic-facing cameras get full weight,
    other surveillance half weight.
@@ -171,10 +173,11 @@ open-source servers above. There is no analytics and never will be.
 
 ## Testing
 
-20 automated suites (`scripts/*.mjs`) cover routing, avoidance, the full UI
-with real mouse hit-testing, simulated GPS drive-throughs, traffic, ETA
-accuracy, and the report flow. Run any of them after `npm run build`;
-`smoke.mjs` and `interact-check.mjs` are the fast core pair.
+Headless check suites in `scripts/` (80+ named `*-check.mjs`) cover routing,
+avoidance, the full UI with real mouse hit-testing, simulated GPS
+drive-throughs, traffic, ETA accuracy, and the report flow. Most drive the
+built bundle, so run `npm run build` first; `smoke.mjs` and
+`interact-check.mjs` are the fast core pair.
 
 ## License
 
