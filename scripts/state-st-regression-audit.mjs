@@ -9,9 +9,12 @@
 //
 // Contract being tested (t_gwrouting2 acceptance):
 //   - Clearest from a FAR origin must keep ≥75 m from F006.
-//   - Clearest from a NEAR origin (reroute-anchor case) must NOT silently
-//     pass F006 — this is the known-open bug; the audit must report RED
-//     until the start-boxed-exemption fix lands, then go GREEN.
+//   - MID-DRIVE REROUTE from an origin beside F006 must not serve a line that
+//     runs back past the reader. Two honest outcomes are allowed: an anchored
+//     line that starts at the nearest clear node and keeps ≥75 m, or
+//     REROUTE_HELD (keep the previous line + warn). What is forbidden is a
+//     line that silently passes F006. A plain (non-reroute) plan keeps the
+//     documented original-start exemption, so it is reported, not graded.
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -117,8 +120,38 @@ async function engineLayer() {
 
   const farFail = rows.filter((r) => !r.name.startsWith('near') && !r.pass).length;
   const nearFail = rows.filter((r) => r.name.startsWith('near') && !r.pass).length;
-  console.log(`\nSummary: ${rows.length - farFail}/${rows.length} far-origin PASS (expect 2/2); near-origin PASS=${2 - nearFail}/2 (expect 2/2 — held counts as PASS).`);
-  if (farFail > 0 || nearFail > 0) { console.error('CLEARANCE FAILURE — regression'); process.exit(1); }
+
+  // ---- reroute path: the actual t_gwrouting2 bug ----
+  let rrFail = 0;
+  for (const [name, org] of [
+    ['rr-near-S-100', [-111.8275, 40.3880]],
+    ['rr-near-SE-150', [-111.8265, 40.3880]],
+    ['rr-far-N-500', [-111.8275, 40.3940]],
+  ]) {
+    let line = '';
+    let ok;
+    try {
+      const { options } = await planRoutes(org, [-111.8279, 40.3855], { reroute: true });
+      const clear = options.find((o) => o.label === 'Clearest');
+      if (!clear) { line = 'no Clearest served'; ok = false; }
+      else {
+        const min = minDistToCam(clear.coords);
+        const anchor = Math.round(clear.startAnchorM || 0);
+        line = `${Math.round(clear.distance)}m F006min=${Math.round(min)}m anchor=${anchor}m`;
+        ok = min >= 75;
+        if (!ok) line += ' ILLEGAL: line runs back past the reader';
+      }
+    } catch (e) {
+      // REROUTE_HELD is the honest refusal: caller keeps the previous line.
+      if (e && e.code === 'REROUTE_HELD') { line = 'HELD (previous line kept) PASS'; ok = true; }
+      else { line = `THREW ${e && (e.code || e.message)}`; ok = false; }
+    }
+    if (!ok) rrFail++;
+    console.log(`[ENGINE] ${name.padEnd(14)} reroute ${line}`);
+  }
+
+  console.log(`\nSummary: ${rows.length - farFail}/${rows.length} far-origin PASS (expect 2/2); near-origin PASS=${2 - nearFail}/2 (expect 2/2 — held counts as PASS); reroute PASS=${3 - rrFail}/3.`);
+  if (farFail > 0 || nearFail > 0 || rrFail > 0) { console.error('CLEARANCE FAILURE — regression'); process.exit(1); }
   return true;
 }
 

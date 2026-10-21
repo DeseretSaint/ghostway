@@ -37,10 +37,19 @@ const checks = {
   // in-app updates (no GitHub visit).
   // One locate affordance (release UX spec D2): the duplicate top-right gpsBtn
   // is gone from both markup and wiring; the start field owns "use my location".
-  recenterNotDuplicate: !/gpsBtn/.test(main)
+  // Strip `//` comments first: a comment that names the removed control is not
+  // the control. Without this the assertion fails on its own tombstone note.
+  recenterNotDuplicate: !/gpsBtn/.test(main.replace(/^\s*\/\/.*$/gm, ''))
     && !/id="gpsBtn"/.test(readFileSync('index.html', 'utf8'))
     && /fromLocateBtn'\)\.addEventListener\('click', useMyLocation\)/.test(main),
-  pillWired: /safety-pill'\)\.addEventListener\('click'/.test(main),
+  // The top-right #safety-pill was removed 2026-10-20 (UI delta): mode
+  // switching is the route sheet's .mode-btn row, so assert that wiring and
+  // assert the removed pill is gone from markup and script.
+  pillRemoved: !/<button[^>]*id="safety-pill"/.test(readFileSync('index.html', 'utf8'))
+    && !/ce\('safety-pill'\)|ce\("#safety-pill"\)|\$\('#safety-pill'\)/.test(main),
+  modeSwitchWired: /'#modeSwitch'\)\.addEventListener\('click'/.test(main)
+    && /closest\('\.mode-btn'\)/.test(main)
+    && /id="modeSwitch"/.test(readFileSync('index.html', 'utf8')),
   feedbackEncoded: /issues\/new\?title=/.test(main),
   updatesInApp: /checkForUpdates/.test(main) && /data-action="updates"/.test(readFileSync('index.html', 'utf8'))
     && /downloadApk/.test(main) && /modal-actions/.test(main),

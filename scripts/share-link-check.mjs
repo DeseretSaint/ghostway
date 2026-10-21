@@ -24,7 +24,8 @@ try {
   const deep = await page.evaluate(() => ({
     from: document.getElementById('fromInput').value,
     to: document.getElementById('toInput').value,
-    pill: document.querySelector('#safety-pill .label')?.textContent || '',
+    mode: document.querySelector('.mode-btn.active')?.dataset.mode || '',
+    modeLabel: document.querySelector('.mode-btn.active')?.textContent || '',
     rcTime: document.querySelector('.rc-time')?.textContent || '',
   }));
 
@@ -76,7 +77,7 @@ try {
   const checks = {
     deepFrom: /Shared point \(40\.3640/.test(deep.from),
     deepTo: /Shared point \(40\.3940/.test(deep.to),
-    deepMode: deep.pill === 'Avoid cameras',
+    deepMode: deep.mode === 'moderate',
     deepRouted: deep.rcTime.length > 0,
     qrRendered: sheet.w > 100 && sheet.role === 'img',
     qrRoundTrip: decoded !== null && decoded.data === sheet.link,

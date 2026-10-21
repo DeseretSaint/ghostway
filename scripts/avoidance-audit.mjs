@@ -8,10 +8,9 @@
 // HARD_CAM_EXPOSURE = 64 forbids strict-mode edges within ~75 m of a plate
 // reader ("Clear means clear", Keaton field report 2026-09-30). This audit
 // holds that promise, not the weaker read-range one: STRICT ("Clearest") must
-// keep >= 75 m mid-route.
-// Prints per-option min-distance + pass/fail, exits 1 if strict < 75 m
-// mid-route (endpoint tolerance: first/last 250 m of the route is exempt,
-// since origins/destinations can legitimately sit next to a camera).
+// keep >= 75 m over the WHOLE served polyline. No endpoint tolerance — the
+// final approach into a walled lot is where the reader sits (2026-10-20).
+// Prints per-option min-distance + pass/fail, exits 1 if strict < 75 m.
 import { planRoutes, loadGraph } from '../src/router.js';
 import { isAlprCamera } from '../src/config.js';
 import { readFileSync } from 'node:fs';
@@ -31,11 +30,13 @@ await loadGraph();
 const cams = JSON.parse(readFileSync('engine/data/cameras-usa.geojson', 'utf8'));
 const CELL = 0.002;
 const grid = new Map();
+const alprPts = [];
 let alprCount = 0;
 for (const f of cams.features) {
   if (!isAlprCamera(f.properties || {})) continue;
   const [lon, lat] = f.geometry.coordinates;
   alprCount++;
+  alprPts.push([lon, lat]);
   const k = Math.floor(lon / CELL) + ',' + Math.floor(lat / CELL);
   if (!grid.has(k)) grid.set(k, []);
   grid.get(k).push([lon, lat]);
@@ -60,10 +61,14 @@ function minDistToCamera(lon, lat) {
   return Math.sqrt(best);
 }
 
-// Walk the route in ~10 m steps; track min camera distance, ignoring the
-// first/last `endTol` meters (origins/destinations may sit beside cameras).
+// Walk the route in ~10 m steps; track the true minimum camera distance over
+// the FULL polyline (endpoints included) plus, informationally, the mid-route
+// minimum (first/last 250 m excluded). G-71: the pass criterion is the FULL
+// measure — the final approach into a walled lot is where the reader sits, so
+// exempting it is how the Home Depot route passed this audit while a dot sat
+// on the served line (Keaton, 2026-10-20).
 function auditRoute(coords, endTol = 250) {
-  let minMid = Infinity, minAll = Infinity, minMidAt = null;
+  let minMid = Infinity, minAll = Infinity, minMidAt = null, minAllAt = null;
   let acc = 0, total = 0;
   const segs = [];
   for (let i = 1; i < coords.length; i++) {
@@ -84,7 +89,7 @@ function auditRoute(coords, endTol = 250) {
       const lon = s.a[0] + (s.b[0] - s.a[0]) * t;
       const lat = s.a[1] + (s.b[1] - s.a[1]) * t;
       const d = minDistToCamera(lon, lat);
-      if (d < minAll) minAll = d;
+      if (d < minAll) { minAll = d; minAllAt = [lon, lat]; }
       if (acc > endTol && total - acc > endTol && d < minMid) {
         minMid = d;
         minMidAt = [lon, lat];
@@ -92,7 +97,7 @@ function auditRoute(coords, endTol = 250) {
       if (k > 0) acc += s.len / steps;
     }
   }
-  return { minMid, minAll, minMidAt, total };
+  return { minMid, minAll, minMidAt, minAllAt, total };
 }
 
 // Named regression cases. Each ID is a route Keaton reported (or a corridor a
@@ -131,6 +136,11 @@ const corridors = [
     dest: 'Home Depot #4417, 885 W Grassland Dr, American Fork UT',
   },
   {
+    id: 'K6', name: 'State St N → S across F#006 (600 m trip)', expect: 'clear',
+    why: 'Keaton field report 2026-10-21: a 600 m hop past F#006 served a 2.6x loop. Measured: every crossing within 285 m of the reader is camera-blocked or dead-ends, so the loop is geometry-forced, not routing slop. This corridor locks that in: clear, near-optimal, and disclosed on the card.',
+    from: [-111.827125, 40.3918], to: [-111.827125, 40.3865],
+  },
+  {
     id: 'K5', name: 'AF → Park City', expect: 'best-effort',
     why: 'Keaton report #4 (detour quality): canyon corridors cannot always clear within budget — must say so, not over-detour silently',
     from: [-111.7965, 40.3769], to: [-111.498, 40.6461],
@@ -140,14 +150,81 @@ const corridors = [
 // "Clear means clear" is 75 m in the engine (src/router.js HARD_CAM_EXPOSURE
 // = 64 → ~75 m), not the bare ALPR read range (~23 m). Auditing at 30 m would
 // pass routes the product promises are clear, so the audit holds the shipped
-// claim: mid-route minimum clear distance must be >= 75 m.
+// claim: the minimum clear distance over the WHOLE served polyline must be
+// >= 75 m. No endpoint tolerance: an exempted final approach is exactly where
+// a lot-entrance reader sat while the card said "Clearest" (2026-10-20).
 const STRICT_FLOOR_M = 75;
-let failures = 0, bestEffort = 0;
+// Detour-quality oracle (Keaton directive 2026-10-21): "Clearest" is allowed to
+// be slower than Fastest, but it must not be slower than it has to be. Dijkstra
+// over the same graph, same hard camera floor, minimising LENGTH, gives the
+// shortest camera-clear path that exists. Comparing the served Clearest against
+// that oracle separates two very different outcomes:
+//   served <= oracle*1.15          → the detour is geometry-forced, not routing
+//                                    slop. Any cost vs Fastest must be DISCLOSED
+//                                    on the card (rc-detour), not hidden.
+//   served >  oracle*1.15 + snap   → over-detour REGRESSION.
+// The oracle is deliberately a lower bound (it ignores turn costs and live
+// traffic), so a small positive gap is expected and not a failure.
+const ORACLE_SLOP = 1.15;
+function clearOracle(g, s, t) {
+  if (!g || s < 0 || t < 0 || s === t) return null;
+  const N = g.nodeCount;
+  const dist = new Float64Array(N).fill(Infinity);
+  const done = new Uint8Array(N);
+  dist[s] = 0;
+  // Binary heap of [cost, node]; the graph is ~1M nodes and the search is
+  // bounded by the clear subgraph, so a plain array heap is fast enough here.
+  const heap = [[0, s]];
+  const push = (c, n) => {
+    heap.push([c, n]);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][0] <= heap[i][0]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]]; i = p;
+    }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
+      }
+    }
+    return top;
+  };
+  while (heap.length) {
+    const [c, n] = pop();
+    if (done[n]) continue;
+    done[n] = 1;
+    if (n === t) return c;
+    for (let k = g.outStart[n]; k < g.outStart[n + 1]; k++) {
+      const e = g.arcEdge[k];
+      if (g.eCam[e] >= 64) continue; // same hard floor the router uses
+      const to = g.arcTo[k];
+      if (done[to]) continue;
+      const nc = c + g.eLen[e];
+      if (nc < dist[to]) { dist[to] = nc; push(nc, to); }
+    }
+  }
+  return null;
+}
+let failures = 0, bestEffort = 0, detours = 0;
 console.log(`ALPR cameras indexed: ${alprCount}`);
-console.log(`Strict floor under test: ${STRICT_FLOOR_M} m mid-route (endpoint tolerance 250 m)\n`);
+console.log(`Strict floor under test: ${STRICT_FLOOR_M} m over the full polyline (no endpoint tolerance)\n`);
 for (const c of corridors) {
-  const { options } = await planRoutes(c.from, c.to, {});
+  const res = await planRoutes(c.from, c.to, {});
+  const { options } = res;
+  const oracleM = clearOracle(res.graph, res.snapFrom && res.snapFrom.node, res.snapTo && res.snapTo.node);
   console.log(`— ${c.id} ${c.name}  [expect: ${c.expect}]`);
+  console.log(`  clear-path oracle (shortest ≥${STRICT_FLOOR_M} m clear line): ${oracleM == null ? 'none exists' : Math.round(oracleM) + ' m'}`);
   console.log(`  repro: ${c.why}`);
   // A corridor that serves no Clearest option at all is a failure for an
   // expect:'clear' case: the user picked Clearest and got nothing camera-aware.
@@ -159,19 +236,51 @@ for (const c of corridors) {
     // floor guarantees and what the car actually drives — not the simplified
     // render polyline (±3 m DP tolerance).
     const rawCoords = (o.route && o.route.coords) || o.coords;
-    const { minMid, minAll, minMidAt } = auditRoute(rawCoords);
+    const { minMid, minAll, minAllAt } = auditRoute(rawCoords);
+    const abs = minAll === Infinity ? '∞' : minAll.toFixed(0) + ' m';
+    const mid = minMid === Infinity ? '∞' : minMid.toFixed(0) + ' m';
     if (o.mode !== 'strict') {
+      console.log(`  ${o.label.padEnd(9)} cams=${o.cameras}  full min ${abs}  (mid-route ${mid})`);
+      continue;
+    }
+    const fullOk = minAll === Infinity || minAll >= STRICT_FLOOR_M;
+    const gateNote = o.destOffsetM > 40
+      ? `  ⚠ serves to a drop-off ${o.destOffsetM} m from the pin` : '';
+    if (fullOk) {
+      // Detour quality: the clear line must be close to the SHORTEST clear
+      // line, not merely clear. A route that wanders 40% past the optimum is
+      // the "2.6x loop" complaint in a different form.
+      const slack = (o.destOffsetM || 0) + 50;
+      if (oracleM != null && o.distance > oracleM * ORACLE_SLOP + slack) {
+        failures++;
+        console.log(
+          `  ${o.label.padEnd(9)} cams=${o.cameras}  full min ${abs}  ` +
+          `❌ OVER-DETOUR: served ${Math.round(o.distance)} m vs ${Math.round(oracleM)} m oracle ` +
+          `(+${Math.round(o.distance - oracleM)} m, allowed +${Math.round((ORACLE_SLOP - 1) * 100)}% + ${Math.round(slack)} m snap)`
+        );
+        continue;
+      }
+      // Overhead vs Fastest that survives the oracle is geometry-forced (no
+      // shorter clear line exists). It is allowed, but the route card must say
+      // so: that disclosure is what the UI check covers.
+      const fast = options.find((x) => x.mode === 'off');
+      let disclosure = '';
+      if (fast && o.distance > fast.distance * 1.4 && oracleM != null && o.distance <= oracleM * ORACLE_SLOP + slack) {
+        detours++;
+        disclosure = `  geometry-forced detour ${(o.distance / fast.distance).toFixed(2)}x vs Fastest ` +
+          `(${Math.round((o.duration - fast.duration) / 60)} min extra) — card must disclose`;
+      }
+      // The served line is clear over its whole length. A gate-snapped route
+      // counts: it stops before the reader, and the drop-off distance is
+      // stated rather than pretended away.
+      const best = o.strictFallback
+        ? `  (best-effort: ${o.walled ? 'walled destination' : 'detour budget'})` : '';
       console.log(
-        `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ` +
-        `${minMid === Infinity ? '∞' : minMid.toFixed(0) + ' m'}  (abs min ${minAll.toFixed(0)} m)`
+        `  ${o.label.padEnd(9)} cams=${o.cameras}  full min ${abs}  (mid-route ${mid})  PASS${gateNote}${best}${disclosure}`
       );
       continue;
     }
-    const midOk = minMid === Infinity || minMid >= STRICT_FLOOR_M;
-    if (o.strictFallback && !o.clearToM) {
-      // Hard floor found no route within budget. Two distinct causes (router
-      // exposes which): truly camera-walled (no ≥floor path exists anywhere)
-      // vs budget-exhausted (a clear path exists but costs too much time).
+    if (o.strictFallback) {
       bestEffort++;
       const reason = o.walled
         ? `destination camera-walled; no ≥${STRICT_FLOOR_M} m path exists`
@@ -179,30 +288,22 @@ for (const c of corridors) {
       if (c.expect === 'clear') {
         failures++;
         console.log(
-          `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ${minMid.toFixed(0)} m  ` +
+          `  ${o.label.padEnd(9)} cams=${o.cameras}  full min ${abs}  ` +
           `❌ REGRESSION: ${c.id} must serve a clear route (needed ${STRICT_FLOOR_M} m) — got best-effort (${reason})`
         );
         continue;
       }
       console.log(
-        `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ${minMid.toFixed(0)} m  ` +
-        `⚠ BEST-EFFORT (${reason}) — expected for ${c.id}`
-      );
-    } else if (!midOk) {
-      failures++;
-      console.log(
-        `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ${minMid.toFixed(1)} m ` +
-        `@ ${minMidAt[0].toFixed(5)},${minMidAt[1].toFixed(5)}  ❌ FAIL (< ${STRICT_FLOOR_M} m)`
+        `  ${o.label.padEnd(9)} cams=${o.cameras}  full min ${abs}  ` +
+        `⚠ BEST-EFFORT (${reason}) — expected for ${c.id}${gateNote}`
       );
     } else {
-      // PASS — includes gate-snapped routes: the SERVED route is hard-floor
-      // clear; only the stated final approach (clearToM) passes a camera.
-      const gateNote = o.clearToM
-        ? `  ⚠ gate-snapped: clear to within ~${Math.round(o.clearToM)} m of destination`
-        : '';
+      // No fallback flag and a reader on the served line: a silent pass. This
+      // is the failure mode G-71 forbids outright.
+      failures++;
       console.log(
-        `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ` +
-        `${minMid === Infinity ? '∞' : minMid.toFixed(0) + ' m'}  (abs min ${minAll.toFixed(0)} m)  PASS${gateNote}`
+        `  ${o.label.padEnd(9)} cams=${o.cameras}  full min ${minAll.toFixed(1)} m ` +
+        `@ ${minAllAt[0].toFixed(5)},${minAllAt[1].toFixed(5)}  ❌ FAIL: silent clear claim (< ${STRICT_FLOOR_M} m)`
       );
     }
   }
@@ -216,8 +317,9 @@ for (const c of corridors) {
 }
 console.log(
   failures
-    ? `\nAVOIDANCE AUDIT FAIL ❌ — ${failures} strict route(s) pass within ${STRICT_FLOOR_M} m of an ALPR camera mid-route`
-    : `\nAVOIDANCE AUDIT PASS ✅ — ≥ ${STRICT_FLOOR_M} m from ALPR cameras mid-route on clearable corridors` +
-      (bestEffort ? `; ${bestEffort} walled/budget destination(s) served best-effort` : '')
+    ? `\nAVOIDANCE AUDIT FAIL ❌ — ${failures} strict route(s) pass within ${STRICT_FLOOR_M} m of an ALPR camera on the served polyline`
+    : `\nAVOIDANCE AUDIT PASS ✅ — ≥ ${STRICT_FLOOR_M} m from ALPR cameras over the full served polyline on clearable corridors` +
+      (bestEffort ? `; ${bestEffort} walled/budget destination(s) served best-effort` : '') +
+      (detours ? `; ${detours} geometry-forced detour(s) disclosed on the card` : '')
 );
 process.exit(failures ? 1 : 0);
