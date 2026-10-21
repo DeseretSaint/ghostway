@@ -456,17 +456,9 @@ function wireApp() {
   // the map on the fix), and #recenterBtn resumes follow during navigation.
   // The duplicate top-right #gpsBtn is gone, so there is no second control
   // that only moves the map.
-  // The avoidance pill is a real control now (it read as a dead green dot):
-  // tap = cycle Strict → Balanced → Fastest, re-routing if a route exists.
-  $('#safety-pill').addEventListener('click', () => {
-    const order = ['strict', 'moderate', 'off'];
-    app.state.mode = order[(order.indexOf(app.state.mode) + 1) % order.length];
-    app.state.avoid = app.state.mode !== 'off';
-    try { localStorage.setItem('gw-mode', app.state.mode); } catch {}
-    applyModeUI();
-    showStatus(`Mode: ${app.state.mode === 'strict' ? 'Clearest (strict avoidance)' : app.state.mode === 'moderate' ? 'Balanced (avoid cameras)' : 'Fastest (no avoidance)'}`, 'info');
-    if (app.state.from && app.state.to) onRoute();
-  });
+  // The top-right avoidance pill was removed 2026-10-20 (UI delta): it was a
+  // duplicate control. Mode switching lives in the route sheet's .mode-btn row
+  // (and the route-option mode chips), which is the canonical mode UI.
   $('#recenterBtn').addEventListener('click', () => setFollow(true));
   $('#zoomInBtn').addEventListener('click', () => app.map.zoomIn());
   $('#zoomOutBtn').addEventListener('click', () => app.map.zoomOut());
@@ -604,21 +596,10 @@ function wireApp() {
 }
 
 function applyModeUI() {
-  const pill = $('#safety-pill');
   const mode = app.state.mode;
-  pill.classList.toggle('off', mode === 'off');
-  // Short visible labels that fit the phone topbar; the full state and the tap
-  // action stay available to assistive tech and long-press (spec D2 strings).
-  const visible = mode === 'strict' ? 'Strict' : mode === 'moderate' ? 'Avoiding' : 'Fastest';
-  const spoken =
-    mode === 'strict'
-      ? 'Camera avoidance Strict, tap to change mode'
-      : mode === 'moderate'
-        ? 'Camera avoidance Balanced, tap to change mode'
-        : 'Camera avoidance off, tap to change mode';
-  pill.querySelector('.label').textContent = visible;
-  pill.setAttribute('aria-label', spoken);
-  pill.title = spoken;
+  // The top-right #safety-pill is gone (UI delta 2026-10-20). The route sheet's
+  // .mode-btn row (and the route-option mode chips) are the only mode UI, so
+  // this function now only syncs their pressed state.
   document.querySelectorAll('.mode-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.mode === mode);
     b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false');
@@ -1586,7 +1567,7 @@ async function reRoute(fromC) {
   try {
     if (engineCovers(fromC, to.coords) && (await ensureLocalEngine(fromC, to.coords))) {
       const engine = app._engine;
-      const { options } = await engine.planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams() });
+      const { options } = await engine.planRoutes(fromC, to.coords, { traffic: app.traffic || null, communityCams: communityCams(), deflockCams: await deflockCamsNear(fromC, to.coords), reroute: true });
       app.state.options = options;
       app.state.chosen = pickOptionForMode(options);
       app.state.route = { engine: true, options, chosen: app.state.chosen };
@@ -1618,6 +1599,16 @@ async function reRoute(fromC) {
     showNavBanner();
     renderNavStep();
   } catch (e) {
+    if (e && e.code === 'REROUTE_HELD') {
+      // Every road out of the current snap runs past a reader. Do not draw a
+      // fresh "Clearest" line that leaves through it: hold the route already
+      // on screen until the car moves off the boxed node.
+      app.state.routeHeld = true;
+      console.warn('reroute held: origin is camera-walled', fromC);
+      announceNav('Route held. Current position is next to a camera.');
+      app._rerouting = false;
+      return;
+    }
     console.warn('reroute failed', e);
   } finally {
     app._rerouting = false;

@@ -333,6 +333,44 @@ function renderEngineCard(app, card, result) {
     return `<button class="mode-chip ${active ? 'active' : ''}" data-mode="${mode}" type="button" role="button" tabindex="0" aria-pressed="${active}" aria-label="${escHtml(label + ': ' + (o ? fmtDuration(o.duration) + ', ' + cams + ' cameras' : 'not routed yet — tap to route'))}">${modeEmoji(mode)} ${label}<span class="chip-meta">${o ? fmtDuration(o.duration) + ' · ' + cams + ' cam' : 'tap to route'}</span></button>`;
   };
 
+  // G-71: a walled destination (camera-secured lot) cannot be driven into without
+  // passing the reader at its entrance. The Clearest route stops short of the
+  // pin; say that out loud instead of letting the pin imply a drive-in.
+  //
+  // Trigger is the router's PROOF, not a guess: `walled` is only set after the
+  // strict probe fails to reach the destination node, and `clearToM` is the
+  // measured exposed tail beyond the served end. `destOffsetM` is NOT the
+  // trigger: every geocoded pin snaps to a node some tens of metres away
+  // (Costco Lehi snaps 81 m), which would put this callout on destinations the
+  // route actually reaches (Keaton acceptance #3: no false trigger).
+  const walledM = sel.mode === 'strict' && sel.walled === true ? Math.round(sel.clearToM || 0) : 0;
+  const showCallout = walledM > 0 && app.state.parkCalloutFor !== (sel.servedTo || []).join(',');
+  const walkMin = Math.max(1, Math.round(walledM / 80));
+  const destName = (app.state.to && app.state.to.label) ? escHtml(app.state.to.label) : 'this destination';
+  const calloutHtml = showCallout
+    ? `<div class="rc-callout" role="status">
+        <div class="rc-callout-h">${icon('shield', { size: 14 })} <b>Camera-secured destination</b></div>
+        <p>Every nearby entrance into ${destName} is covered by a camera. There is no camera-free way to route directly to the door.</p>
+        <p>This route stops about <b>${fmtDistance(walledM)}</b> before the building, roughly ${walkMin} min on foot. Approach with caution and park at the marked clear point instead.</p>
+        <div class="rc-callout-actions">
+          <button id="showParkBtn" class="text-link" type="button">${icon('flag', { size: 14 })} Show where to park</button>
+          <button id="dismissCalloutBtn" class="text-link" type="button">Dismiss</button>
+        </div>
+      </div>`
+    : '';
+
+  // Detour honesty (Keaton directive 2026-10-21): when the only clear line is a
+  // long way round, the card says what it costs instead of presenting a 2.6x
+  // loop as a plain win. Compared against Fastest for the same trip.
+  const fastOpt = options.find((o) => o.mode === 'off');
+  const detourMin = fastOpt && sel.mode === 'strict'
+    ? Math.round((sel.duration - fastOpt.duration) / 60) : 0;
+  const detourShare = fastOpt && fastOpt.duration ? sel.duration / fastOpt.duration : 1;
+  const showDetour = detourMin >= 3 && detourShare >= 1.25;
+  const detourHtml = showDetour
+    ? `<div class="rc-detour" role="note">Clearest adds about ${detourMin} min versus Fastest to stay clear of known cameras.</div>`
+    : '';
+
   card.innerHTML = `
     <button id="editRouteBtn" class="text-link rc-edit" type="button">${icon('edit', { size: 14 })} Edit route</button>
     <div class="mode-chip-row" role="radiogroup" aria-label="Camera avoidance level">${chip('strict')}${chip('moderate')}${chip('off')}</div>
@@ -342,6 +380,8 @@ function renderEngineCard(app, card, result) {
       <div class="rc-dist">${fmtDistance(sel.distance)}</div>
     </div>
     <div class="rc-badge">${badgeHtml(sel)}</div>
+    ${detourHtml}
+    ${calloutHtml}
     <div class="rc-trip" id="tripBadge" hidden></div>
     <button id="startNavBtn" class="primary-btn">${icon('play', { size: 16 })} Start navigation</button>
     <button id="densityBtn" class="text-link rc-density" type="button" aria-pressed="${!!app.state.compactBanner}" title="Toggle the active-nav banner density (compact = fewer glance elements)">${icon(app.state.compactBanner ? 'densityFull' : 'densityCompact', { size: 14 })} ${app.state.compactBanner ? 'Compact banner' : 'Full banner'}</button>
@@ -366,6 +406,21 @@ function renderEngineCard(app, card, result) {
       app.onRoute();
     })
   );
+  const park = $('#showParkBtn');
+  if (park)
+    park.addEventListener('click', () => {
+      // The drop-off point IS the served end of the chosen route. Centring there
+      // (not on the pin) shows the reader the line refuses to cross.
+      const at = sel.servedTo || (sel.coords && sel.coords[sel.coords.length - 1]);
+      if (at && app.map && app.map.map) app.map.map.jumpTo({ center: at, zoom: 17 });
+    });
+  const dismissCallout = $('#dismissCalloutBtn');
+  if (dismissCallout)
+    dismissCallout.addEventListener('click', () => {
+      app.state.parkCalloutFor = (sel.servedTo || []).join(',');
+      const el = card.querySelector('.rc-callout');
+      if (el) el.remove();
+    });
   const sn = $('#startNavBtn');
   if (sn) sn.addEventListener('click', () => app.startNav());
   // C12 #126: density lives in the planning panel (where the user is

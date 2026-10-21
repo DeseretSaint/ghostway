@@ -895,6 +895,100 @@ function camerasWithin(coords, cams, radius = 75) {
   return out;
 }
 
+// Ground length of a served polyline, in metres. camerasWithin() reports each
+// camera's distance ALONG the route; comparing that to the total is how the
+// endpoint exemption is audited rather than assumed.
+function polylineLenM(coords) {
+  if (!coords || coords.length < 2) return 0;
+  const rad = Math.PI / 180;
+  let acc = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const mid = (coords[i - 1][1] + coords[i][1]) / 2;
+    const kx = 111320 * Math.cos(mid * rad), ky = 110540;
+    acc += Math.hypot((coords[i][0] - coords[i - 1][0]) * kx, (coords[i][1] - coords[i - 1][1]) * ky);
+  }
+  return acc;
+}
+
+// Nearest camera in the pool to the polyline, in metres (no radius cap). Used
+// only to rank clear gate candidates by how much daylight they leave.
+function minCameraM(coords, cams) {
+  if (!coords || coords.length < 2 || !cams || !cams.length) return Infinity;
+  const rad = Math.PI / 180;
+  const midLat = (coords[0][1] + coords[coords.length - 1][1]) / 2;
+  const kx = 111320 * Math.cos(midLat * rad), ky = 110540;
+  let min = Infinity;
+  for (const c of cams) {
+    const cx = c.lon * kx, cy = c.lat * ky;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const x1 = coords[i][0] * kx, y1 = coords[i][1] * ky;
+      const x2 = coords[i + 1][0] * kx, y2 = coords[i + 1][1] * ky;
+      const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+      let t = L2 ? ((cx - x1) * dx + (cy - y1) * dy) / L2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const d2 = (cx - (x1 + t * dx)) ** 2 + (cy - (y1 + t * dy)) ** 2;
+      if (d2 < min * min) min = Math.sqrt(d2);
+    }
+  }
+  return min;
+}
+
+// G-71 endpoint rule (Keaton field report 2026-10-20, Home Depot American
+// Fork): a clear claim is about the WHOLE served line, the final approach
+// included. astar()'s endpoint exemption is honest for a genuinely boxed
+// destination — you have to arrive somehow — but that exemption is exactly how
+// a reader ends up on the last 250 m while the card still says "Clearest".
+// Measure the served arcs themselves, from the graph's own exposure bytes, so
+// the rule holds even when the caller passes no camera pool (headless audits).
+function tailExposed(route, floor, tailM = 250) {
+  if (!route || !route.arcs || !route.arcs.length) return false;
+  let acc = 0;
+  for (let i = route.arcs.length - 1; i >= 0; i--) {
+    const arc = route.arcs[i];
+    const e = graph.arcEdge[arc];
+    if (graph.eCam[e] >= floor) return true;
+    acc += graph.eLen[e];
+    if (acc >= tailM) break;
+  }
+  return false;
+}
+
+// True when the first `headM` metres of the route run past a reader. astar()
+// exempts the origin node, so a reroute can leave through the camera the car is
+// parked beside; this is the check that refuses to ship that as "Clearest".
+function startExposed(route, floor, headM = 200) {
+  if (!route || !route.arcs || !route.arcs.length) return false;
+  let acc = 0;
+  for (let i = 0; i < route.arcs.length; i++) {
+    const arc = route.arcs[i];
+    const e = graph.arcEdge[arc];
+    if (graph.eCam[e] >= floor) return true;
+    acc += graph.eLen[e];
+    if (acc >= headM) break;
+  }
+  return false;
+}
+
+// True when every road INTO `node` is above the exposure floor — the exact
+// condition astar() grants its endpoint exemption for. A gate node that is
+// itself boxed would re-open the same hole, so gate-snap never parks there.
+function nodeBoxed(g, node) {
+  let inbound = 0;
+  for (let p = 0; p < g.arcTo.length; p++) {
+    if (g.arcTo[p] !== node) continue;
+    inbound++;
+    if (g.eCam[g.arcEdge[p]] < HARD_CAM_EXPOSURE) return false;
+  }
+  return inbound > 0;
+}
+
+// Ground distance between two [lon, lat] points, in metres.
+function lonLatM(a, b) {
+  const rad = Math.PI / 180;
+  const kx = 111320 * Math.cos((a[1] * rad)), ky = 110540;
+  return Math.hypot((b[0] - a[0]) * kx, (b[1] - a[1]) * ky);
+}
+
 function turnFor(deg) {
   if (deg > 150) return 'u-turn';
   if (deg > 55) return 'right';
@@ -1000,7 +1094,7 @@ function clearTailsTo(idx, tNode, maxTail = 500, limit = 8) {
 }
 
 // ---- Public planning API: returns up to 3 options ----
-export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [], deflockCams = null } = {}) {
+export async function planRoutes(from, to, { prefer = 'moderate', traffic = null, communityCams = [], deflockCams = null, reroute = false } = {}) {
   const g = await loadGraph();
   let s = nearestNode(from[0], from[1]);
   let t = nearestNode(to[0], to[1]);
@@ -1095,6 +1189,31 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     }
   }
 
+  // Reroute anchoring (G-71, 2026-10-20): a moving driver can snap to a node
+  // whose every road runs past a reader ("boxed"). astar grants the origin an
+  // exemption, so a mid-drive reroute would leave through the very reader the
+  // car is sitting next to, yet the line still calls itself "Clearest". On a
+  // reroute, anchor at the nearest unboxed node that has a hard-floor route to
+  // the destination and report the gap; if no such node exists, refuse and let
+  // the caller keep the route already on screen.
+  let startAnchorM = 0;
+  if (reroute && nodeBoxed(graph, s.node)) {
+    let anchored = -1;
+    for (const c of nearestCandidates(from[0], from[1], 8)) {
+      if (c.dist > 400) continue;
+      if (c.node === s.node || nodeBoxed(graph, c.node)) continue;
+      anchored = c.node;
+      startAnchorM = Math.round(c.dist);
+      break;
+    }
+    if (anchored === -1) {
+      const err = new Error('Reroute origin is camera-walled');
+      err.code = 'REROUTE_HELD';
+      throw err;
+    }
+    s = { node: anchored, dist: startAnchorM };
+  }
+
   const fastest = astar(graph, s.node, t.node, 'off', edgeFactor, edgeDelay);
   if (!fastest) throw new Error('No route found');
 
@@ -1157,11 +1276,35 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
   let walled = false;
   let clearToM = 0;
   let largeDetour = false;
+  // "Clearest" has to be true of the WHOLE served line, endpoints included.
+  // The hard-floor probe can still carry a reader: the destination-approach
+  // exemption lets the last stretch into a walled lot pass a plate reader, and
+  // a perpendicular crossing can sit inside 75 m of a mid-route vertex. Measure
+  // the polyline the driver actually gets, and demote a probe that fails it.
+  const nearOnRoute = (r) => (r && r.coords && deflockCams && deflockCams.length)
+    ? camerasWithin(r.coords, deflockCams, 75) : [];
+  let endpointExposed = false;
+  if (clearest && !strictFallback) {
+    const near = nearOnRoute(clearest);
+    // Graph-truth tail check runs even with no camera pool: the served arcs
+    // are the contract, and a hard-floor arc on the final approach means the
+    // destination node was boxed and the exemption let the reader through.
+    const tailHit = tailExposed(clearest, HARD_CAM_EXPOSURE, 250);
+    if (near.length || tailHit) {
+      const total = polylineLenM(clearest.coords);
+      // Readers only on the exempted final approach: stop at the last clear
+      // node instead of rolling the car past the lot-entrance reader. A
+      // mid-route crossing cannot be fixed by a short gate, so it stays with
+      // the corridor re-route below (which may only ever improve the count).
+      if (tailHit || near.every((c) => c.at >= total - 150)) endpointExposed = true;
+      clearest = null;
+    }
+  }
   if (!clearest) {
     // Camera-walled or budget-exhausted. The unbounded probe already tells us
     // which: null = truly walled (no ≥floor path anywhere); an over-budget hit
     // = a clear path exists but costs too much time.
-    walled = strictProbe === null;
+    walled = strictProbe === null || endpointExposed;
     if (walled) {
       // Gate-snap: the clear network ends a short drive from the destination
       // (measured: BYU tail = 118 m / 4 edges). Route hard-floor-clear to the
@@ -1200,20 +1343,35 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
       }
       gateCands.sort((a, b) => a.tailM - b.tailM);
       const gateBudget = fastest.duration * 2 + 300;
+      // A gate is only honest if the route to it is itself dot-free: the point
+      // of stopping short is to stop BEFORE the reader, so a short tail that
+      // still drives past one is not a win. Among dot-free gates prefer the
+      // one inside the nearest-clear-node window (≤ +3 min), then the most
+      // daylight from any reader, so the dot is visibly off the line too.
+      const gateWindow = fastest.duration + 180;
+      let bestGate = null;
       // Bounded retry: each strict search is a few hundred ms, and the walled
       // case is the slow path already.
-      for (let i = 0; i < gateCands.length && i < 5; i++) {
+      for (let i = 0; i < gateCands.length && i < 6; i++) {
         const gt = gateCands[i];
         // Unbounded search, budget checked after: the in-search maxCost prune
         // tracks time on the best-score label only and can reject a route
         // whose true time fits the budget (observed on this very corridor).
         const gateRoute = astar(graph, s.node, gt.node, 'strict', edgeFactor, edgeDelay, {});
-        if (gateRoute && gateRoute.duration <= gateBudget) {
-          clearest = gateRoute;
-          clearToM = gt.tailM + gt.extra;
-          overBudget = gateRoute.duration > strictBudget;
-          break;
-        }
+        if (!gateRoute || gateRoute.duration > gateBudget) continue;
+        if (nearOnRoute(gateRoute).length) continue; // would still pass a reader
+        if (nodeBoxed(graph, gt.node)) continue; // gate arrival would need the exemption
+        const clearance = minCameraM(gateRoute.coords, deflockCams);
+        const cand = { route: gateRoute, gt, clearance, inWindow: gateRoute.duration <= gateWindow };
+        if (!bestGate) bestGate = cand;
+        else if (cand.inWindow && !bestGate.inWindow) bestGate = cand;
+        else if (cand.inWindow === bestGate.inWindow && cand.clearance > bestGate.clearance + 20) bestGate = cand;
+        if (bestGate.inWindow && bestGate.clearance >= 120) break;
+      }
+      if (bestGate) {
+        clearest = bestGate.route;
+        clearToM = bestGate.gt.tailM + bestGate.gt.extra;
+        overBudget = clearest.duration > strictBudget;
       }
     }
     if (!clearest) {
@@ -1373,7 +1531,13 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
           }
           if (best < 75 * 75) stillNear++;
         }
-        if (stillNear < corridorCams.length && avoid.distance <= fastest.distance * 5) {
+        // Improvement-only. A gate-snapped Clearest already measures zero
+        // readers on its served line; swapping it for a best-effort route that
+        // drives into the lot past seven of them is a downgrade dressed as an
+        // avoidance win (Home Depot American Fork, 2026-10-20). Accept the
+        // re-route only when it strictly beats what is already on the card.
+        const incumbentNear = camerasWithin(strictOpt.route.coords, deflockCams, 75).length;
+        if (stillNear < incumbentNear && avoid.distance <= fastest.distance * 5) {
           strictOpt.route = avoid;
           strictOpt.cameras = stillNear;  // honest: count cameras STILL near after avoidance
           strictOpt.route.cameras = stillNear;
@@ -1383,6 +1547,43 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
           strictOpt.overBudget = avoid.duration > (fastest.duration * 1.25 + 90);
           strictOpt.largeDetour = avoid.distance > fastest.distance * 1.5;
         }
+      }
+    }
+  }
+
+  // Final honesty pass on Clearest. The card must equal the dots: recount the
+  // served polyline (endpoints included), never the edge bytes or the earlier
+  // candidate's number. A route with a reader in range is a best-effort route,
+  // not a clean win, and the card says so.
+  {
+    const so = options.find((o) => o.mode === 'strict');
+    if (so && so.route && so.route.coords) {
+      const last = so.route.coords[so.route.coords.length - 1];
+      so.servedTo = last;
+      so.destOffsetM = Math.round(lonLatM(to, last));
+      so.route.servedTo = last;
+      so.route.destOffsetM = so.destOffsetM;
+      // Recount only when the caller supplied the pool the map is drawing.
+      // With no pool, nearOnRoute() is empty by construction — writing that
+      // zero into the badge would manufacture a "fully clear" claim.
+      if (deflockCams && deflockCams.length) {
+        const near = nearOnRoute(so.route);
+        so.nearCameras = near.map((c) => ({ lon: c.lon, lat: c.lat, d: c.d }));
+        so.cameras = near.length;
+        so.route.cameras = near.length;
+        if (near.length) so.strictFallback = true;
+      }
+      if (tailExposed(so.route, HARD_CAM_EXPOSURE, 250)) so.strictFallback = true;
+    }
+    // A reroute must never serve a line that leaves through the reader the car
+    // is parked beside. If no anchored Clearest exists, refuse so the caller
+    // keeps the route already on screen (REROUTE_HELD).
+    if (reroute) {
+      const st = options.find((o) => o.mode === 'strict');
+      if (!st || startExposed(st.route, HARD_CAM_EXPOSURE, 200)) {
+        const err = new Error('Reroute has no clean departure');
+        err.code = 'REROUTE_HELD';
+        throw err;
       }
     }
   }
@@ -1427,6 +1628,7 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
     o.distance = o.route.distance;
     o.duration = o.route.duration;
     o.delay = o.route.delay || 0;
+    o.startAnchorM = startAnchorM;
     if (o.mode === 'strict') {
       o.strictFallback = !!o.route.strictFallback;
       o.overBudget = !!o.route.overBudget;
