@@ -232,6 +232,11 @@ body {
   height: 44px;
   font-size: 0.8125rem;
   font-weight: 600;
+  /* The pill is a <button>: the UA stylesheet sets its own `color`
+     (buttontext = black), which is NOT overridden by the inherited body ink,
+     so the label rendered black-on-dark and the pill looked blank. Restate the
+     ink here so the label stays white on the dark panel. */
+  color: var(--ink);
   backdrop-filter: blur(8px);
   box-shadow: var(--shadow-1);
 }
