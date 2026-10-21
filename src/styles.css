@@ -59,8 +59,7 @@ summary {
 .sl-num,
 .step-dist,
 .opt-meta,
-.cam-chip,
-.safety-pill .label {
+.cam-chip {
   font-variant-numeric: tabular-nums;
 }
 
@@ -220,41 +219,9 @@ body {
   font-size: 1.0625rem;
   color: var(--ink);
 }
-.safety-pill {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 8px 12px;
-  height: 44px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  /* The pill is a <button>: the UA stylesheet sets its own `color`
-     (buttontext = black), which is NOT overridden by the inherited body ink,
-     so the label rendered black-on-dark and the pill looked blank. Restate the
-     ink here so the label stays white on the dark panel. */
-  color: var(--ink);
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-1);
-}
-/* Text-only pill: the leading dot was removed 2026-10-20 (UI delta D1). The
-   border and panel tint carry the "this is a control" signal, and the label
-   names the current mode. */
-/* The label is part of the control at every width (release UX spec D2): it
-   names the current state in place, and truncates rather than vanishing when
-   the topbar crowds on a 360px phone. */
-.safety-pill .label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.safety-pill.off .label {
-  color: var(--muted);
-}
+/* The top-right avoidance pill (#safety-pill) was removed 2026-10-20
+   (UI delta): it duplicated the route sheet's .mode-btn row, which is the
+   canonical mode control. Its rules (.safety-pill, .label, .off) are gone. */
 
 
 /* Panel */
@@ -915,13 +882,6 @@ details summary {
 /* Small phones: the wordmark stays. With the decorative glyph gone the row
    measures 242px at 411px wide, so the brand no longer needs to collapse to a
    lone icon (UI delta D1, 2026-10-20). */
-@media (max-width: 420px) {
-  /* The label stays visible at every width: a lone dot reads as a dead
-     indicator (release UX spec 2026-10-20 D2). It truncates instead. */
-  .safety-pill {
-    padding: 8px 10px;
-  }
-}
 
 /* Visually hidden but exposed to screen readers (ARIA live region mirror of
    voice guidance — slot-B round 68). */
@@ -2333,4 +2293,40 @@ a.primary-btn.feedback-link {
   border-radius: var(--r-sm);
   font-size: 0.8125rem;
   color: var(--ink);
+}
+
+/* G-71: walled destination callout. Says the drop-off is short of the pin. */
+.rc-callout {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--accent-2) 12%, var(--bg-2));
+  border: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--line));
+  border-left: 3px solid var(--accent-2);
+  border-radius: var(--r-sm);
+}
+.rc-callout-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.rc-callout p {
+  margin: 0 0 8px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.rc-callout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.rc-callout-actions .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  font-size: 0.8125rem;
 }
