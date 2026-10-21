@@ -515,6 +515,13 @@ export function astar(g, startNode, endNode, mode, edgeFactor, edgeDelay, { soft
   // Time-only accumulation for the detour budget: camera cost must not eat
   // into the budget (maxCost is real driving seconds, not avoidance weight).
   const tScore = maxCost < Infinity ? new Float64Array(N).fill(Infinity) : null;
+  // Budget clock starts at zero at the origin. Without this the first
+  // relaxation computes Infinity + time and prunes, so EVERY budgeted search
+  // returned null regardless of the budget value (field repro: PG -> Home
+  // Depot American Fork fell through to the unbudgeted fallback, tied Fastest
+  // on geometry and got dropped by the dedupe, leaving Fastest/9 cameras as the
+  // only option while the Clearest chip sat blank).
+  if (tScore) tScore[startNode] = 0;
 
   const tLon = g.nodeLon[endNode] / 1e6;
   const tLat = g.nodeLat[endNode] / 1e6;
@@ -880,30 +887,38 @@ function buildClearIndex(g, sNode, floor) {
   return { g, clear, revStart, revFrom, revEdge };
 }
 
-function clearTailTo(idx, tNode) {
+// Every clear node within `maxTail` of tNode, shortest tail first. A gate can
+// be clear-reachable from the origin yet unreachable by A* (one-way approach or
+// a turn restriction at the gate itself), so callers need more than the single
+// shortest-tail candidate to fall back on.
+function clearTailsTo(idx, tNode, maxTail = 500, limit = 8) {
   const { g, clear, revStart, revFrom, revEdge } = idx;
-  if (clear[tNode]) return null; // not actually walled
+  const out = [];
+  if (clear[tNode]) return out;
   const N = g.nodeCount;
   const dist = new Float64Array(N).fill(Infinity);
   const closed = new Uint8Array(N);
   const heap = new Heap();
   dist[tNode] = 0;
   heap.push(0, tNode);
-  const MAX_TAIL = 500; // never gate-snap across an exposed tail this long
   while (heap.size) {
     const u = heap.pop();
     if (closed[u]) continue;
     closed[u] = 1;
-    if (dist[u] > MAX_TAIL) break; // later pops only get farther
-    if (clear[u]) return { node: u, tailM: dist[u] };
+    const du = dist[u];
+    if (du > maxTail) break;
+    if (clear[u]) {
+      out.push({ node: u, tailM: du });
+      if (out.length >= limit) break;
+    }
     for (let q = revStart[u]; q < revStart[u + 1]; q++) {
       const v = revFrom[q];
       if (closed[v]) continue;
-      const nd = dist[u] + g.eLen[revEdge[q]];
+      const nd = du + g.eLen[revEdge[q]];
       if (nd < dist[v]) { dist[v] = nd; heap.push(nd, v); }
     }
   }
-  return null;
+  return out;
 }
 
 // ---- Public planning API: returns up to 3 options ----
@@ -1086,25 +1101,40 @@ export async function planRoutes(from, to, { prefer = 'moderate', traffic = null
       // clear tail. Probe the primary snap plus up to 4 more candidates and
       // take the shortest qualifying tail. The clear index is built once.
       const idx = buildClearIndex(graph, s.node, HARD_CAM_EXPOSURE);
-      let tail = clearTailTo(idx, t.node);
-      let tailExtra = 0; // candidate→dest straight-line, added to the honest badge
-      if (!tail || tail.tailM > 200) {
-        for (const c of nearestCandidates(to[0], to[1], 5)) {
-          if (c.node === t.node || c.dist > 400) continue;
-          const alt = clearTailTo(idx, c.node);
-          if (alt && alt.tailM <= 200 && (!tail || alt.tailM < tail.tailM)) { tail = alt; tailExtra = c.dist; }
+      // Shortest qualifying tail wins, but a gate that is clear-reachable from
+      // the origin is not necessarily A*-reachable: one-way approaches and turn
+      // restrictions at the gate node itself return null. Home Depot American
+      // Fork's shortest-tail gate is exactly that (its two shortest gates are
+      // unreachable while a gate 8 m further along the tail routes fine), and
+      // giving up on the first candidate made this destination fall all the way
+      // through to the exposed best-effort route.
+      const gateCands = [];
+      const addGates = (node, extra) => {
+        for (const gt of clearTailsTo(idx, node, 200, 6)) {
+          if (gt.node === s.node) continue;
+          gateCands.push({ node: gt.node, tailM: gt.tailM, extra });
         }
+      };
+      addGates(t.node, 0);
+      for (const c of nearestCandidates(to[0], to[1], 5)) {
+        if (c.node === t.node || c.dist > 400) continue;
+        addGates(c.node, c.dist);
       }
-      if (tail && tail.tailM <= 200 && tail.node !== s.node) {
-        const gateBudget = fastest.duration * 2 + 300;
+      gateCands.sort((a, b) => a.tailM - b.tailM);
+      const gateBudget = fastest.duration * 2 + 300;
+      // Bounded retry: each strict search is a few hundred ms, and the walled
+      // case is the slow path already.
+      for (let i = 0; i < gateCands.length && i < 5; i++) {
+        const gt = gateCands[i];
         // Unbounded search, budget checked after: the in-search maxCost prune
         // tracks time on the best-score label only and can reject a route
         // whose true time fits the budget (observed on this very corridor).
-        const gateRoute = astar(graph, s.node, tail.node, 'strict', edgeFactor, edgeDelay, {});
+        const gateRoute = astar(graph, s.node, gt.node, 'strict', edgeFactor, edgeDelay, {});
         if (gateRoute && gateRoute.duration <= gateBudget) {
           clearest = gateRoute;
-          clearToM = tail.tailM + tailExtra;
+          clearToM = gt.tailM + gt.extra;
           overBudget = gateRoute.duration > strictBudget;
+          break;
         }
       }
     }

@@ -4,8 +4,12 @@
 // DeFlock snapshot (same file + classification the graph builder uses).
 //
 // Safety floor: Flock/ALPR plates are read at ~10-23 m (30-75 ft) at speed.
-// STRICT ("Clearest") must keep a margin beyond that — audit threshold 30 m.
-// Prints per-option min-distance + pass/fail, exits 1 if strict < 30 m
+// The SHIPPED floor is stricter than the read range: src/router.js
+// HARD_CAM_EXPOSURE = 64 forbids strict-mode edges within ~75 m of a plate
+// reader ("Clear means clear", Keaton field report 2026-09-30). This audit
+// holds that promise, not the weaker read-range one: STRICT ("Clearest") must
+// keep >= 75 m mid-route.
+// Prints per-option min-distance + pass/fail, exits 1 if strict < 75 m
 // mid-route (endpoint tolerance: first/last 250 m of the route is exempt,
 // since origins/destinations can legitimately sit next to a camera).
 import { planRoutes, loadGraph } from '../src/router.js';
@@ -91,21 +95,66 @@ function auditRoute(coords, endTol = 250) {
   return { minMid, minAll, minMidAt, total };
 }
 
+// Named regression cases. Each ID is a route Keaton reported (or a corridor a
+// field report was measured on); the ID is stable so a failure names the
+// report it breaks. `expect` is the contract, not a snapshot:
+//   'clear'       — strict MUST serve a route clear of the floor mid-route.
+//                   A best-effort fallback here is a REGRESSION.
+//   'best-effort' — destination is camera-walled or the clear path breaks the
+//                   detour budget; honest best-effort is acceptable, but a
+//                   strict option that silently passes a camera is NOT.
 const corridors = [
-  { name: 'PG → Costco Lehi', from: [-111.759, 40.364], to: [-111.834, 40.394] },
-  { name: 'PG → BYU Provo', from: [-111.759, 40.364], to: [-111.6553, 40.2523] },
-  { name: 'Lehi → SLC Downtown', from: [-111.8508, 40.3852], to: [-111.891, 40.7608] },
-  { name: 'Orem → SLC Airport', from: [-111.6946, 40.2969], to: [-111.9778, 40.7884] },
-  { name: 'AF → Park City', from: [-111.7965, 40.3769], to: [-111.498, 40.6461] },
+  {
+    id: 'K1', name: 'PG → Costco Lehi', expect: 'clear',
+    why: 'Keaton report #1 (2026-08): Clearest forced a highway hop and still passed a plate reader on State St',
+    from: [-111.759, 40.364], to: [-111.834, 40.394],
+  },
+  {
+    id: 'K2', name: 'PG → BYU Provo', expect: 'best-effort',
+    why: 'Keaton report #2: destination gate is camera-walled (tail 118 m) — must serve gate-snap honest best-effort, never a silent pass',
+    from: [-111.759, 40.364], to: [-111.6553, 40.2523],
+  },
+  {
+    id: 'K3', name: 'Lehi → SLC Downtown', expect: 'clear',
+    why: 'long-corridor detour quality: avoidance must survive an 18 km trip',
+    from: [-111.8508, 40.3852], to: [-111.891, 40.7608],
+  },
+  {
+    id: 'K4', name: 'Orem → SLC Airport', expect: 'clear',
+    why: 'airport corridor: freeway-heavy, must still find a clear surface alternative',
+    from: [-111.6946, 40.2969], to: [-111.9778, 40.7884],
+  },
+  {
+    id: 'homedepot-flock', name: 'PG → Home Depot American Fork', expect: 'clear',
+    why: 'Keaton report 2026-10-20: live route to Home Depot American Fork hugged a Flock plate reader; destination lot is camera-walled, so Clearest must gate-snap and stay clear mid-route',
+    from: [-111.759, 40.364], to: [-111.8229, 40.3842],
+    dest: 'Home Depot #4417, 885 W Grassland Dr, American Fork UT',
+  },
+  {
+    id: 'K5', name: 'AF → Park City', expect: 'best-effort',
+    why: 'Keaton report #4 (detour quality): canyon corridors cannot always clear within budget — must say so, not over-detour silently',
+    from: [-111.7965, 40.3769], to: [-111.498, 40.6461],
+  },
 ];
 
-const STRICT_FLOOR_M = 30; // must exceed max ALPR read range (~23 m) + buffer
+// "Clear means clear" is 75 m in the engine (src/router.js HARD_CAM_EXPOSURE
+// = 64 → ~75 m), not the bare ALPR read range (~23 m). Auditing at 30 m would
+// pass routes the product promises are clear, so the audit holds the shipped
+// claim: mid-route minimum clear distance must be >= 75 m.
+const STRICT_FLOOR_M = 75;
 let failures = 0, bestEffort = 0;
-console.log(`ALPR cameras indexed: ${alprCount}\n`);
+console.log(`ALPR cameras indexed: ${alprCount}`);
+console.log(`Strict floor under test: ${STRICT_FLOOR_M} m mid-route (endpoint tolerance 250 m)\n`);
 for (const c of corridors) {
   const { options } = await planRoutes(c.from, c.to, {});
-  console.log(`— ${c.name}`);
+  console.log(`— ${c.id} ${c.name}  [expect: ${c.expect}]`);
+  console.log(`  repro: ${c.why}`);
+  // A corridor that serves no Clearest option at all is a failure for an
+  // expect:'clear' case: the user picked Clearest and got nothing camera-aware.
+  // This used to slip through because the loop only inspected options present.
+  let strictSeen = false;
   for (const o of options) {
+    if (o.mode === 'strict') strictSeen = true;
     // Measure the RAW graph geometry (node-to-node), which is what the hard
     // floor guarantees and what the car actually drives — not the simplified
     // render polyline (±3 m DP tolerance).
@@ -127,9 +176,17 @@ for (const c of corridors) {
       const reason = o.walled
         ? `destination camera-walled; no ≥${STRICT_FLOOR_M} m path exists`
         : `camera-clear path exists but exceeds detour budget`;
+      if (c.expect === 'clear') {
+        failures++;
+        console.log(
+          `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ${minMid.toFixed(0)} m  ` +
+          `❌ REGRESSION: ${c.id} must serve a clear route (needed ${STRICT_FLOOR_M} m) — got best-effort (${reason})`
+        );
+        continue;
+      }
       console.log(
         `  ${o.label.padEnd(9)} cams=${o.cameras}  mid-route min ${minMid.toFixed(0)} m  ` +
-        `⚠ BEST-EFFORT (${reason})`
+        `⚠ BEST-EFFORT (${reason}) — expected for ${c.id}`
       );
     } else if (!midOk) {
       failures++;
@@ -148,6 +205,13 @@ for (const c of corridors) {
         `${minMid === Infinity ? '∞' : minMid.toFixed(0) + ' m'}  (abs min ${minAll.toFixed(0)} m)  PASS${gateNote}`
       );
     }
+  }
+  if (!strictSeen && c.expect === 'clear') {
+    failures++;
+    console.log(
+      `  Clearest  ❌ REGRESSION: no camera-aware option served at all ` +
+      `(options: ${options.map((o) => o.label).join(', ') || 'none'})`
+    );
   }
 }
 console.log(
