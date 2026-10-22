@@ -14,7 +14,7 @@ cameras, including Flock Safety's. Your drive stays yours.
 
 | Route options — ETA + camera count *before* you pick | Turn-by-turn with live camera counter |
 |:---:|:---:|
-| <img src="docs/screenshots/route-options.png" width="280" alt="Route options showing Clearest vs Fastest with camera counts"> | <img src="docs/screenshots/navigation.png" width="280" alt="Active navigation with instruction banner, speed limit, and camera counter"> |
+| <img src="docs/screenshots/route-options.png" width="280" alt="Route options showing Clearest vs Fastest with camera counts"> | <img src="docs/screenshots/navigation.png" width="280" alt="Active navigation with instruction banner and camera counter"> |
 
 ## Why
 
